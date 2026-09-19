@@ -34,6 +34,7 @@ import (
 	"gourdian/internal/hud"
 	"gourdian/internal/matchdata"
 	"gourdian/internal/model"
+	"gourdian/internal/platform"
 	"gourdian/internal/rules"
 	"gourdian/internal/secrets"
 	"gourdian/internal/speech"
@@ -599,7 +600,7 @@ func (s *Server) settingsResponse() settingsResponse {
 		AIEfforts:      config.AIEfforts,
 		HeroNames:      s.heroNames(),
 		Autostart:      autostart.Enabled(),
-		CanAutostart:   runtime.GOOS == "windows" || nativeLinux(),
+		CanAutostart:   runtime.GOOS == "windows" || platform.LinuxDesktop(),
 		HotkeyProblems: s.hotkeyProblemsCopy(),
 		VoiceLangs:     s.voiceLangs(),
 		NaturalVoice:   s.naturalVoiceStatus(),

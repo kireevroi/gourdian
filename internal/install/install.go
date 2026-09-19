@@ -4,6 +4,7 @@ package install
 import (
 	"errors"
 	"fmt"
+	"gourdian/internal/platform"
 	"io"
 	"os"
 	"path/filepath"
@@ -55,7 +56,7 @@ func steamRoots() []string {
 		filepath.Join(home, ".var", "app", "com.valvesoftware.Steam", "data", "Steam"),
 		filepath.Join(home, "snap", "steam", "common", ".local", "share", "Steam"),
 	}
-	if os.Getenv("WSL_DISTRO_NAME") != "" {
+	if platform.WSL() {
 		roots = append([]string{"/mnt/c/Program Files (x86)/Steam", "/mnt/c/Program Files/Steam"}, roots...)
 	}
 	return roots
