@@ -724,33 +724,30 @@ func TestJSONAnswersWithAStatusKeepTheirContentType(t *testing.T) {
 	}
 }
 
-// A dashboard that stops reading gets disconnected, so its browser reconnects to the current
-// state, instead of silently losing events like a finished review.
-func TestHubDisconnectsAClientThatFallsBehind(t *testing.T) {
-	h := hub{clients: map[chan []byte]struct{}{}}
+// A dashboard that stops reading misses the events that don't fit its buffer, but stays
+// connected and gets the events after it catches up.
+func TestHubDropsEventsForAClientThatFallsBehind(t *testing.T) {
+	h := newHub(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ch := h.subscribe()
 	for i := range cap(ch) + 5 {
 		h.publish("tip", i)
 	}
-	got := 0
-	for open := true; open; {
-		select {
-		case _, open = <-ch:
-			if open {
-				got++
-			}
-		case <-time.After(time.Second):
-			t.Fatal("the client is still connected after falling behind")
+	for i := range cap(ch) {
+		if msg := <-ch; !strings.Contains(string(msg), fmt.Sprintf("data: %d\n", i)) {
+			t.Fatalf("event %d is %q", i, msg)
 		}
 	}
-	if got != cap(ch) {
-		t.Fatalf("read %d events before the disconnect, want the %d buffered", got, cap(ch))
+	h.publish("tip", "after")
+	select {
+	case msg := <-ch:
+		if !strings.Contains(string(msg), `"after"`) {
+			t.Fatalf("got %q after catching up", msg)
+		}
+	default:
+		t.Fatal("a client that caught up gets no events")
 	}
-	h.mu.Lock()
-	left := len(h.clients)
+	if h.mu.Lock(); !h.clients[ch] {
+		t.Error("the drop isn't noted for the client")
+	}
 	h.mu.Unlock()
-	if left != 0 {
-		t.Fatal("the client is still subscribed")
-	}
-	h.unsubscribe(ch) // what handleEvents does on its way out: must not panic
 }

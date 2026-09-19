@@ -102,7 +102,7 @@ type Server struct {
 
 func New(cfg *config.Store, engine *coach.Engine, st *stats.Store, data *dotadata.Client, speaker *speech.Speaker, workDir, cacheDir string, log *slog.Logger) *Server {
 	s := &Server{cfg: cfg, engine: engine, stats: st, data: data, speaker: speaker, workDir: workDir, cacheDir: cacheDir, log: log,
-		hub: hub{clients: map[chan []byte]struct{}{}}, matches: matchdata.Service{Data: data, Stats: st, Log: log}}
+		hub: newHub(log), matches: matchdata.Service{Data: data, Stats: st, Log: log}}
 	s.baseCtx, s.cancel = context.WithCancel(context.Background())
 	s.keys = secrets.Open(workDir)
 	ai.SetToolsDir(workDir)
@@ -547,10 +547,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
-		case msg, ok := <-ch:
-			if !ok {
-				return // fell behind: the browser reconnects
-			}
+		case msg := <-ch:
 			w.Write(msg)
 		case <-ping.C:
 			fmt.Fprint(w, ": ping\n\n")
@@ -760,14 +757,24 @@ func sse(event string, v any) []byte {
 }
 
 type hub struct {
-	mu      sync.Mutex
-	clients map[chan []byte]struct{}
+	mu  sync.Mutex
+	log *slog.Logger
+	// clients maps each dashboard's buffer to whether it has had to drop an event.
+	clients map[chan []byte]bool
 }
 
+func newHub(log *slog.Logger) hub {
+	return hub{log: log, clients: map[chan []byte]bool{}}
+}
+
+// hubBuffer is how many events a dashboard can fall behind by, a minute or so of a match,
+// before events are dropped for it.
+const hubBuffer = 256
+
 func (h *hub) subscribe() chan []byte {
-	ch := make(chan []byte, 64)
+	ch := make(chan []byte, hubBuffer)
 	h.mu.Lock()
-	h.clients[ch] = struct{}{}
+	h.clients[ch] = false
 	h.mu.Unlock()
 	return ch
 }
@@ -787,18 +794,21 @@ func (h *hub) publish(event string, v any) {
 }
 
 // publishRaw sends an event whose JSON is already encoded. A client that has fallen a whole
-// buffer behind is disconnected rather than silently missing events: its browser reconnects
-// and gets the current state afresh.
+// buffer behind misses the event, which is logged once for it: the game-state post can't
+// wait for it. Disconnecting it instead would lose the event just the same, and blank the
+// dashboard while it reconnects.
 func (h *hub) publishRaw(event string, data []byte) {
 	msg := fmt.Appendf(nil, "event: %s\ndata: %s\n\n", event, data)
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for ch := range h.clients {
+	for ch, dropped := range h.clients {
 		select {
 		case ch <- msg:
 		default:
-			delete(h.clients, ch)
-			close(ch)
+			if !dropped {
+				h.clients[ch] = true
+				h.log.Warn("a dashboard fell behind; dropping events for it", "event", event, "buffer", cap(ch))
+			}
 		}
 	}
 }
