@@ -20,7 +20,9 @@ It reads Valve's official Game State Integration feed, which only describes your
 
 Run **Gourdian-Setup-<version>.exe**. The setup wizard installs to `%LOCALAPPDATA%\Programs\Gourdian` without admin rights, adds Start menu and (optionally) desktop shortcuts, can start the app when you sign in to Windows, and connects Dota 2. Setup quits a running copy before upgrading and keeps your settings and statistics. Upgrading from Dota Trainer works the same way: setup installs Gourdian into the old app's folder, keeps everything, and replaces the old shortcuts and startup entry. Uninstall from Windows Settings › Apps; you're asked whether to keep your statistics.
 
-Downloads are on the [Releases page](https://github.com/kireevroi/gourdian/releases): the Windows installer, the Linux tarball and `SHA256SUMS`. Release builds aren't code-signed yet (signing through the SignPath Foundation is being set up), so Windows SmartScreen says "Unknown publisher": choose **More info › Run anyway**. Installers built locally with `make installer` are signed with a self-signed **Gourdian** certificate that is only trusted on a PC where `make cert` has been run.
+Downloads are on the [Releases page](https://github.com/kireevroi/gourdian/releases): the Windows installer, the Linux tarball and `SHA256SUMS`. Each file has a GitHub attestation proving it was built from this repository's release tag; check one with `gh attestation verify Gourdian-Setup-<version>.exe --repo kireevroi/gourdian`.
+
+The installer and app are signed with a self-signed **Gourdian** certificate ([`installer/gourdian.cer`](installer/gourdian.cer)). Windows only trusts it on a PC where `make cert` has been run, so elsewhere SmartScreen says "Unknown publisher": choose **More info › Run anyway**.
 
 Requirements:
 
@@ -197,6 +199,7 @@ From WSL:
 ```sh
 winget.exe install JRSoftware.InnoSetup --scope user   # once
 make cert        # once: creates the signing certificate; click Yes in the Windows dialog
+make cert-github # once: lets the Release workflow sign with that certificate too
 make test        # gofmt check, vet (Linux and Windows), tests with the race detector
 make lint        # staticcheck
 make installer   # signed installer in dist/ and your Downloads folder
@@ -209,7 +212,7 @@ For experiments, start a trainer with `GOURDIAN_HOME=/some/folder` and its own `
 
 ### Releases
 
-Bump `VERSION` (and `pkgver` in `packaging/arch/PKGBUILD`), commit, then `make release`. It runs the tests, tags the commit `v<VERSION>` and pushes it; the Release workflow in `.github/workflows` tests it again, builds the installer on Windows and the tarball on Linux, and publishes them with checksums as a GitHub release. The CI workflow runs the tests on Linux and Windows for every push to `main`.
+Bump `VERSION` (and `pkgver` in `packaging/arch/PKGBUILD`), commit, then `make release`. It runs the tests, tags the commit `v<VERSION>` and pushes it; the Release workflow in `.github/workflows` tests it again, builds the installer on Windows (signed with the certificate that `make cert-github` stored in the `release` environment, which only `v*` tags can use) and the tarball on Linux, and publishes them with checksums and attestations as a GitHub release. The CI workflow runs the tests on Linux and Windows for every push to `main`.
 
 ### Commands
 

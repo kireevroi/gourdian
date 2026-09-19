@@ -41,14 +41,31 @@ jobs:
   installer:
     needs: build
     runs-on: windows-latest
+    # The signing certificate lives in this environment's secrets, which only v* tags can use.
+    environment: release
+    env:
+      SIGN: ${{ secrets.WINDOWS_CERT_PFX != '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           name: exe
           path: bin
-      # Code signing (SignPath) goes here once approved: sign bin/gourdian.exe before
-      # packaging, then the finished installer.
+      - name: Load the signing certificate
+        if: env.SIGN == 'true'
+        shell: pwsh
+        env:
+          PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'sign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX))
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force)
+          Remove-Item $pfx
+          # Trusted on this runner only, so the signatures can be checked below.
+          $cer = Join-Path $env:RUNNER_TEMP 'sign.cer'
+          Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
       - name: Find or install Inno Setup
         shell: pwsh
         run: |
@@ -63,12 +80,29 @@ jobs:
           $version = (Get-Content VERSION -Raw).Trim()
           $stage = Join-Path $env:RUNNER_TEMP 'stage'
           New-Item -ItemType Directory -Force $stage | Out-Null
-          Copy-Item bin\gourdian.exe (Join-Path $stage 'Gourdian.exe')
-          Copy-Item installer\Gourdian.iss, installer\README.txt, installer\icon.ico, installer\wizard*.bmp $stage
-          & $env:ISCC /Q "/DAppVersion=$version" /DUnsigned (Join-Path $stage 'Gourdian.iss')
+          $exe = Join-Path $stage 'Gourdian.exe'
+          Copy-Item bin\gourdian.exe $exe
+          Copy-Item installer\Gourdian.iss, installer\sign.ps1, installer\README.txt, installer\icon.ico, installer\wizard*.bmp $stage
+          $sign = Join-Path $stage 'sign.ps1'
+          if ($env:SIGN -eq 'true') {
+            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $sign $exe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            # Inno Setup signs the installer and uninstaller with the same script ($q is a quote, $f the file).
+            $tool = '/Sgourdian=powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $q' + $sign + '$q $f'
+            & $env:ISCC /Q "/DAppVersion=$version" $tool (Join-Path $stage 'Gourdian.iss')
+          } else {
+            & $env:ISCC /Q "/DAppVersion=$version" /DUnsigned (Join-Path $stage 'Gourdian.iss')
+          }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $setup = Join-Path $stage "Gourdian-Setup-$version.exe"
+          if ($env:SIGN -eq 'true') {
+            foreach ($file in $exe, $setup) {
+              $status = (Get-AuthenticodeSignature $file).Status
+              if ($status -ne 'Valid') { throw "$file signature is $status" }
+            }
+          }
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item (Join-Path $stage "Gourdian-Setup-$version.exe") dist\
+          Copy-Item $setup dist\
       - uses: actions/upload-artifact@v7
         with:
           name: release-windows
@@ -80,6 +114,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -88,6 +125,10 @@ jobs:
           merge-multiple: true
       - name: Checksums
         run: cd out && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      # A signed record that these files were built here from this tag: gh attestation verify.
+      - uses: actions/attest@v4
+        with:
+          subject-path: 'out/*'
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}

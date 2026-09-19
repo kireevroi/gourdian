@@ -3,7 +3,7 @@ GOFLAGS := -buildvcs=false
 VERSION := $(shell cat VERSION)
 LDFLAGS := -X gourdian/internal/buildinfo.Version=$(VERSION)
 
-.PHONY: all linux windows test lint release install winres cert installer app clean linux-dist linux-install linux-uninstall
+.PHONY: all linux windows test lint release install winres cert cert-github installer app clean linux-dist linux-install linux-uninstall
 
 all: linux windows
 
@@ -21,6 +21,10 @@ winres:
 # Creates the self-signed "Gourdian" code-signing certificate and trusts it for this Windows user (once).
 cert:
 	cd /mnt/c && powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$$(wslpath -w $(CURDIR)/installer/new-cert.ps1)"
+
+# Lets the Release workflow sign with the same certificate (once, and after a new make cert).
+cert-github:
+	installer/cert-to-github.sh
 
 # Builds the signed installer into dist/ and your Downloads folder.
 installer: winres all

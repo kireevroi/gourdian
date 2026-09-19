@@ -1,9 +1,10 @@
 # Creates the self-signed "Gourdian" code-signing certificate and trusts it for the
-# current Windows user. Safe to run again: an existing certificate is reused.
+# current Windows user. Safe to run again: an existing certificate is reused. Its key can be
+# exported so `make cert-github` can hand it to the Release workflow, which signs releases too.
 $ErrorActionPreference = 'Stop'
 $subject = 'CN=Gourdian'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$cerPath = Join-Path $here 'dota-trainer.cer'
+$cerPath = Join-Path $here 'gourdian.cer'
 
 $cert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert |
     Where-Object { $_.Subject -eq $subject -and $_.NotAfter -gt (Get-Date).AddDays(30) } |
@@ -12,7 +13,7 @@ $cert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert |
 if (-not $cert) {
     $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $subject `
         -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 `
-        -KeyExportPolicy NonExportable -NotAfter (Get-Date).AddYears(5) `
+        -KeyExportPolicy Exportable -NotAfter (Get-Date).AddYears(5) `
         -CertStoreLocation Cert:\CurrentUser\My
     Write-Output "created certificate $($cert.Thumbprint)"
 } else {
