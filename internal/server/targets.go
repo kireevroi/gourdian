@@ -21,35 +21,29 @@ const (
 )
 
 // targetCache builds personal targets from the match history and OpenDota's item timings. The
-// engine asks several times a second, so answers are kept until the history changes.
+// engine asks several times a second, so answers are kept until the history changes, which
+// stats counts for us.
 type targetCache struct {
 	s       *Server
 	mu      sync.Mutex
-	gen     int
 	entries map[string]cachedTargets
 }
 
 type cachedTargets struct {
 	t        coach.Targets
-	gen      int
+	history  int64
 	complete bool
 	at       time.Time
 }
 
-func (tc *targetCache) reset() {
-	tc.mu.Lock()
-	tc.gen++
-	tc.mu.Unlock()
-}
-
 func (tc *targetCache) TargetsFor(heroID int, role string) coach.Targets {
 	key := role + "/" + strconv.Itoa(heroID)
+	history := tc.s.stats.HistoryVersion()
 	tc.mu.Lock()
-	if e, ok := tc.entries[key]; ok && e.gen == tc.gen && (e.complete || time.Since(e.at) < incompleteWait) {
+	if e, ok := tc.entries[key]; ok && e.history == history && (e.complete || time.Since(e.at) < incompleteWait) {
 		tc.mu.Unlock()
 		return e.t
 	}
-	gen := tc.gen
 	tc.mu.Unlock()
 
 	t, complete := tc.build(heroID, role)
@@ -57,7 +51,7 @@ func (tc *targetCache) TargetsFor(heroID int, role string) coach.Targets {
 	if tc.entries == nil {
 		tc.entries = map[string]cachedTargets{}
 	}
-	tc.entries[key] = cachedTargets{t: t, gen: gen, complete: complete, at: time.Now()}
+	tc.entries[key] = cachedTargets{t: t, history: history, complete: complete, at: time.Now()}
 	tc.mu.Unlock()
 	return t
 }

@@ -372,6 +372,23 @@ func TestUnknownMatchSaysSo(t *testing.T) {
 	}
 }
 
+// Targets are built from item timings as well as matches, so saving timings counts as a
+// change to the history.
+func TestItemTimingsCountAsHistory(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	before := st.HistoryVersion()
+	if err := st.AppendItems([]ItemTiming{{MatchID: "a", Item: "bfury", Time: 1000, Source: SourceOpenDota}}); err != nil {
+		t.Fatal(err)
+	}
+	if st.HistoryVersion() == before {
+		t.Fatal("saving item timings didn't change the history version")
+	}
+}
+
 func TestMatchesWhere(t *testing.T) {
 	st, err := Open(t.TempDir())
 	if err != nil {

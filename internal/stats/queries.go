@@ -112,6 +112,7 @@ func (s *Store) AppendItems(items []ItemTiming) error {
 	if len(items) == 0 {
 		return nil
 	}
+	defer s.history.Add(1) // item timings are part of what targets are built from
 	return s.tx(func(tx *sql.Tx) error { return appendItems(tx, items) })
 }
 

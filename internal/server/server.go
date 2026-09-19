@@ -376,7 +376,6 @@ func (s *Server) recordMatch(m *stats.MatchSummary, set config.Settings) {
 	if err := s.stats.AppendItems(m.Items); err != nil {
 		s.log.Error("save item timings", "err", err)
 	}
-	s.targets.reset()
 	s.drillResult(*m, set)
 	s.askForMMR(m)
 	s.goalFeedback(*m, set)
