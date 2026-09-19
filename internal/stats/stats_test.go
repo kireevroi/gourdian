@@ -355,3 +355,61 @@ func TestMatchKeepsEveryField(t *testing.T) {
 		t.Fatalf("read back\n%+v\nwant\n%+v", got, m)
 	}
 }
+
+func TestMatchesWhere(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	start := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	add := func(id string, hero int, role string, day int, source string) {
+		t.Helper()
+		if err := st.AppendMatch(MatchSummary{MatchID: id, HeroID: hero, Role: role, Source: source, EndedAt: start.AddDate(0, 0, day)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := st.HistoryVersion()
+	add("a", 26, "hard_support", 0, SourceLive)
+	add("b", 26, "hard_support", 1, SourcePractice)
+	add("c", 26, "mid", 2, SourceLive)
+	add("d", 26, "hard_support", 3, SourceOpenDota)
+	add("e", 74, "hard_support", 4, SourceLive)
+	add("f", 26, "hard_support", 5, SourceLive)
+	if st.HistoryVersion() == before {
+		t.Fatal("saving matches didn't change the history version")
+	}
+	ids := func(f MatchFilter) string {
+		t.Helper()
+		ms, err := st.MatchesWhere(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := ""
+		for _, m := range ms {
+			out += m.MatchID
+		}
+		return out
+	}
+	for _, c := range []struct {
+		f    MatchFilter
+		want string
+	}{
+		{MatchFilter{}, "abcdef"},
+		{MatchFilter{HeroID: 26, Role: "hard_support"}, "abdf"},
+		{MatchFilter{HeroID: 26, Role: "hard_support", Real: true}, "adf"},
+		{MatchFilter{HeroID: 26, Role: "hard_support", Real: true, Limit: 2}, "df"},
+		{MatchFilter{Since: start.AddDate(0, 0, 3)}, "def"},
+	} {
+		if got := ids(c.f); got != c.want {
+			t.Errorf("%+v: %s, want %s", c.f, got, c.want)
+		}
+	}
+	if role, err := st.UsualRole(26, []string{"hard_support", "mid"}); err != nil || role != "hard_support" {
+		t.Errorf("usual role %q, %v", role, err)
+	}
+	st.AppendItems([]ItemTiming{{MatchID: "a", Item: "blink", Time: 900}, {MatchID: "c", Item: "bkb", Time: 1500}})
+	if items, err := st.ItemsIn([]string{"a", "f"}); err != nil || len(items) != 1 || items[0].Item != "blink" {
+		t.Errorf("items %+v, %v", items, err)
+	}
+}

@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -138,6 +139,7 @@ type Store struct {
 	dir     string
 	db      *sql.DB
 	onError func(msg string, err error)
+	history atomic.Int64 // counts changes to the matches, for HistoryVersion
 }
 
 // Dir is the folder the CSV exports are written to.

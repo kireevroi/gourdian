@@ -4,10 +4,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
+	"time"
 )
 
 func (s *Store) AppendMatch(m MatchSummary) error {
-	return s.tx(func(tx *sql.Tx) error { return appendMatch(tx, m) })
+	err := s.tx(func(tx *sql.Tx) error { return appendMatch(tx, m) })
+	if err == nil {
+		s.history.Add(1)
+	}
+	return err
 }
 
 // execer runs statements on the store's connection or inside a transaction.
@@ -30,6 +37,7 @@ func appendMatch(q execer, m MatchSummary) error {
 
 // UpdateMatch changes one match, for example to add OpenDota's data after the game.
 func (s *Store) UpdateMatch(matchID string, update func(*MatchSummary)) error {
+	defer s.history.Add(1)
 	return s.tx(func(tx *sql.Tx) error {
 		var rowID int64
 		if err := tx.QueryRow(`SELECT rowid FROM matches WHERE match_id = ?`, matchID).Scan(&rowID); err != nil {
@@ -429,3 +437,89 @@ func (s *Store) RulesImported() bool {
 
 // MarkRulesImported records that the old rules file has been read.
 func (s *Store) MarkRulesImported() error { return setMeta(s.db, "rules_imported", "yes") }
+
+// MatchFilter says which matches MatchesWhere returns; the zero value means all of them.
+type MatchFilter struct {
+	HeroID int       // 0: any hero
+	Role   string    // "": any position
+	Since  time.Time // zero: any time
+	Real   bool      // only matches the player really played, as MatchSummary.Real says
+	Limit  int       // 0: all; otherwise only the newest this many
+}
+
+// MatchesWhere returns the matches f describes, oldest first, asking the data file for only
+// those instead of reading the whole history.
+func (s *Store) MatchesWhere(f MatchFilter) ([]MatchSummary, error) {
+	var where []string
+	var args []any
+	if f.HeroID != 0 {
+		where, args = append(where, "hero_id = ?"), append(args, f.HeroID)
+	}
+	if f.Role != "" {
+		where, args = append(where, "role = ?"), append(args, f.Role)
+	}
+	if !f.Since.IsZero() {
+		where, args = append(where, "julianday(ended_at) >= julianday(?)"), append(args, timeValue(f.Since))
+	}
+	if f.Real {
+		where, args = append(where, "simulated = 0 AND IFNULL(source, '') != ?"), append(args, SourcePractice)
+	}
+	q := ""
+	if len(where) > 0 {
+		q = "WHERE " + strings.Join(where, " AND ")
+	}
+	if f.Limit <= 0 {
+		return s.queryMatches(q+` ORDER BY julianday(ended_at), rowid`, args...)
+	}
+	matches, err := s.queryMatches(q+` ORDER BY julianday(ended_at) DESC, rowid DESC LIMIT ?`, append(args, f.Limit)...)
+	slices.Reverse(matches)
+	return matches, err
+}
+
+// ItemsIn returns the item timings of the given matches.
+func (s *Store) ItemsIn(matchIDs []string) ([]ItemTiming, error) {
+	if len(matchIDs) == 0 {
+		return nil, nil
+	}
+	args := make([]any, len(matchIDs))
+	for i, id := range matchIDs {
+		args[i] = id
+	}
+	rows, err := s.db.Query(`SELECT match_id, hero, item, time, source FROM items WHERE match_id IN (`+placeholders(len(args))+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ItemTiming
+	for rows.Next() {
+		var it ItemTiming
+		if err := rows.Scan(&it.MatchID, &it.Hero, &it.Item, &it.Time, &it.Source); err != nil {
+			return nil, err
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// UsualRole is the position the player has played most on a hero, among roles, leaving out
+// simulated games; a tie goes to the one played most recently. "" when there's none.
+func (s *Store) UsualRole(heroID int, roles []string) (string, error) {
+	if len(roles) == 0 {
+		return "", nil
+	}
+	args := []any{heroID}
+	for _, r := range roles {
+		args = append(args, r)
+	}
+	var role string
+	err := s.db.QueryRow(`SELECT role FROM matches WHERE hero_id = ? AND simulated = 0 AND role IN (`+placeholders(len(roles))+`)
+		GROUP BY role ORDER BY COUNT(*) DESC, MAX(julianday(ended_at)) DESC, MAX(rowid) DESC LIMIT 1`, args...).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return role, err
+}
+
+// HistoryVersion changes whenever a match is saved or changed, so what's worked out from the
+// match history can be kept until then.
+func (s *Store) HistoryVersion() int64 { return s.history.Load() }

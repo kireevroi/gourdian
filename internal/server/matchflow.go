@@ -113,7 +113,7 @@ func (s *Server) afterMatch(m stats.MatchSummary, set config.Settings) {
 // resumePending picks up matches from the last day whose parse or review was cut short by
 // quitting the trainer or by the AI coach being paused.
 func (s *Server) resumePending() {
-	matches, err := s.stats.Matches()
+	matches, err := s.stats.MatchesWhere(stats.MatchFilter{Since: time.Now().Add(-resumeWithin)})
 	if err != nil {
 		return
 	}

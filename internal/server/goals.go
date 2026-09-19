@@ -29,7 +29,8 @@ func (s *Server) weekProgress(now time.Time) []stats.GoalProgress {
 	if err != nil {
 		return nil
 	}
-	matches, _ := s.stats.Matches()
+	// Progress picks the week's games itself; the last eight days hold them all.
+	matches, _ := s.stats.MatchesWhere(stats.MatchFilter{Since: now.AddDate(0, 0, -8)})
 	return stats.Progress(stats.WeekGoals(all, stats.Week(now)), matches)
 }
 

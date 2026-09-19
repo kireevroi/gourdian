@@ -17,7 +17,7 @@ import (
 const (
 	coreGoalCost   = 2000
 	incompleteWait = 10 * time.Second // retry while OpenDota data is still loading
-	goalHistory    = 10
+	goalHistory    = 10               // games on the hero in the position that targets are made from
 )
 
 // targetCache builds personal targets from the match history and OpenDota's item timings. The
@@ -64,16 +64,12 @@ func (tc *targetCache) TargetsFor(heroID int, role string) coach.Targets {
 
 func (tc *targetCache) build(heroID int, role string) (coach.Targets, bool) {
 	s := tc.s
-	matches, err := s.stats.Matches()
+	matches, err := s.stats.MatchesWhere(stats.MatchFilter{HeroID: heroID, Role: role, Real: true, Limit: goalHistory})
 	if err != nil {
 		return coach.RoleTargets(role), false
 	}
-	var history []stats.MatchSummary
-	for _, m := range slices.Backward(matches) {
-		if m.HeroID == heroID && m.Role == role && m.Real() {
-			history = append(history, m)
-		}
-	}
+	history := slices.Clone(matches)
+	slices.Reverse(history) // newest first
 	t := coach.PersonalLastHits(role, history)
 	if role != config.RoleCarry && role != config.RoleMid && role != config.RoleOfflane || s.data == nil {
 		return t, true
@@ -92,10 +88,12 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []stats.MatchS
 		return nil, 0, false
 	}
 	ids := map[string]bool{}
+	var idList []string
 	for _, m := range history[:min(len(history), goalHistory)] {
 		ids[m.MatchID] = true
+		idList = append(idList, m.MatchID)
 	}
-	rows, _ := s.stats.Items()
+	rows, _ := s.stats.ItemsIn(idList)
 	perMatch := map[string]map[string]int{}
 	for _, r := range rows {
 		if !ids[r.MatchID] || items[r.Item].Cost < coreGoalCost {

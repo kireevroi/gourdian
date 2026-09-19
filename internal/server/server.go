@@ -82,6 +82,7 @@ type Server struct {
 	rules   *rules.Store
 	targets *targetCache
 	brief   briefingCache
+	picks   pickCache
 
 	roleMu   sync.Mutex
 	roleHero int
@@ -456,23 +457,11 @@ func (s *Server) roleFor(heroID int, set config.Settings) (role, note string) {
 }
 
 func (s *Server) usualRole(heroID int) string {
-	matches, err := s.stats.Matches()
+	role, err := s.stats.UsualRole(heroID, config.Roles)
 	if err != nil {
-		return ""
+		s.log.Warn("read the usual role", "hero", heroID, "err", err)
 	}
-	counts := map[string]int{}
-	best := ""
-	// Newest last, so ties go to the most recent role.
-	for _, m := range matches {
-		if m.HeroID != heroID || m.Simulated || !slices.Contains(config.Roles, m.Role) {
-			continue
-		}
-		counts[m.Role]++
-		if counts[m.Role] >= counts[best] {
-			best = m.Role
-		}
-	}
-	return best
+	return role
 }
 
 // roleFromHeroRoles reads OpenDota's hero roles, which list the main ones first.

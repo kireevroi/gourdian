@@ -1,11 +1,14 @@
 package server
 
 import (
+	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"gourdian/internal/coach"
 	"gourdian/internal/gsi"
+	"gourdian/internal/stats"
 )
 
 const (
@@ -17,10 +20,29 @@ const (
 	pickRecent   = 120 * 24 * time.Hour
 )
 
+// pickCache keeps pick help, which the draft asks for every tick, until the match history
+// changes (or the day does, since old games drop out of the window).
+type pickCache struct {
+	mu   sync.Mutex
+	key  string
+	help *coach.PickHelp
+}
+
 // pickHelp is your own record for this position: the heroes worth picking and the ones that
 // keep losing. Dota tells the player nothing about the draft, so this is history only.
 func (s *Server) pickHelp(role string) *coach.PickHelp {
-	matches, err := s.stats.Matches()
+	key := fmt.Sprintf("%s/%d/%s", role, s.stats.HistoryVersion(), time.Now().Format(time.DateOnly))
+	c := &s.picks
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.key != key {
+		c.key, c.help = key, s.readPickHelp(role)
+	}
+	return c.help
+}
+
+func (s *Server) readPickHelp(role string) *coach.PickHelp {
+	matches, err := s.stats.MatchesWhere(stats.MatchFilter{Role: role, Since: time.Now().Add(-pickRecent), Real: true})
 	if err != nil || len(matches) == 0 {
 		return nil
 	}
