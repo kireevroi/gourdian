@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dota Trainer · In-game view</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+<!--
+  The HUD as a web page, for places the Windows overlay can't reach: the Steam overlay's
+  browser (Shift+Tab, then pin it) on Linux, or a second monitor anywhere.
+-->
+<style>
+  :root { --info: #5b9cf0; --warn: #e5a93b; --urgent: #ef4a4a; --coach: #9085e9; --good: #3fb97a; --text: #e6e9ef; --muted: #8b95a7; }
+  html, body { margin: 0; background: #0e1116; color: var(--text); font: 600 20px/1.35 system-ui, "Segoe UI", sans-serif; }
+  body { padding: 12px 14px; }
+  .alert { padding: 10px 12px; margin-bottom: 10px; border-radius: 10px; background: #171b22; border-left: 5px solid var(--info); font-size: 1.15em; }
+  .alert.warn { border-color: var(--warn); } .alert.urgent { border-color: var(--urgent); } .alert.coach { border-color: var(--coach); }
+  .row { padding: 3px 2px; }
+  .text { color: var(--text); } .muted { color: var(--muted); } .good { color: var(--good); } .info { color: var(--info); }
+  .warn { color: var(--warn); } .urgent { color: var(--urgent); } .coach { color: var(--coach); }
+  .alert.warn, .alert.urgent, .alert.coach, .alert.info { color: var(--text); }
+  .idle { color: var(--muted); font-weight: 500; font-size: 16px; }
+  body.big { font-size: 26px; } body.small { font-size: 16px; }
+  .size { position: fixed; right: 8px; bottom: 6px; display: flex; gap: 4px; opacity: .25; }
+  .size:hover { opacity: 1; }
+  .size button { background: #202631; color: var(--text); border: 0; border-radius: 6px; padding: 2px 8px; font: inherit; font-size: 13px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="view"><div class="idle">Waiting for the trainer…</div></div>
+<div class="size"><button data-size="small">A−</button><button data-size="">A</button><button data-size="big">A+</button></div>
+<script>
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function render(p) {
+  const v = p && p.live;
+  const el = document.getElementById('view');
+  if (!v || (!v.alert && !(v.rows || []).length)) {
+    el.innerHTML = '<div class="idle">Nothing to show yet. Tips appear here during a match.</div>';
+    return;
+  }
+  const more = v.more ? ` <span class="muted">(+${v.more})</span>` : '';
+  el.innerHTML = (v.alert ? `<div class="alert ${esc(v.alert.kind)}">${esc(v.alert.text)}${more}</div>` : '') +
+    (v.rows || []).map((r) => `<div class="row ${esc(r.kind)}">${esc(r.text)}</div>`).join('');
+}
+
+async function load() {
+  try { render(await (await fetch('/api/hud')).json()); } catch (e) { setTimeout(load, 2000); }
+}
+
+function connect() {
+  const es = new EventSource('/events');
+  es.addEventListener('hud', (e) => render(JSON.parse(e.data)));
+  es.onopen = load;
+  es.onerror = () => { document.getElementById('view').innerHTML = '<div class="idle">The trainer isn\'t running. Reconnecting…</div>'; };
+}
+
+// The Steam overlay browser remembers nothing between sessions, so the size lives in the URL too.
+const params = new URLSearchParams(location.search);
+let size = params.get('size') || '';
+try { size = size || localStorage.getItem('overlay-size') || ''; } catch (e) { /* private window */ }
+document.body.className = size;
+document.querySelector('.size').addEventListener('click', (e) => {
+  if (e.target.dataset.size === undefined) return;
+  size = e.target.dataset.size;
+  document.body.className = size;
+  try { localStorage.setItem('overlay-size', size); } catch (err) { /* private window */ }
+});
+
+load();
+connect();
+</script>
+</body>
+</html>

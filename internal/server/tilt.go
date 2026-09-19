@@ -1,0 +1,107 @@
+package server
+
+import (
+	"fmt"
+	"slices"
+	"time"
+
+	"dotatrainer/internal/coach"
+	"dotatrainer/internal/config"
+	"dotatrainer/internal/stats"
+)
+
+const (
+	sessionGap    = 90 * time.Minute // matches closer than this belong to one session
+	tiltRemindFor = 10 * time.Minute // a match started this soon after the warning gets a reminder
+	tiltMMRDrop   = 50
+)
+
+// tiltReason looks at the session the latest match ended and says why a break would help,
+// or returns "".
+func tiltReason(matches []stats.MatchSummary, mmr []stats.MMREntry) string {
+	var decided []stats.MatchSummary
+	for _, m := range matches {
+		if m.Real() && m.Result != "unknown" {
+			decided = append(decided, m)
+		}
+	}
+	slices.SortFunc(decided, func(a, b stats.MatchSummary) int { return a.EndedAt.Compare(b.EndedAt) })
+	n := len(decided)
+	if n == 0 {
+		return ""
+	}
+	start := n - 1
+	for start > 0 && decided[start].EndedAt.Sub(decided[start-1].EndedAt) <= sessionGap {
+		start--
+	}
+	session := decided[start:]
+	lost := func(i int) bool { return session[i].Result == "loss" }
+	k := len(session)
+	switch {
+	case k >= 3 && lost(k-1) && lost(k-2) && lost(k-3):
+		return "Three losses in a row. Take a proper break before you queue again"
+	case k >= 2 && lost(k-1) && lost(k-2):
+		return "Two losses in a row. Take a 10-minute break before you queue again"
+	case k >= 4 && lost(k-1):
+		losses := 0
+		for i := k - 4; i < k; i++ {
+			if lost(i) {
+				losses++
+			}
+		}
+		if losses >= 3 {
+			return "Three of your last four games were losses. Take a break before the next one"
+		}
+	}
+	var first, last *stats.MMREntry
+	for i := range mmr {
+		if e := &mmr[i]; !e.Date.Before(session[0].EndedAt.Add(-3 * time.Hour)) {
+			if first == nil {
+				first = e
+			}
+			last = e
+		}
+	}
+	if first != nil && last != first && first.MMR-last.MMR >= tiltMMRDrop && lost(k-1) {
+		return fmt.Sprintf("You're down %d MMR this session. Take a break before you queue again", first.MMR-last.MMR)
+	}
+	return ""
+}
+
+// tiltCheck warns after a match that ends a losing run.
+func (s *Server) tiltCheck(m stats.MatchSummary, set config.Settings) {
+	if !set.TiltCheck || !m.Real() {
+		return
+	}
+	matches, err := s.stats.Matches()
+	if err != nil {
+		return
+	}
+	mmr, _ := s.stats.MMR()
+	reason := tiltReason(matches, mmr)
+	if reason == "" {
+		return
+	}
+	s.brief.mu.Lock()
+	s.brief.tiltAt = time.Now()
+	s.brief.mu.Unlock()
+	tip := coach.Tip{Rule: "tilt", Category: "focus", Severity: coach.Warn, Text: reason, Speech: reason + ".", Clock: m.DurationSec, At: time.Now()}
+	s.engine.AddTips([]coach.Tip{tip})
+	s.deliver(m.MatchID, []coach.Tip{tip}, set)
+}
+
+// tiltReminder gives one calm-down reminder when a match starts soon after a break warning.
+func (s *Server) tiltReminder(matchID string, set config.Settings) {
+	s.brief.mu.Lock()
+	recent := !s.brief.tiltAt.IsZero() && time.Since(s.brief.tiltAt) < tiltRemindFor
+	s.brief.tiltAt = time.Time{}
+	s.brief.mu.Unlock()
+	if !recent || !set.TiltCheck {
+		return
+	}
+	tip := coach.Tip{Rule: "tilt", Category: "focus", Severity: coach.Info, At: time.Now(),
+		Text:   "Straight back in after a losing run: play this one calm, mute anyone tilting you, and focus on your own farm",
+		Speech: "Play this one calm. Mute anyone tilting you."}
+	s.engine.AddTips([]coach.Tip{tip})
+	s.deliver(matchID, []coach.Tip{tip}, set)
+}

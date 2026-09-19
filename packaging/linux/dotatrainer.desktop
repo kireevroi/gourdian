@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Dota Trainer
+GenericName=Dota 2 coach
+Comment=Live coaching for Dota 2
+Exec=dotatrainer run -open
+Icon=dotatrainer
+Terminal=false
+Categories=Game;
+Keywords=dota;coach;trainer;
+StartupNotify=false

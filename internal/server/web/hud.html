@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dota Trainer · HUD</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+<link rel="stylesheet" href="/app.css">
+<style>
+  .layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  .stack { display: grid; gap: 16px; }
+
+  .stage { position: relative; min-height: 420px; border-radius: 8px; overflow: hidden; padding: 18px;
+    background: radial-gradient(circle at 20% 30%, #3d5a2a 0, transparent 40%), radial-gradient(circle at 80% 70%, #5a4a2a 0, transparent 45%),
+      repeating-linear-gradient(45deg, #2e3f24 0 18px, #33472a 18px 36px); }
+  .stage.right { display: flex; justify-content: flex-end; }
+  .stage.center { display: flex; justify-content: center; }
+  .preview-hud { transform-origin: top left; }
+  .stage.right .preview-hud { transform-origin: top right; }
+  .stage.center .preview-hud { transform-origin: top center; }
+  .hp { position: relative; margin-bottom: 8px; padding: 12px 12px 12px 17px; border-radius: 10px; }
+  .hp::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 5px; background: var(--bar, #262d3a); }
+  .hp div { font-size: 17px; font-weight: 500; line-height: 1.3; margin-top: 4px; }
+  .hp div:first-child { margin-top: 0; }
+  .hp.big div { font-size: 22px; font-weight: 600; }
+  .hp.shadow div { text-shadow: 1px 1px 0 rgba(0,0,0,.8); }
+  .k-text { color: #e6e9ef; } .k-muted { color: #8b95a7; } .k-good { color: #3fb97a; } .k-info { color: #5b9cf0; }
+  .k-warn { color: #e5a93b; } .k-urgent { color: #ef4a4a; } .k-coach { color: #9085e9; }
+  .preview-note { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: #dfe6d2; text-shadow: 0 1px 2px #000; }
+
+  .widgets { display: grid; gap: 6px; }
+  .widget { display: grid; grid-template-columns: auto auto 1fr auto; gap: 10px; align-items: start; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid transparent; }
+  .widget.dragging { opacity: .4; }
+  .widget.over { border-color: var(--accent); }
+  .widget .grip { cursor: grab; color: var(--muted); user-select: none; padding-top: 1px; }
+  .widget small { display: block; color: var(--muted); font-size: 12px; }
+  .widget .opts { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 6px; align-items: center; font-size: 13px; }
+  .widget .opts label { display: inline-flex; gap: 4px; align-items: center; color: var(--text-2); }
+  .widget.off .opts { display: none; }
+  .widget .moves { display: flex; gap: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="layout">
+    <div class="stack">
+      <section class="card">
+        <h2>Preview <span><label class="muted" style="text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="sample"> Sample data</label></span></h2>
+        <div class="stage right" id="stage"><div class="preview-hud" id="preview"></div><div class="preview-note" id="preview-note"></div></div>
+      </section>
+      <section class="card">
+        <h2>Place it</h2>
+        <div class="field"><span class="muted">Drag the HUD over the game, scroll to resize it, Ctrl+scroll for the background.</span><button class="btn primary" id="edit">Edit in game</button></div>
+        <div class="field"><span class="muted">On Linux, or on a second monitor: the same HUD as a page. In the Steam overlay, open the web browser and pin it.</span><a class="btn" href="/overlay.html" target="_blank" rel="noopener">In-game view</a></div>
+        <p class="hint">Or press the HUD layout hotkey in game. Click Done on the HUD when it's where you want it.</p>
+        <div class="field"><label for="corner">Position</label>
+          <select id="corner"><option value="top-right">Top right</option><option value="top-left">Top left</option><option value="top-center">Top center</option><option value="placed" disabled>Where you dragged it</option></select></div>
+      </section>
+    </div>
+
+    <div class="stack">
+      <section class="card">
+        <h2>What it shows</h2>
+        <p class="hint">Top to bottom, in this order. Drag to reorder.</p>
+        <div class="widgets" id="widgets"></div>
+      </section>
+      <section class="card">
+        <h2>Look</h2>
+        <div class="field"><label for="width">Width <span class="num muted" id="width-v"></span></label><input type="range" id="width" min="300" max="1000" step="20"></div>
+        <div class="field"><label for="scale">Text size <span class="num muted" id="scale-v"></span></label><input type="range" id="scale" min="60" max="200" step="10"></div>
+        <div class="field"><label for="background">Background <span class="num muted" id="background-v"></span></label><input type="range" id="background" min="0" max="100" step="5"></div>
+        <div class="field"><label for="opacity">Whole HUD opacity <span class="num muted" id="opacity-v"></span></label><input type="range" id="opacity" min="20" max="100" step="5"></div>
+        <label class="toggle"><input type="checkbox" id="shadow"><span>Text shadow<small>Keeps text readable with little or no background.</small></span></label>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script src="/app.js"></script>
+<script>
+const WIDGETS = {
+  alerts: ['Alerts', 'Tips from the rules and the AI coach, in large type for a few seconds.'],
+  position: ['Position', 'Before 2:30: the position you are coached as, and how to change it.'],
+  drill: ['Drill', 'The habit you are drilling, and how often it happened this game.'],
+  picks: ['Your best heroes', 'While you pick: your best and worst heroes in this position.'],
+  briefing: ['Briefing', 'Before the horn: your record on the hero, the last-hit target and item goals.'],
+  focus: ['Focus', 'Your focus from the last match review, before the horn and while dead.'],
+  death: ['While dead', 'Respawn time and gold to spend.'],
+  timers: ['Timers', 'Runes, neutral items, Roshan, Tormentor and stack pulls.'],
+  pace: ['Last-hit pace', 'Last hits against the target pace for your position.'],
+  next_item: ['Next item', 'The next item in the build, and when you can buy it.'],
+  skill: ['Skill', 'With a skill point to spend: the ability pros level next, and how many pro games that order comes from.'],
+  item_goal: ['Item goal', 'Your next core item and its timing goal, from five minutes before it.'],
+  stats: ['Stats line', 'Kills, deaths, assists, GPM and last hits.'],
+};
+const KIND_NAMES = { rune: 'Runes', neutral: 'Neutral items', objective: 'Roshan and Tormentor', stack: 'Stacks' };
+const SLIDERS = [['width', 'hud_width', 'px'], ['scale', 'hud_scale', '%'], ['background', 'hud_background', '%'], ['opacity', 'hud_opacity', '%']];
+let hudPayload = null, widgets = [], dragIndex = -1;
+
+function renderPreview() {
+  if (!cfg) return;
+  if (!hudPayload || !hudPayload.sample) {
+    $('preview').innerHTML = '<div class="muted">Loading the preview…</div>';
+    return;
+  }
+  const o = cfg.settings.overlay;
+  const live = hudPayload.live && (hudPayload.live.alert || (hudPayload.live.rows || []).length);
+  const view = ($('sample').checked || !live ? hudPayload.sample : hudPayload.live) || {};
+  $('preview-note').textContent = view === hudPayload.live ? 'Live from your match' : 'Sample data';
+  const bg = `rgba(14,17,22,${o.hud_background / 100})`;
+  const panel = (lines, bar, big) => `<div class="hp ${big ? 'big' : ''} ${o.hud_shadow ? 'shadow' : ''}" style="background:${bg};--bar:${bar}">${lines.map((l) => `<div class="k-${esc(l.kind)}">${esc(l.text)}</div>`).join('')}</div>`;
+  const colors = { info: '#5b9cf0', warn: '#e5a93b', urgent: '#ef4a4a', coach: '#9085e9', good: '#3fb97a', text: '#e6e9ef', muted: '#8b95a7' };
+  let html = '';
+  if (view.alert) html += panel([{ ...view.alert, text: view.alert.text + (view.more ? `  (+${view.more})` : '') }], colors[view.alert.kind] || '#262d3a', true);
+  if ((view.rows || []).length) html += panel(view.rows, '#262d3a', false);
+  const el = $('preview');
+  el.innerHTML = html || '<div class="muted">Nothing enabled.</div>';
+  el.style.width = `${o.hud_width}px`;
+  el.style.opacity = o.hud_opacity / 100;
+  el.style.transform = `scale(${o.hud_scale / 100})`;
+  $('stage').className = `stage ${o.hud_placed ? 'right' : o.hud_corner === 'top-left' ? '' : o.hud_corner === 'top-center' ? 'center' : 'right'}`;
+}
+
+function widgetOptions(w, i) {
+  if (w.id === 'alerts') {
+    return `<div class="opts">
+      <label>Show <select data-i="${i}" data-opt="min_severity">${[['info', 'every tip'], ['warn', 'warnings and up'], ['urgent', 'urgent only']].map(([v, n]) => `<option value="${v}" ${w.min_severity === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label><input type="checkbox" data-i="${i}" data-opt="coach" ${w.coach ? 'checked' : ''}> AI coach tips</label></div>`;
+  }
+  if (w.id === 'timers') {
+    return `<div class="opts">
+      <label>Show <select data-i="${i}" data-opt="count">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<option ${w.count === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label>due within <select data-i="${i}" data-opt="within">${[[0, 'any time'], [30, '30 s'], [60, '1 min'], [120, '2 min'], [300, '5 min']].map(([v, n]) => `<option value="${v}" ${(w.within || 0) === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      ${Object.entries(KIND_NAMES).map(([k, n]) => `<label><input type="checkbox" data-i="${i}" data-kind="${k}" ${(w.kinds || []).includes(k) ? 'checked' : ''}> ${n}</label>`).join('')}</div>`;
+  }
+  return '';
+}
+
+function renderWidgets() {
+  $('widgets').innerHTML = widgets.map((w, i) => {
+    const [name, desc] = WIDGETS[w.id] || [w.id, ''];
+    return `<div class="widget ${w.on ? '' : 'off'}" draggable="true" data-index="${i}">
+      <span class="grip" title="Drag to reorder">⋮⋮</span>
+      <input type="checkbox" data-i="${i}" data-opt="on" ${w.on ? 'checked' : ''} aria-label="Show ${esc(name)}">
+      <div><b>${esc(name)}</b><small>${esc(desc)}</small>${widgetOptions(w, i)}</div>
+      <span class="moves"><button class="btn small" data-move="-1" data-i="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button><button class="btn small" data-move="1" data-i="${i}" ${i === widgets.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button></span>
+    </div>`;
+  }).join('');
+}
+
+const saveWidgets = () => saveSettings({ hud_widgets: widgets });
+
+$('widgets').addEventListener('change', (e) => {
+  const i = Number(e.target.dataset.i);
+  if (Number.isNaN(i)) return;
+  const w = widgets[i];
+  if (e.target.dataset.kind) {
+    const kinds = new Set(w.kinds || []);
+    e.target.checked ? kinds.add(e.target.dataset.kind) : kinds.delete(e.target.dataset.kind);
+    w.kinds = Object.keys(KIND_NAMES).filter((k) => kinds.has(k));
+  } else {
+    const opt = e.target.dataset.opt;
+    w[opt] = e.target.type === 'checkbox' ? e.target.checked : ['count', 'within'].includes(opt) ? Number(e.target.value) : e.target.value;
+  }
+  saveWidgets();
+});
+$('widgets').addEventListener('click', (e) => {
+  const move = Number(e.target.dataset.move);
+  if (!move) return;
+  const i = Number(e.target.dataset.i), j = i + move;
+  [widgets[i], widgets[j]] = [widgets[j], widgets[i]];
+  saveWidgets();
+});
+$('widgets').addEventListener('dragstart', (e) => {
+  const row = e.target.closest('.widget');
+  dragIndex = Number(row.dataset.index);
+  row.classList.add('dragging');
+});
+$('widgets').addEventListener('dragover', (e) => {
+  const row = e.target.closest('.widget');
+  if (!row) return;
+  e.preventDefault();
+  document.querySelectorAll('.widget.over').forEach((el) => el.classList.remove('over'));
+  row.classList.add('over');
+});
+$('widgets').addEventListener('drop', (e) => {
+  const row = e.target.closest('.widget');
+  if (!row || dragIndex < 0) return;
+  e.preventDefault();
+  const [moved] = widgets.splice(dragIndex, 1);
+  widgets.splice(Number(row.dataset.index), 0, moved);
+  dragIndex = -1;
+  saveWidgets();
+});
+$('widgets').addEventListener('dragend', () => { dragIndex = -1; renderWidgets(); });
+
+onSettings((c) => {
+  const o = c.settings.overlay;
+  widgets = structuredClone(c.settings.hud_widgets || []);
+  renderWidgets();
+  $('corner').value = o.hud_placed ? 'placed' : o.hud_corner;
+  for (const [id, key, unit] of SLIDERS) {
+    if (document.activeElement !== $(id)) $(id).value = o[key];
+    $(`${id}-v`).textContent = `${o[key]}${unit}`;
+  }
+  $('shadow').checked = o.hud_shadow;
+  renderPreview();
+});
+
+$('corner').addEventListener('change', (e) => saveSettings({ overlay: { hud_corner: e.target.value, hud_placed: false } }));
+for (const [id, key, unit] of SLIDERS) {
+  $(id).addEventListener('input', (e) => {
+    $(`${id}-v`).textContent = `${e.target.value}${unit}`;
+    if (cfg) { cfg.settings.overlay[key] = Number(e.target.value); renderPreview(); }
+  });
+  $(id).addEventListener('change', (e) => saveSettings({ overlay: { [key]: Number(e.target.value) } }));
+}
+$('shadow').addEventListener('change', (e) => saveSettings({ overlay: { hud_shadow: e.target.checked } }));
+$('sample').addEventListener('change', renderPreview);
+$('edit').addEventListener('click', async () => {
+  try { toast((await api('/api/hud/edit', { method: 'POST' })).status); } catch (e) { toast(e.message, true); }
+});
+
+events.on('hud', (p) => { hudPayload = p; renderPreview(); });
+// The preview is fetched on load and again whenever the event stream (re)connects, so a
+// restart of the trainer doesn't leave it empty.
+async function loadHUD() {
+  try {
+    hudPayload = await api('/api/hud');
+    renderPreview();
+  } catch (e) {
+    setTimeout(loadHUD, 2000);
+  }
+}
+events.onOpen(loadHUD);
+loadHUD();
+events.start();
+</script>
+</body>
+</html>

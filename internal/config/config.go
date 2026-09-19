@@ -1,0 +1,571 @@
+// Package config persists trainer settings and holds the patch timings built into this version.
+package config
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"maps"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+
+	"dotatrainer/internal/hotkey"
+)
+
+const (
+	RoleCarry       = "carry"
+	RoleMid         = "mid"
+	RoleOfflane     = "offlane"
+	RoleSoftSupport = "soft_support"
+	RoleHardSupport = "hard_support"
+)
+
+var Roles = []string{RoleCarry, RoleMid, RoleOfflane, RoleSoftSupport, RoleHardSupport}
+
+const (
+	VoiceSystem  = "system"
+	VoiceBrowser = "browser"
+	VoiceOff     = "off"
+)
+
+// Languages the dashboard can be shown in.
+var Languages = []string{"en", "ru"}
+
+// Voice levels decide which tips are spoken; every tip still shows on screen.
+const (
+	SpeakAll       = "all"
+	SpeakImportant = "important"
+	SpeakUrgent    = "urgent"
+)
+
+// Timings are in-game clock seconds. They ship with each app version instead of being
+// user settings, so updating the app is how they follow a patch.
+type Timings struct {
+	BountyRuneEvery  int   `json:"bounty_rune_every"`
+	WaterRunes       []int `json:"water_runes"`
+	PowerRuneFirst   int   `json:"power_rune_first"`
+	PowerRuneEvery   int   `json:"power_rune_every"`
+	WisdomRuneEvery  int   `json:"wisdom_rune_every"`
+	LotusEvery       int   `json:"lotus_every"`
+	TormentorSpawn   int   `json:"tormentor_spawn"`
+	NeutralTiers     []int `json:"neutral_tiers"`
+	RoshanRespawnMin int   `json:"roshan_respawn_min"`
+	RoshanRespawnMax int   `json:"roshan_respawn_max"`
+	AegisDuration    int   `json:"aegis_duration"`
+	BuybackFrom      int   `json:"buyback_from"`
+}
+
+// AIChoice is which provider and model answer one kind of request.
+type AIChoice struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	Effort   string `json:"effort,omitempty"`
+	// Typed is a model the player named that the provider doesn't list; it's never replaced.
+	Typed bool `json:"typed,omitempty"`
+}
+
+type AISettings struct {
+	Enabled bool     `json:"enabled"` // live tips
+	Review  bool     `json:"review"`  // match reviews
+	Live    AIChoice `json:"live"`
+	Reviews AIChoice `json:"reviews"`
+	// Fallback answers when the chosen provider is logged out or out of usage; empty means none.
+	Fallback     AIChoice          `json:"fallback"`
+	Interval     int               `json:"interval"`
+	Profile      string            `json:"profile"`
+	Instructions string            `json:"instructions"`
+	CLIPaths     map[string]string `json:"cli_paths,omitempty"` // provider id -> path to its CLI
+	CustomURL    string            `json:"custom_url,omitempty"`
+
+	// Before 1.1 only Claude Code was supported; Open moves these into Live and Reviews.
+	LegacyModel      string `json:"model,omitempty"`
+	LegacyEffort     string `json:"effort,omitempty"`
+	LegacyClaudePath string `json:"claude_path,omitempty"`
+}
+
+// migrate moves pre-1.1 Claude settings into the provider choices.
+func (a *AISettings) migrate() {
+	if a.LegacyModel != "" {
+		a.Live.Model, a.Reviews.Model = a.LegacyModel, a.LegacyModel
+	}
+	if a.LegacyEffort != "" {
+		a.Live.Effort = a.LegacyEffort
+	}
+	if a.LegacyClaudePath != "" {
+		if a.CLIPaths == nil {
+			a.CLIPaths = map[string]string{}
+		}
+		a.CLIPaths["claude"] = a.LegacyClaudePath
+	}
+	a.LegacyModel, a.LegacyEffort, a.LegacyClaudePath = "", "", ""
+	// The Gemini CLI needed Node.js, so 1.1 dropped it; its API key provider stays.
+	for _, c := range []*AIChoice{&a.Live, &a.Reviews} {
+		if c.Provider == "gemini" {
+			c.Provider, c.Model = "claude", ""
+		}
+	}
+	if a.Fallback.Provider == "gemini" {
+		a.Fallback = AIChoice{}
+	}
+	delete(a.CLIPaths, "gemini")
+}
+
+const maxPromptText = 2000
+
+var AIEfforts = []string{"low", "medium", "high", "xhigh", "max"}
+
+var HUDCorners = []string{"top-right", "top-left", "top-center"}
+
+// OverlaySettings are the in-game HUD's position, size and look.
+type OverlaySettings struct {
+	HUDCorner string `json:"hud_corner"`
+	// HUDPlaced means the player dragged the HUD to HUDX, HUDY; picking a corner clears it.
+	HUDPlaced  bool `json:"hud_placed"`
+	HUDX       int  `json:"hud_x"`
+	HUDY       int  `json:"hud_y"`
+	HUDScale   int  `json:"hud_scale"`   // percent
+	HUDOpacity int  `json:"hud_opacity"` // percent, for the whole HUD
+	HUDWidth   int  `json:"hud_width"`   // pixels at 100% size
+	// HUDBackground is the panels' opacity in percent; at 0 only the text shows.
+	HUDBackground int  `json:"hud_background"`
+	HUDShadow     bool `json:"hud_shadow"` // outline text so it reads over the game
+}
+
+// Limits for the overlay's size and opacity.
+const (
+	MinHUDScale   = 60
+	MaxHUDScale   = 200
+	MinHUDOpacity = 20
+	MinHUDWidth   = 300
+	MaxHUDWidth   = 1000
+)
+
+// HUDWidget is one kind of line on the HUD; the list order is the order on screen. Options
+// only apply to the widgets that use them.
+type HUDWidget struct {
+	ID string `json:"id"`
+	On bool   `json:"on"`
+	// Alerts: the least severe tip to show, and whether AI coach tips show.
+	MinSeverity string `json:"min_severity,omitempty"`
+	Coach       bool   `json:"coach,omitempty"`
+	// Timers: how many, which kinds, and only those due within this many seconds (0 = any).
+	Count  int      `json:"count,omitempty"`
+	Kinds  []string `json:"kinds,omitempty"`
+	Within int      `json:"within,omitempty"`
+}
+
+// HUD widget ids.
+const (
+	WidgetAlerts   = "alerts"
+	WidgetPosition = "position"
+	WidgetDrill    = "drill"
+	WidgetPicks    = "picks"
+	WidgetBriefing = "briefing"
+	WidgetFocus    = "focus"
+	WidgetDeath    = "death"
+	WidgetTimers   = "timers"
+	WidgetPace     = "pace"
+	WidgetNextItem = "next_item"
+	WidgetSkill    = "skill"
+	WidgetItemGoal = "item_goal"
+	WidgetStats    = "stats"
+)
+
+var (
+	TimerKinds    = []string{"rune", "neutral", "objective", "stack"}
+	TipSeverities = []string{"info", "warn", "urgent"}
+)
+
+func DefaultWidgets() []HUDWidget {
+	return []HUDWidget{
+		{ID: WidgetAlerts, On: true, MinSeverity: "info", Coach: true},
+		{ID: WidgetPosition, On: true},
+		{ID: WidgetDrill, On: true},
+		{ID: WidgetPicks, On: true},
+		{ID: WidgetBriefing, On: true},
+		{ID: WidgetFocus, On: true},
+		{ID: WidgetDeath, On: true},
+		{ID: WidgetTimers, On: true, Count: 3, Kinds: slices.Clone(TimerKinds)},
+		{ID: WidgetPace, On: true},
+		{ID: WidgetNextItem, On: true},
+		{ID: WidgetSkill, On: true},
+		{ID: WidgetItemGoal, On: true},
+		{ID: WidgetStats, On: false},
+	}
+}
+
+// normalizeWidgets drops unknown widgets and duplicates, and appends widgets added in newer
+// versions with their default on/off state, so a saved layout keeps working.
+func normalizeWidgets(list []HUDWidget) []HUDWidget {
+	defaults := DefaultWidgets()
+	known := map[string]HUDWidget{}
+	for _, w := range defaults {
+		known[w.ID] = w
+	}
+	var out []HUDWidget
+	seen := map[string]bool{}
+	for _, w := range list {
+		if _, ok := known[w.ID]; ok && !seen[w.ID] {
+			seen[w.ID] = true
+			out = append(out, w)
+		}
+	}
+	for _, w := range defaults {
+		if !seen[w.ID] {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// HotkeySettings are the in-game shortcuts, written like "Ctrl+Shift+F10".
+type HotkeySettings struct {
+	HUDEdit   string `json:"hud_edit"`
+	HUDToggle string `json:"hud_toggle"`
+	Dashboard string `json:"dashboard"`
+}
+
+type RecordingSettings struct {
+	Auto bool `json:"auto"`
+	Keep int  `json:"keep"`
+}
+
+type Settings struct {
+	Role      string `json:"role"`
+	Language  string `json:"language"`   // "en" or "ru": the dashboard's text
+	MMRPrompt bool   `json:"mmr_prompt"` // ask for the new MMR after a match
+	// Drill is the rule whose habit the player is working on, counted live and after each match.
+	Drill string `json:"drill,omitempty"`
+	// QuietInFights holds back spoken reminders while the hero is losing health fast.
+	QuietInFights bool              `json:"quiet_in_fights"`
+	Voice         string            `json:"voice"`
+	VoiceRate     int               `json:"voice_rate"` // -10 (slow) .. 10 (fast)
+	VoiceLevel    string            `json:"voice_level"`
+	DisabledRules []string          `json:"disabled_rules"`
+	Timings       Timings           `json:"-"` // always DefaultTimings()
+	AI            AISettings        `json:"ai"`
+	Overlay       OverlaySettings   `json:"overlay"`
+	Recording     RecordingSettings `json:"recording"`
+	Hotkeys       HotkeySettings    `json:"hotkeys"`
+	// DashboardWindow opens the dashboard in its own app window instead of a browser tab.
+	DashboardWindow bool        `json:"dashboard_window"`
+	HUDWidgets      []HUDWidget `json:"hud_widgets"`
+	// TiltCheck suggests a break after a run of losses.
+	TiltCheck bool `json:"tilt_check"`
+	// HeroRoles remembers the role last played on each hero, keyed by hero id.
+	HeroRoles map[string]string `json:"hero_roles"`
+	// PiperVoices is the natural voice picked for each language on Linux, by voice id.
+	PiperVoices map[string]string `json:"piper_voices,omitempty"`
+	// AccountID is the player's 32-bit Steam account id, learned from Dota or set by hand.
+	AccountID string `json:"account_id"`
+}
+
+func (s Settings) RuleEnabled(id string) bool { return !slices.Contains(s.DisabledRules, id) }
+
+// Clone copies every slice and map, so decoding JSON into a copy can't write into the stored settings.
+func (s Settings) Clone() Settings {
+	s.DisabledRules = slices.Clone(s.DisabledRules)
+	s.HUDWidgets = slices.Clone(s.HUDWidgets)
+	for i := range s.HUDWidgets {
+		s.HUDWidgets[i].Kinds = slices.Clone(s.HUDWidgets[i].Kinds)
+	}
+	s.HeroRoles = maps.Clone(s.HeroRoles)
+	s.PiperVoices = maps.Clone(s.PiperVoices)
+	s.AI.CLIPaths = maps.Clone(s.AI.CLIPaths)
+	s.Timings.WaterRunes = slices.Clone(s.Timings.WaterRunes)
+	s.Timings.NeutralTiers = slices.Clone(s.Timings.NeutralTiers)
+	return s
+}
+
+func (s Settings) Validate() error {
+	if !slices.Contains(Roles, s.Role) {
+		return fmt.Errorf("unknown role %q", s.Role)
+	}
+	if !slices.Contains(Languages, s.Language) {
+		return fmt.Errorf("unknown language %q", s.Language)
+	}
+	if !slices.Contains([]string{VoiceSystem, VoiceBrowser, VoiceOff}, s.Voice) {
+		return fmt.Errorf("unknown voice mode %q", s.Voice)
+	}
+	if !slices.Contains([]string{SpeakAll, SpeakImportant, SpeakUrgent}, s.VoiceLevel) {
+		return fmt.Errorf("unknown voice level %q", s.VoiceLevel)
+	}
+	for hero, role := range s.HeroRoles {
+		if !slices.Contains(Roles, role) {
+			return fmt.Errorf("unknown role %q for hero %s", role, hero)
+		}
+	}
+	if s.VoiceRate < -10 || s.VoiceRate > 10 {
+		return fmt.Errorf("voice_rate must be between -10 and 10")
+	}
+	if !slices.Contains(HUDCorners, s.Overlay.HUDCorner) {
+		return fmt.Errorf("unknown HUD position %q", s.Overlay.HUDCorner)
+	}
+	if id, err := strconv.ParseUint(s.AccountID, 10, 32); s.AccountID != "" && (err != nil || id == 0) {
+		return fmt.Errorf("account id must be your Dota Friend ID, a number like 123456789")
+	}
+	if o := s.Overlay; o.HUDScale < MinHUDScale || o.HUDScale > MaxHUDScale {
+		return fmt.Errorf("HUD size must be between %d%% and %d%%", MinHUDScale, MaxHUDScale)
+	}
+	if o := s.Overlay; o.HUDOpacity < MinHUDOpacity || o.HUDOpacity > 100 || o.HUDBackground < 0 || o.HUDBackground > 100 {
+		return fmt.Errorf("HUD opacity must be %d%% to 100%% and its background 0%% to 100%%", MinHUDOpacity)
+	}
+	if o := s.Overlay; o.HUDWidth < MinHUDWidth || o.HUDWidth > MaxHUDWidth {
+		return fmt.Errorf("HUD width must be %d to %d pixels", MinHUDWidth, MaxHUDWidth)
+	}
+	for _, w := range s.HUDWidgets {
+		switch {
+		case w.ID == WidgetTimers && (w.Count < 1 || w.Count > 7 || w.Within < 0):
+			return fmt.Errorf("the HUD shows 1 to 7 timers")
+		case w.ID == WidgetAlerts && !slices.Contains(TipSeverities, w.MinSeverity):
+			return fmt.Errorf("unknown alert level %q", w.MinSeverity)
+		}
+		for _, k := range w.Kinds {
+			if !slices.Contains(TimerKinds, k) {
+				return fmt.Errorf("unknown timer kind %q", k)
+			}
+		}
+	}
+	seen := map[string]bool{}
+	for _, hk := range []string{s.Hotkeys.HUDEdit, s.Hotkeys.HUDToggle, s.Hotkeys.Dashboard} {
+		h, err := hotkey.Parse(hk)
+		if err != nil {
+			return err
+		}
+		if seen[h.String()] {
+			return fmt.Errorf("%s is used for two things", h)
+		}
+		seen[h.String()] = true
+	}
+	if s.Recording.Keep < 1 || s.Recording.Keep > 500 {
+		return fmt.Errorf("recordings to keep must be between 1 and 500")
+	}
+	for _, c := range []AIChoice{s.AI.Live, s.AI.Reviews, s.AI.Fallback} {
+		if c.Effort != "" && !slices.Contains(AIEfforts, c.Effort) {
+			return fmt.Errorf("unknown AI effort %q", c.Effort)
+		}
+	}
+	if s.AI.Live.Provider == "" || s.AI.Reviews.Provider == "" {
+		return fmt.Errorf("choose an AI provider for live tips and for reviews")
+	}
+	if u := s.AI.CustomURL; u != "" && !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+		return fmt.Errorf("the custom AI URL must start with http:// or https://")
+	}
+	if s.AI.Interval < 60 {
+		return fmt.Errorf("AI interval must be at least 60 seconds")
+	}
+	if len(s.AI.Profile) > maxPromptText || len(s.AI.Instructions) > maxPromptText {
+		return fmt.Errorf("AI profile and instructions are limited to %d characters each", maxPromptText)
+	}
+	return nil
+}
+
+type Config struct {
+	Listen   string   `json:"listen"`
+	Token    string   `json:"token"`
+	Settings Settings `json:"settings"`
+}
+
+func Default() Config {
+	return Config{
+		Listen: "127.0.0.1:4570",
+		Settings: Settings{
+			Role:          RoleCarry,
+			Voice:         VoiceSystem,
+			Language:      "en",
+			MMRPrompt:     true,
+			QuietInFights: true,
+			VoiceRate:     1,
+			VoiceLevel:    SpeakAll,
+			Timings:       DefaultTimings(),
+			AI: AISettings{Enabled: true, Review: true, Interval: 180,
+				// Claude Code's aliases follow Anthropic's newest models, so the defaults never go stale.
+				Live:    AIChoice{Provider: "claude", Model: "sonnet", Effort: "low"},
+				Reviews: AIChoice{Provider: "claude", Model: "opus", Effort: "medium"}},
+			Overlay:         OverlaySettings{HUDCorner: "top-right", HUDScale: 100, HUDOpacity: 100, HUDWidth: 460, HUDBackground: 70, HUDShadow: true},
+			HUDWidgets:      DefaultWidgets(),
+			Recording:       RecordingSettings{Auto: true, Keep: 20},
+			Hotkeys:         HotkeySettings{HUDEdit: "Ctrl+Shift+F10", HUDToggle: "Ctrl+Shift+F9", Dashboard: "Ctrl+Shift+F11"},
+			DashboardWindow: true,
+			TiltCheck:       true,
+		},
+	}
+}
+
+// DefaultTimings are the map timings of patch 7.41f, checked against Valve's patch notes
+// (dota2.com/datafeed/patchnotes) and Liquipedia on 2026-09-18.
+func DefaultTimings() Timings {
+	return Timings{
+		BountyRuneEvery:  240,                               // 0:00, then every 4:00 since 7.38
+		WaterRunes:       []int{120, 240},                   // 2:00 and 4:00
+		PowerRuneFirst:   360,                               // 6:00
+		PowerRuneEvery:   120,                               // then every 2:00
+		WisdomRuneEvery:  420,                               // Shrines of Wisdom every 7:00 since 7.38
+		LotusEvery:       180,                               // a lotus every 3:00, six at most
+		TormentorSpawn:   1200,                              // 20:00 since 7.39, then 10:00 after it dies
+		NeutralTiers:     []int{300, 900, 1500, 2100, 3600}, // Madstone cap rises at 5/15/25/35/60 min
+		RoshanRespawnMin: 480,                               // 8 to 11 minutes after he dies
+		RoshanRespawnMax: 660,
+		AegisDuration:    300,
+		BuybackFrom:      1800, // coaching choice, not a game rule: keep buyback gold from 30:00
+	}
+}
+
+// DashboardHost is the host:port to reach a trainer listening on addr, which may be a wildcard.
+func DashboardHost(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil || host == "" || host == "0.0.0.0" || host == "::" {
+		return "127.0.0.1:" + port
+	}
+	return net.JoinHostPort(host, port)
+}
+
+// GSIURI is where Dota sends game state for a trainer listening on addr.
+func GSIURI(addr string) string { return "http://" + DashboardHost(addr) + "/gsi" }
+
+const (
+	AppName = "Dota Trainer"
+	AppExe  = "Dota Trainer.exe"
+)
+
+// Dir prefers the installed app's folder, even from other builds, so every entry point shares one set of data.
+func Dir() (string, error) {
+	if d := os.Getenv("DOTATRAINER_HOME"); d != "" {
+		return d, nil
+	}
+	if exe, err := os.Executable(); err == nil && filepath.Base(exe) == AppExe {
+		return filepath.Dir(exe), nil
+	}
+	localAppData, appData := os.Getenv("LOCALAPPDATA"), os.Getenv("APPDATA")
+	if runtime.GOOS == "linux" {
+		localAppData, appData = wslFolders()
+	}
+	if localAppData != "" {
+		if app := filepath.Join(localAppData, "Programs", AppName); isAppDir(app) {
+			return app, nil
+		}
+	}
+	if appData != "" {
+		return filepath.Join(appData, "dotatrainer"), nil
+	}
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "dotatrainer"), nil
+}
+
+func isAppDir(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, AppExe))
+	return err == nil
+}
+
+// wslFolders returns %LOCALAPPDATA% and %APPDATA% as /mnt/... paths when running under WSL.
+func wslFolders() (string, string) {
+	if os.Getenv("WSL_DISTRO_NAME") == "" {
+		return "", ""
+	}
+	cmdExe, err := exec.LookPath("cmd.exe")
+	if err != nil {
+		return "", ""
+	}
+	cmd := exec.Command(cmdExe, "/c", "echo %LOCALAPPDATA%&echo %APPDATA%")
+	cmd.Dir = "/mnt/c" // cmd.exe refuses to start in a Linux working directory
+	out, err := cmd.Output()
+	lines := strings.Split(strings.ReplaceAll(string(out), "\r", ""), "\n")
+	if err != nil || len(lines) < 2 {
+		return "", ""
+	}
+	return mntPath(lines[0]), mntPath(lines[1])
+}
+
+func mntPath(win string) string {
+	win = strings.TrimSpace(win)
+	if len(win) < 3 || win[1] != ':' {
+		return ""
+	}
+	return "/mnt/" + strings.ToLower(win[:1]) + "/" + strings.ReplaceAll(win[3:], `\`, "/")
+}
+
+type Store struct {
+	path string
+	mu   sync.RWMutex
+	cfg  Config
+}
+
+func Open(dir string) (*Store, error) {
+	s := &Store{path: filepath.Join(dir, "config.json"), cfg: Default()}
+	data, err := os.ReadFile(s.path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+	case err != nil:
+		return nil, err
+	default:
+		// Unmarshal over defaults so keys missing from an older file keep their defaults.
+		if err := json.Unmarshal(data, &s.cfg); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", s.path, err)
+		}
+	}
+	s.cfg.Settings.HUDWidgets = normalizeWidgets(s.cfg.Settings.HUDWidgets)
+	s.cfg.Settings.AI.migrate()
+	if s.cfg.Token == "" {
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			return nil, err
+		}
+		s.cfg.Token = hex.EncodeToString(b)
+		if err := s.save(); err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
+}
+
+func (s *Store) Path() string { return s.path }
+
+func (s *Store) Get() Config {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c := s.cfg
+	c.Settings = c.Settings.Clone()
+	return c
+}
+
+func (s *Store) Settings() Settings { return s.Get().Settings }
+
+func (s *Store) UpdateSettings(next Settings) error {
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cfg.Settings = next.Clone()
+	s.cfg.Settings.Timings = DefaultTimings()
+	s.cfg.Settings.HUDWidgets = normalizeWidgets(s.cfg.Settings.HUDWidgets)
+	return s.save()
+}
+
+func (s *Store) save() error {
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(s.cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := s.path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, s.path)
+}

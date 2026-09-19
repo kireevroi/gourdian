@@ -1,0 +1,31 @@
+# Builds Dota Trainer from this source tree for Arch Linux and its derivatives
+# (EndeavourOS, CachyOS, Manjaro, Garuda). From the repository root:
+#   cd packaging/arch && makepkg -si
+pkgname=dotatrainer
+pkgver=1.4.0
+pkgrel=1
+pkgdesc='Live coaching for Dota 2: rules, voice, AI reviews and statistics'
+arch=('x86_64' 'aarch64')
+url='https://github.com/kireevroi/gourdian'
+license=('custom')
+depends=('xdg-utils')
+optdepends=('pipewire: plays the natural voice the trainer downloads (pw-play)'
+            'alsa-utils: plays the natural voice without PipeWire (aplay)'
+            'espeak-ng: reads tips aloud until the natural voice is downloaded'
+            'libnotify: desktop notifications'
+            'steam: Dota 2 itself')
+makedepends=('go')
+options=('!debug')
+
+build() {
+	cd "$startdir/../.."
+	export CGO_ENABLED=0 GOFLAGS='-buildvcs=false -trimpath'
+	go build -ldflags "-s -w -X dotatrainer/internal/buildinfo.Version=$pkgver" -o "$srcdir/dotatrainer" .
+}
+
+package() {
+	cd "$startdir/../.."
+	install -Dm755 "$srcdir/dotatrainer" "$pkgdir/usr/bin/dotatrainer"
+	install -Dm644 packaging/linux/dotatrainer.desktop "$pkgdir/usr/share/applications/dotatrainer.desktop"
+	install -Dm644 winres/icon.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/dotatrainer.png"
+}
