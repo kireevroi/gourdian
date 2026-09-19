@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -391,105 +390,6 @@ func (s *Server) recordMatch(m *model.MatchSummary, set config.Settings) {
 	s.afterMatch(*m, set)
 }
 
-func (s *Server) rememberHeroRole(heroID int, role string) {
-	key := strconv.Itoa(heroID)
-	if heroID == 0 || s.cfg.Settings().HeroRoles[key] == role {
-		return
-	}
-	if _, err := s.cfg.Update(func(set *config.Settings) error {
-		if set.HeroRoles == nil {
-			set.HeroRoles = map[string]string{}
-		}
-		set.HeroRoles[key] = role
-		return nil
-	}); err != nil {
-		s.log.Error("remember hero role", "err", err)
-	}
-}
-
-// applyHeroRole picks the role when a match starts on a different hero. The pre-game
-// role line tells the player where the choice came from.
-func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings {
-	// The lock covers the choice and its settings write, so a post about an older hero can't
-	// write its role over a newer hero's. The dashboard update runs without it.
-	s.roleMu.Lock()
-	defer s.roleMu.Unlock()
-	if s.roleHero == heroID {
-		return set
-	}
-	s.roleHero = heroID
-	role, note := s.roleFor(heroID, set)
-	s.engine.SetRoleNote(note)
-	defer func() { s.applyFocus(s.cfg.Settings().Role, heroID) }()
-	if role == "" {
-		return set
-	}
-	// Compared with the settings now, not set: another post may have changed them since.
-	changed := false
-	set, err := s.cfg.Update(func(cur *config.Settings) error {
-		changed = cur.Role != role
-		cur.Role = role
-		return nil
-	})
-	if err != nil {
-		s.log.Error("apply hero role", "err", err)
-		return set
-	}
-	if !changed {
-		return set
-	}
-	s.publishSettingsLater()
-	s.log.Info("role set for hero", "role", role, "why", note)
-	return set
-}
-
-// publishSettingsLater sends the dashboard the new settings without holding up the
-// game-state post, since settingsResponse asks Windows about autostart and voices.
-func (s *Server) publishSettingsLater() { s.spawn(func(context.Context) { s.publishSettings() }) }
-
-// roleFor tries the role last played on the hero, then the player's most common role on it
-// (imported matches count), then the hero's own roles from OpenDota.
-func (s *Server) roleFor(heroID int, set config.Settings) (role, note string) {
-	name := fmt.Sprintf("hero %d", heroID)
-	if s.data != nil {
-		name = s.data.HeroName(heroID)
-	}
-	if r, ok := set.HeroRoles[strconv.Itoa(heroID)]; ok {
-		return r, roleSay(set.Language, "what you played on %s last time", name)
-	}
-	if r := s.usualRole(heroID); r != "" {
-		return r, roleSay(set.Language, "your usual role on %s", name)
-	}
-	if s.data != nil {
-		if info, ok := s.data.Hero(heroID); ok {
-			if r := roleFromHeroRoles(info.Roles); r != "" {
-				return r, roleSay(set.Language, "a guess for %s", name)
-			}
-		}
-	}
-	return "", ""
-}
-
-func (s *Server) usualRole(heroID int) string {
-	role, err := s.stats.UsualRole(heroID, dota.Roles)
-	if err != nil {
-		s.log.Warn("read the usual role", "hero", heroID, "err", err)
-	}
-	return role
-}
-
-// roleFromHeroRoles reads OpenDota's hero roles, which list the main ones first.
-func roleFromHeroRoles(roles []string) string {
-	support, carry := slices.Index(roles, "Support"), slices.Index(roles, "Carry")
-	switch {
-	case support >= 0 && (carry < 0 || support < carry):
-		return dota.SoftSupport
-	case carry >= 0:
-		return dota.Carry
-	}
-	return ""
-}
-
 func speakable(tip coach.Tip, level string) bool {
 	switch level {
 	case config.SpeakUrgent:
@@ -610,6 +510,10 @@ func (s *Server) settingsResponse() settingsResponse {
 // publishSettings sends every open dashboard the settings as they are now.
 func (s *Server) publishSettings() { s.hub.publish("settings", s.settingsResponse()) }
 
+// publishSettingsLater sends the dashboard the new settings without holding up the
+// game-state post, since settingsResponse asks Windows about autostart and voices.
+func (s *Server) publishSettingsLater() { s.spawn(func(context.Context) { s.publishSettings() }) }
+
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.settingsResponse())
 }
@@ -728,19 +632,6 @@ func (s *Server) handleQuit(w http.ResponseWriter, r *http.Request) {
 	go s.quit()
 }
 
-func (s *Server) handleVoiceTest(w http.ResponseWriter, r *http.Request) {
-	set := s.cfg.Settings()
-	if set.Voice == config.VoiceSystem && s.speaker != nil {
-		english := "Gourdian voice check. Power rune in 15 seconds."
-		if set.Language == "ru" {
-			s.speaker.SayIn("ru", "Проверка голоса. Руна силы через 15 секунд.", english, true)
-		} else {
-			s.speaker.Say(english, true)
-		}
-	}
-	writeJSON(w, map[string]string{"voice": set.Voice})
-}
-
 // readJSON decodes a request body of at most limit bytes into v. A body that is missing or
 // empty is an error: taken as v's zero value, it would quietly mean "clear everything".
 func readJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) error {
@@ -829,4 +720,26 @@ func (h *hub) publishRaw(event string, data []byte) {
 			}
 		}
 	}
+}
+
+// closeWait is how long Close waits for background work to stop once it's told to.
+const closeWait = 3 * time.Second
+
+// Close stops background work and waits for it (up to closeWait), then stops recording.
+func (s *Server) Close() error {
+	s.tasksMu.Lock()
+	s.closing = true
+	s.tasksMu.Unlock()
+	s.cancel()
+	done := make(chan struct{})
+	go func() {
+		s.tasks.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(closeWait):
+		s.log.Warn("background work still running at exit")
+	}
+	return s.StopRecording()
 }

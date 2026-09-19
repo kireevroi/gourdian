@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"gourdian/internal/config"
 	"gourdian/internal/hidewin"
 	"gourdian/internal/platform"
 	"gourdian/internal/speech"
@@ -93,4 +94,17 @@ func (s *Server) handleVoiceRecheck(w http.ResponseWriter, r *http.Request) {
 	}
 	s.recheckVoices(s.cfg.Settings().Language)
 	writeJSON(w, s.settingsResponse())
+}
+
+func (s *Server) handleVoiceTest(w http.ResponseWriter, r *http.Request) {
+	set := s.cfg.Settings()
+	if set.Voice == config.VoiceSystem && s.speaker != nil {
+		english := "Gourdian voice check. Power rune in 15 seconds."
+		if set.Language == "ru" {
+			s.speaker.SayIn("ru", "Проверка голоса. Руна силы через 15 секунд.", english, true)
+		} else {
+			s.speaker.Say(english, true)
+		}
+	}
+	writeJSON(w, map[string]string{"voice": set.Voice})
 }

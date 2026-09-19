@@ -233,3 +233,33 @@ func matchErrorStatus(err error) int {
 	}
 	return http.StatusInternalServerError
 }
+
+// handleMMRList returns every MMR entry, so the match lists can show what was logged.
+func (s *Server) handleMMRList(w http.ResponseWriter, r *http.Request) {
+	entries, err := s.stats.MMR()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if entries == nil {
+		entries = []model.MMREntry{}
+	}
+	writeJSON(w, entries)
+}
+
+func (s *Server) handleMMR(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		MMR  int    `json:"mmr"`
+		Note string `json:"note"`
+	}
+	if err := readJSON(w, r, 4<<10, &body); err != nil || body.MMR <= 0 || body.MMR > 20000 {
+		http.Error(w, "send {\"mmr\": 1234}", http.StatusBadRequest)
+		return
+	}
+	entry := model.MMREntry{Date: time.Now(), MMR: body.MMR, Note: body.Note}
+	if err := s.stats.AppendMMR(entry); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, entry)
+}
