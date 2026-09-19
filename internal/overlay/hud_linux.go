@@ -421,14 +421,7 @@ func (u *xui) applyLayout(o config.OverlaySettings) {
 // saveLayout applies a layout change right away and sends it to the trainer.
 func (u *xui) saveLayout(o config.OverlaySettings) {
 	u.applyLayout(o)
-	p := patch{"overlay": patch{"hud_placed": o.HUDPlaced, "hud_x": o.HUDX, "hud_y": o.HUDY, "hud_scale": o.HUDScale, "hud_background": o.HUDBackground}}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := u.api.do(ctx, "PUT", "/api/settings", p, nil); err != nil {
-			u.log.Warn("couldn't save the HUD layout", "err", err)
-		}
-	}()
+	sendLayout(u.api, u.log, o)
 }
 
 func (u *xui) refresh() {
@@ -562,16 +555,7 @@ func (u *xui) setEditing(on bool) {
 	u.refresh()
 }
 
-func (u *xui) pickPosition(i int) {
-	role := dota.Roles[i]
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := u.api.do(ctx, "POST", "/api/role", map[string]string{"role": role}, nil); err != nil {
-			u.log.Warn("couldn't set the position", "err", err)
-		}
-	}()
-}
+func (u *xui) pickPosition(i int) { sendPosition(u.api, u.log, i) }
 
 func (u *xui) loadKeycodes() {
 	setup := xproto.Setup(u.conn)

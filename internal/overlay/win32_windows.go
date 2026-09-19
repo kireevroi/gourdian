@@ -3,10 +3,9 @@
 package overlay
 
 import (
+	"image/color"
 	"syscall"
 	"unsafe"
-
-	"gourdian/internal/hud"
 )
 
 var (
@@ -235,23 +234,24 @@ type notifyIconData struct {
 
 func rgb(r, g, b byte) uintptr { return uintptr(r) | uintptr(g)<<8 | uintptr(b)<<16 }
 
+// colorref is a colour as GDI takes it.
+func colorref(c color.RGBA) uintptr { return rgb(c.R, c.G, c.B) }
+
 // alpha converts an opacity percentage for SetLayeredWindowAttributes.
 func alpha(percent int) uintptr { return uintptr(min(max(percent, 0), 100) * 255 / 100) }
 
 var (
-	colorPanel  = rgb(14, 17, 22)
-	colorRow    = rgb(28, 34, 48)
-	colorLine   = rgb(38, 45, 58)
-	colorAccent = rgb(224, 83, 61)
-	kindColors  = map[string]uintptr{
-		hud.KindText:   rgb(230, 233, 239),
-		hud.KindMuted:  rgb(139, 149, 167),
-		hud.KindGood:   rgb(63, 185, 122),
-		hud.KindInfo:   rgb(91, 156, 240),
-		hud.KindWarn:   rgb(229, 169, 59),
-		hud.KindUrgent: rgb(239, 74, 74),
-		hud.KindCoach:  rgb(144, 133, 233),
-	}
+	colorPanel  = colorref(hudPanel)
+	colorRow    = colorref(hudRow)
+	colorLine   = colorref(hudLine)
+	colorAccent = colorref(hudAccent)
+	kindColors  = func() map[string]uintptr {
+		m := make(map[string]uintptr, len(hudKinds))
+		for k, c := range hudKinds {
+			m[k] = colorref(c)
+		}
+		return m
+	}()
 )
 
 // gdi caches brushes and fonts for a window; GDI objects must be freed explicitly.
