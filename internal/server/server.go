@@ -356,16 +356,17 @@ func (s *Server) recordMatch(m *stats.MatchSummary, set config.Settings) {
 }
 
 func (s *Server) rememberHeroRole(heroID int, role string) {
-	cur := s.cfg.Settings()
 	key := strconv.Itoa(heroID)
-	if heroID == 0 || cur.HeroRoles[key] == role {
+	if heroID == 0 || s.cfg.Settings().HeroRoles[key] == role {
 		return
 	}
-	if cur.HeroRoles == nil {
-		cur.HeroRoles = map[string]string{}
-	}
-	cur.HeroRoles[key] = role
-	if err := s.cfg.UpdateSettings(cur); err != nil {
+	if _, err := s.cfg.Update(func(set *config.Settings) error {
+		if set.HeroRoles == nil {
+			set.HeroRoles = map[string]string{}
+		}
+		set.HeroRoles[key] = role
+		return nil
+	}); err != nil {
 		s.log.Error("remember hero role", "err", err)
 	}
 }
@@ -385,10 +386,13 @@ func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings 
 	if role == "" || role == set.Role {
 		return set
 	}
-	set.Role = role
-	if err := s.cfg.UpdateSettings(set); err != nil {
+	set, err := s.cfg.Update(func(cur *config.Settings) error {
+		cur.Role = role
+		return nil
+	})
+	if err != nil {
 		s.log.Error("apply hero role", "err", err)
-		return s.cfg.Settings()
+		return set
 	}
 	s.hub.publish("settings", s.settingsResponse())
 	s.log.Info("role set for hero", "role", role, "why", note)
@@ -564,35 +568,59 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.settingsResponse())
 }
 
+// errNoSystemVoice refuses system speech on a machine that has none.
+var errNoSystemVoice = errors.New("Windows speech isn't available on this machine; use browser voice")
+
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
-	prev := s.cfg.Settings()
-	next := prev.Clone()
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	var keys map[string]json.RawMessage
 	if err == nil {
 		err = json.Unmarshal(body, &keys)
 	}
-	if _, ok := keys["hero_roles"]; ok {
-		next.HeroRoles = nil // decoding merges into a map, so a sent map must replace it to drop heroes
-	}
-	if err == nil {
-		err = json.Unmarshal(body, &next)
-	}
 	if err != nil {
 		http.Error(w, "bad settings: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if next.Voice == config.VoiceSystem && s.speaker == nil {
-		http.Error(w, "Windows speech isn't available on this machine; use browser voice", http.StatusBadRequest)
+	// apply decodes the request onto settings: only the fields it sends change.
+	apply := func(set *config.Settings) error {
+		if _, ok := keys["hero_roles"]; ok {
+			set.HeroRoles = nil // decoding merges into a map, so a sent map must replace it to drop heroes
+		}
+		return json.Unmarshal(body, set)
+	}
+	check := func(set config.Settings) error {
+		if set.Voice == config.VoiceSystem && s.speaker == nil {
+			return errNoSystemVoice
+		}
+		return s.validAIChoices(set.AI)
+	}
+	// Model checks ask the providers, which takes a while, so they run on a copy first and the
+	// settings are only locked to apply the request.
+	prev := s.cfg.Settings()
+	picked := prev.Clone()
+	if err := apply(&picked); err != nil {
+		http.Error(w, "bad settings: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := s.validAIChoices(next.AI); err != nil {
+	if err := check(picked); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.markTyped(r.Context(), &prev.AI, &next.AI)
-	s.fillModels(r.Context(), &next.AI)
-	if err := s.cfg.UpdateSettings(next); err != nil {
+	s.markTyped(r.Context(), &prev.AI, &picked.AI)
+	s.fillModels(r.Context(), &picked.AI)
+	next, err := s.cfg.Update(func(cur *config.Settings) error {
+		if err := apply(cur); err != nil {
+			return err
+		}
+		now := aiJobs(&picked.AI)
+		for i, c := range aiJobs(&cur.AI) {
+			if c.Provider == now[i].Provider {
+				c.Model, c.Typed = now[i].Model, now[i].Typed
+			}
+		}
+		return check(*cur)
+	})
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

@@ -29,10 +29,13 @@ func (s *Server) applyDetectedRole(res coach.Result, matchID string, set config.
 	if res.DetectedRole == "" || s.roleLocked(matchID) {
 		return set
 	}
-	set.Role = res.DetectedRole
-	if err := s.cfg.UpdateSettings(set); err != nil {
+	set, err := s.cfg.Update(func(cur *config.Settings) error {
+		cur.Role = res.DetectedRole
+		return nil
+	})
+	if err != nil {
 		s.log.Error("apply detected role", "err", err)
-		return s.cfg.Settings()
+		return set
 	}
 	lang := set.Language
 	s.engine.SetRoleNote(roleSay(lang, "you laned %s", laneIn(lang, res.DetectedLane)))
@@ -64,10 +67,13 @@ func (s *Server) handleRole(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `send {"role": "carry"}, or mid, offlane, soft_support, hard_support`, http.StatusBadRequest)
 		return
 	}
-	set := s.cfg.Settings()
-	changed := set.Role != body.Role
-	set.Role = body.Role
-	if err := s.cfg.UpdateSettings(set); err != nil {
+	changed := false
+	set, err := s.cfg.Update(func(cur *config.Settings) error {
+		changed = cur.Role != body.Role
+		cur.Role = body.Role
+		return nil
+	})
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

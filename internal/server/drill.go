@@ -127,9 +127,10 @@ func (s *Server) handleSetDrill(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "that rule doesn't count mistakes, so it can't be drilled", http.StatusBadRequest)
 		return
 	}
-	set := s.cfg.Settings()
-	set.Drill = body.Rule
-	if err := s.cfg.UpdateSettings(set); err != nil {
+	if _, err := s.cfg.Update(func(set *config.Settings) error {
+		set.Drill = body.Rule
+		return nil
+	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

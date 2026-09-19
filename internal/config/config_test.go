@@ -2,9 +2,12 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -139,5 +142,56 @@ func TestAppIDMatchesTheInstaller(t *testing.T) {
 	want := `#define AppGuid "` + strings.Trim(AppID, "{}") + `"`
 	if !strings.Contains(string(iss), want) {
 		t.Fatalf("installer/Gourdian.iss should have %s", want)
+	}
+}
+
+// Changes made at the same time from different places must all land; reading the settings
+// and writing them back whole lost all but the last.
+func TestUpdateKeepsConcurrentChanges(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := range 40 {
+		wg.Go(func() {
+			if _, err := store.Update(func(s *Settings) error {
+				if s.HeroRoles == nil {
+					s.HeroRoles = map[string]string{}
+				}
+				s.HeroRoles[strconv.Itoa(i+1)] = RoleCarry
+				return nil
+			}); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	if n := len(store.Settings().HeroRoles); n != 40 {
+		t.Fatalf("%d of 40 changes kept", n)
+	}
+	reopened, err := Open(filepath.Dir(store.Path()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(reopened.Settings().HeroRoles); n != 40 {
+		t.Fatalf("%d of 40 changes saved", n)
+	}
+}
+
+func TestUpdateLeavesSettingsAloneWhenTheChangeIsBad(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := store.Settings()
+	if _, err := store.Update(func(s *Settings) error { s.Role = "jungler"; return nil }); err == nil {
+		t.Fatal("an invalid role was accepted")
+	}
+	if _, err := store.Update(func(s *Settings) error { s.Role = RoleMid; return errors.New("changed my mind") }); err == nil {
+		t.Fatal("the change's error was lost")
+	}
+	if got := store.Settings(); got.Role != before.Role {
+		t.Fatalf("role = %q, want %q", got.Role, before.Role)
 	}
 }

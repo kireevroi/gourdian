@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
@@ -581,16 +582,41 @@ func (s *Store) Get() Config {
 
 func (s *Store) Settings() Settings { return s.Get().Settings }
 
+// UpdateSettings replaces all the settings. To change some of them, use Update, which can't
+// undo a change made meanwhile.
 func (s *Store) UpdateSettings(next Settings) error {
-	if err := next.Validate(); err != nil {
-		return err
-	}
+	_, err := s.Update(func(cur *Settings) error {
+		*cur = next.Clone()
+		return nil
+	})
+	return err
+}
+
+// Update changes the settings in place: change edits the current settings under the store's
+// lock, so changes made at the same time from different places all land. If change fails or
+// leaves the settings invalid, nothing changes. It returns the settings after the change.
+func (s *Store) Update(change func(*Settings) error) (Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cfg.Settings = next.Clone()
-	s.cfg.Settings.Timings = DefaultTimings()
-	s.cfg.Settings.HUDWidgets = normalizeWidgets(s.cfg.Settings.HUDWidgets)
-	return s.save()
+	next := s.cfg.Settings.Clone()
+	if err := change(&next); err != nil {
+		return s.cfg.Settings.Clone(), err
+	}
+	if err := next.Validate(); err != nil {
+		return s.cfg.Settings.Clone(), err
+	}
+	next.Timings = DefaultTimings()
+	next.HUDWidgets = normalizeWidgets(next.HUDWidgets)
+	if reflect.DeepEqual(next, s.cfg.Settings) {
+		return next.Clone(), nil
+	}
+	prev := s.cfg.Settings
+	s.cfg.Settings = next
+	if err := s.save(); err != nil {
+		s.cfg.Settings = prev
+		return prev.Clone(), err
+	}
+	return next.Clone(), nil
 }
 
 func (s *Store) save() error {

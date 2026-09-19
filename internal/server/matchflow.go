@@ -136,16 +136,22 @@ func (s *Server) rememberAccount(accountID string) {
 	if accountID == "" || accountID == "0" {
 		return
 	}
-	cur := s.cfg.Settings()
-	if cur.AccountID != "" {
-		return
+	if s.cfg.Settings().AccountID != "" {
+		return // known already; every game-state post asks
 	}
-	cur.AccountID = accountID
-	if err := s.cfg.UpdateSettings(cur); err != nil {
+	learned := false
+	if _, err := s.cfg.Update(func(set *config.Settings) error {
+		if set.AccountID == "" {
+			set.AccountID, learned = accountID, true
+		}
+		return nil
+	}); err != nil {
 		s.log.Error("save account id", "err", err)
 		return
 	}
-	s.log.Info("learned Steam account id", "account", accountID)
+	if learned {
+		s.log.Info("learned Steam account id", "account", accountID)
+	}
 }
 
 type importStatus struct {

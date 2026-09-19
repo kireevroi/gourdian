@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -643,4 +644,25 @@ func openStats(t testing.TB, dir string) *stats.Store {
 	}
 	t.Cleanup(func() { st.Close() })
 	return st
+}
+
+// A dashboard save must not undo what the trainer changed meanwhile, like the position it
+// remembered for a hero; saves used to write back the whole settings they had read.
+func TestSettingsSaveKeepsChangesMadeMeanwhile(t *testing.T) {
+	srv, h, _ := newTestServer(t, nil)
+	var wg sync.WaitGroup
+	for i := range 20 {
+		wg.Go(func() { srv.rememberHeroRole(i+1, config.RoleMid) })
+		wg.Go(func() {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(fmt.Sprintf(`{"voice_rate": %d}`, i%5))))
+			if rec.Code != http.StatusOK {
+				t.Errorf("save: %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+	wg.Wait()
+	if n := len(srv.cfg.Settings().HeroRoles); n != 20 {
+		t.Fatalf("%d of 20 remembered positions survived the saves", n)
+	}
 }
