@@ -317,6 +317,7 @@
     "Keep the newest": "Хранить последних",
     "Record now": "Записать сейчас",
     "Stop recording": "Остановить запись",
+    "Recording to {file}": "Запись в {file}",
     "Not recording right now.": "Сейчас запись не идёт.",
     "Recordings": "Записи",
     "Remembered per hero": "Запоминается по героям",
