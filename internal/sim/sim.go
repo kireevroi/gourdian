@@ -63,13 +63,13 @@ func Run(ctx context.Context, o Options, progress func(clock int, status int)) e
 	client := &http.Client{Timeout: 5 * time.Second}
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
-	for s := range States(o) {
+	for clock, s := range States(o) {
 		status, err := post(ctx, client, o, s)
 		if err != nil {
 			return err
 		}
 		if progress != nil {
-			progress(s.Map.ClockTime, status)
+			progress(clock, status)
 		}
 		select {
 		case <-ctx.Done():
@@ -80,10 +80,12 @@ func Run(ctx context.Context, o Options, progress func(clock int, status int)) e
 	return nil
 }
 
-// States are the game states of the scripted match o describes, one per game second, as Dota
-// would post them; Run sends them to a trainer, and benchmarks feed them to the rules.
-func States(o Options) iter.Seq[*gsi.State] {
-	return func(yield func(*gsi.State) bool) {
+// States are the game states of the scripted match o describes, one per game second with the
+// second it stands for, as Dota would post them; Run sends them to a trainer, and benchmarks
+// feed them to the rules. The clock stops at the end of the match, as Dota's does, so the
+// last few states repeat it.
+func States(o Options) iter.Seq2[int, *gsi.State] {
+	return func(yield func(int, *gsi.State) bool) {
 		g := newGame(o)
 		for clock := o.From; clock <= o.To+3; clock++ {
 			state := gsi.StateInProgress
@@ -95,7 +97,7 @@ func States(o Options) iter.Seq[*gsi.State] {
 			} else {
 				g.step(clock)
 			}
-			if !yield(g.snapshot(state)) {
+			if !yield(clock, g.snapshot(state)) {
 				return
 			}
 		}

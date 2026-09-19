@@ -135,7 +135,7 @@ func BenchmarkGSI(b *testing.B) {
 // second: what a whole match costs the rules engine.
 func BenchmarkRulesOverAMatch(b *testing.B) {
 	var states []*gsi.State
-	for s := range sim.States(sim.Options{From: -60, To: 2400}) {
+	for _, s := range sim.States(sim.Options{From: -60, To: 2400}) {
 		states = append(states, s)
 	}
 	set := config.Default().Settings
