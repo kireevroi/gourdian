@@ -3,16 +3,16 @@ GOFLAGS := -buildvcs=false
 VERSION := $(shell cat VERSION)
 LDFLAGS := -X gourdian/internal/buildinfo.Version=$(VERSION)
 
-.PHONY: all linux windows test lint release install winres cert cert-github installer app clean linux-dist linux-install linux-uninstall
+.PHONY: all linux windows test lint notices release install winres cert cert-github installer app clean linux-dist linux-install linux-uninstall
 
 all: linux windows
 
 linux:
-	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o bin/gourdian .
+	go build $(GOFLAGS) -trimpath -ldflags "$(LDFLAGS)" -o bin/gourdian .
 
 # -H=windowsgui: the app lives in the tray, so no console window.
 windows:
-	GOOS=windows GOARCH=amd64 go build $(GOFLAGS) -ldflags "-H=windowsgui $(LDFLAGS)" -o bin/gourdian.exe .
+	GOOS=windows GOARCH=amd64 go build $(GOFLAGS) -trimpath -ldflags "-H=windowsgui $(LDFLAGS)" -o bin/gourdian.exe .
 
 # Regenerates rsrc_windows_amd64.syso (icon, version info, manifest) from winres/ and VERSION.
 winres:
@@ -39,6 +39,13 @@ test:
 	@files=$$(gofmt -l $$(git ls-files '*.go')); if [ -n "$$files" ]; then echo "not gofmt'ed:" $$files >&2; exit 1; fi
 	go vet ./... && GOOS=windows go vet ./... && go test -race ./...
 
+# The licenses of everything compiled into the app: its libraries, Go itself and the dashboard
+# font. Releases ship the file; CI fails when a dependency change leaves it stale.
+notices:
+	go run github.com/google/go-licenses/v2@v2.0.1 report ./... --ignore gourdian --template packaging/notices.tpl > THIRD_PARTY_NOTICES.txt
+	{ printf '\n%s\nGo (runtime and standard library) (BSD-3-Clause)\n\n' "$$(printf '=%.0s' $$(seq 80))"; cat "$$(go env GOROOT)/LICENSE"; \
+	  printf '\n%s\nRusso One font (OFL-1.1), in the dashboard\n\n' "$$(printf '=%.0s' $$(seq 80))"; cat internal/server/web/fonts/OFL.txt; } >> THIRD_PARTY_NOTICES.txt
+
 # staticcheck, pinned so results don't change under us.
 lint:
 	go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
@@ -58,8 +65,9 @@ install: all
 
 # A release for Linux (Arch and friends): the program, a menu entry, the icon and install.sh.
 linux-dist:
+	rm -rf dist/linux && mkdir -p dist/linux
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(GOFLAGS) -trimpath -ldflags "-s -w $(LDFLAGS)" -o dist/linux/gourdian .
-	cp packaging/linux/gourdian.desktop packaging/linux/install.sh dist/linux/
+	cp packaging/linux/gourdian.desktop packaging/linux/install.sh LICENSE THIRD_PARTY_NOTICES.txt dist/linux/
 	cp winres/icon.png dist/linux/gourdian.png
 	tar -C dist -czf dist/gourdian-$(VERSION)-linux-x86_64.tar.gz --transform 's,^linux,gourdian-$(VERSION),' linux
 	@echo "linux release: dist/gourdian-$(VERSION)-linux-x86_64.tar.gz"

@@ -20,7 +20,7 @@ stage=$(wslpath "$stage_win")
 rm -rf "$stage"
 mkdir -p "$stage"
 cp bin/gourdian.exe "$stage/Gourdian.exe"
-cp installer/Gourdian.iss installer/sign.ps1 installer/README.txt installer/icon.ico installer/wizard*.bmp "$stage/"
+cp installer/Gourdian.iss installer/sign.ps1 installer/README.txt installer/icon.ico installer/wizard*.bmp LICENSE THIRD_PARTY_NOTICES.txt "$stage/"
 
 echo "signing the app"
 ps -File "$stage_win\\sign.ps1" "$stage_win\\Gourdian.exe"

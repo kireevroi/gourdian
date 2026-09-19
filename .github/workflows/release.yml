@@ -85,7 +85,7 @@ jobs:
           New-Item -ItemType Directory -Force $stage | Out-Null
           $exe = Join-Path $stage 'Gourdian.exe'
           Copy-Item bin\gourdian.exe $exe
-          Copy-Item installer\Gourdian.iss, installer\sign.ps1, installer\README.txt, installer\icon.ico, installer\wizard*.bmp $stage
+          Copy-Item installer\Gourdian.iss, installer\sign.ps1, installer\README.txt, installer\icon.ico, installer\wizard*.bmp, LICENSE, THIRD_PARTY_NOTICES.txt $stage
           $sign = Join-Path $stage 'sign.ps1'
           if ($env:SIGN -eq 'true') {
             & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $sign $exe

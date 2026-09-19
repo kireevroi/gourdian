@@ -18,6 +18,8 @@ jobs:
           go-version-file: go.mod
       # gofmt, vet for Linux and Windows, tests with the race detector
       - run: make test
+      - name: Third-party notices are current
+        run: make notices && git diff --exit-code THIRD_PARTY_NOTICES.txt
 
   # The only place the _windows.go code runs under test.
   windows:

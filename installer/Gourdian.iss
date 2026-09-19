@@ -53,6 +53,8 @@ Name: "startup"; Description: "Start Gourdian when I sign in to &Windows"; Group
 [Files]
 Source: "{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "README.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
+Source: "THIRD_PARTY_NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [InstallDelete]
 Type: files; Name: "{app}\{#LegacyExe}"

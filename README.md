@@ -254,3 +254,9 @@ Bump `VERSION` (and `pkgver` in `packaging/arch/PKGBUILD`), commit, then `make r
 | `internal/sim` | Simulator and recordings |
 | `app.go`, `doctor.go`, `main.go` | App startup, commands and checks |
 | `installer/` | Inno Setup script, signing scripts, build script, icons |
+
+## License
+
+Gourdian is released under the [MIT License](LICENSE). The app includes open-source libraries, the Go runtime and the Russo One font; their licenses are collected in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) (`make notices` regenerates it), which ships with every release.
+
+Dota 2 is a trademark of Valve Corporation. Gourdian isn't affiliated with or endorsed by Valve; it only reads the Game State Integration feed Valve provides for third-party tools.

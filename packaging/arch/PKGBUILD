@@ -28,4 +28,5 @@ package() {
 	install -Dm755 "$srcdir/gourdian" "$pkgdir/usr/bin/gourdian"
 	install -Dm644 packaging/linux/gourdian.desktop "$pkgdir/usr/share/applications/gourdian.desktop"
 	install -Dm644 winres/icon.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/gourdian.png"
+	install -Dm644 LICENSE THIRD_PARTY_NOTICES.txt -t "$pkgdir/usr/share/licenses/$pkgname/"
 }
