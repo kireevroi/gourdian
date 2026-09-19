@@ -133,6 +133,9 @@ var Fields = []Field{
 	{ID: "base_under_attack", Label: "Your base is under attack", Group: "Match", Type: "bool",
 		Help: "A tier 3 or 4 tower, a barracks or the ancient of yours is losing health.",
 		flag: flag(func(c *Ctx) bool { _, d := c.m.buildingDrop(inBase); return d > 0 })},
+	{ID: "glyph_ready", Label: "Your Glyph is ready", Group: "Match", Type: "bool",
+		Help: "Your team's Glyph comes back 5 minutes after use, or as soon as a tower or barracks of yours falls.",
+		flag: flag(func(c *Ctx) bool { return c.m.glyphReady(c.Clock, c.T.GlyphCooldown) })},
 	{ID: "melee_rax_lost", Label: "Melee barracks of yours destroyed", Group: "Match", Type: "number",
 		num: num(func(c *Ctx) float64 {
 			n := 0

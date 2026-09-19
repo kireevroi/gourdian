@@ -2,6 +2,7 @@
 package gsi
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -207,11 +208,40 @@ type Event struct {
 	PlayerID       int    `json:"player_id"`
 	KillerPlayerID int    `json:"killer_player_id"`
 	Snatched       bool   `json:"snatched"`
+	Data           string `json:"data"` // a generic_event's Chat, as JSON
 }
 
-// Key dedupes events: GSI resends the same events list on every update.
+// Key dedupes events: GSI resends each event on every update for 30 seconds.
 func (e Event) Key() string {
-	return fmt.Sprintf("%s@%d/%d/%s", e.EventType, e.GameTime, e.PlayerID, e.Team)
+	return fmt.Sprintf("%s@%d/%d/%s/%s", e.EventType, e.GameTime, e.PlayerID, e.Team, e.Data)
+}
+
+// Chat is the line a generic_event prints in the game's chat, such as CHAT_MESSAGE_HERO_KILL.
+// What the numbers mean depends on the type.
+type Chat struct {
+	Type    string  `json:"type"`
+	Value   int     `json:"value"`
+	Player1 int     `json:"playerid1"`
+	Time    float64 `json:"time"`
+}
+
+func (e Event) Chat() (Chat, bool) {
+	var c Chat
+	if e.EventType != "generic_event" || json.Unmarshal([]byte(e.Data), &c) != nil {
+		return Chat{}, false
+	}
+	return c, true
+}
+
+// TeamNumber is team_name as chat events number it, or 0 for a spectator.
+func TeamNumber(name string) int {
+	switch name {
+	case "radiant":
+		return 2
+	case "dire":
+		return 3
+	}
+	return 0
 }
 
 func (s *State) Clock() (int, bool) {

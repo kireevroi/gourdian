@@ -1,6 +1,7 @@
 package coach
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -76,5 +77,31 @@ func TestRoshanKillerInRussian(t *testing.T) {
 	got := byRule(play(e, set, 970, 990, withAegis(4, nil)), "roshan")
 	if len(got) != 1 || !strings.Contains(got[0].Text, "Рошан убит вашей командой") {
 		t.Fatalf("russian roshan tip = %+v", got)
+	}
+}
+
+// chat is a generic_event as GSI sends it at that clock.
+func chat(clock int, data string) gsi.Event {
+	return gsi.Event{GameTime: clock + 90, EventType: "generic_event", Data: data}
+}
+
+func TestAKilledHolderHasUsedTheirAegis(t *testing.T) {
+	killed := func(victim int) func(*gsi.State) {
+		return func(s *gsi.State) {
+			if s.Map.ClockTime >= 1140 {
+				kill := chat(1140, fmt.Sprintf(`{"type":"CHAT_MESSAGE_HERO_KILL","playerid1":%d,"playerid2":7,"time":1140.3}`, victim))
+				s.Events = append([]gsi.Event{kill}, s.Events...)
+			}
+		}
+	}
+	if got := byRule(play(newEngine(nil), settings(config.RoleCarry), 970, 1260, withAegis(4, killed(4))), "aegis"); len(got) != 0 {
+		t.Fatalf("the teammate holding the Aegis died at 19:00, so it was already used: %+v", got)
+	}
+	// Starting mid-match, the kill comes in the same update as the pickup, listed first.
+	if got := byRule(play(newEngine(nil), settings(config.RoleCarry), 1140, 1260, withAegis(4, killed(4))), "aegis"); len(got) != 0 {
+		t.Fatalf("a kill listed before the pickup still comes after it: %+v", got)
+	}
+	if got := byRule(play(newEngine(nil), settings(config.RoleCarry), 970, 1260, withAegis(4, killed(3))), "aegis"); len(got) != 1 {
+		t.Fatalf("another hero's death leaves the Aegis alone: %+v", got)
 	}
 }
