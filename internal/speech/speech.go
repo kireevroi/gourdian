@@ -133,6 +133,9 @@ type Speaker struct {
 
 	lastText string // the last line said, and when, so it isn't said twice in a row
 	lastAt   time.Time
+	// current is the line just taken off the queue: until it's said, it's in neither the
+	// queue nor lastText, and asking for it again must not queue it twice.
+	current string
 
 	piper *piperEngine // natural voices on Linux, once downloaded
 }
@@ -250,6 +253,10 @@ func (s *Speaker) SayIn(lang, text, fallback string, urgent bool) {
 			return // already waiting to be said
 		}
 	}
+	if text == s.current {
+		s.mu.Unlock()
+		return
+	}
 	if text == s.lastText && time.Since(s.lastAt) < repeatGap {
 		s.mu.Unlock()
 		return
@@ -318,11 +325,13 @@ func (s *Speaker) loop() {
 				return
 			}
 			if len(s.queue) == 0 {
+				s.current = ""
 				s.mu.Unlock()
 				break
 			}
 			u := s.queue[0]
 			s.queue = s.queue[1:]
+			s.current = u.text
 			rate, lang := s.rate, u.lang
 			s.mu.Unlock()
 
