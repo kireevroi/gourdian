@@ -8,7 +8,8 @@ import (
 )
 
 // TestDrawGolden writes the Windows renderer's frames to GOLDEN_DIR, to compare with an
-// earlier run's.
+// earlier run's by eye: GDI draws with the machine's own fonts, so the pixels differ from one
+// Windows to another and can't be a golden file like the pure-Go renderer's.
 func TestDrawGolden(t *testing.T) {
 	dir := os.Getenv("GOLDEN_DIR")
 	if dir == "" {
@@ -20,6 +21,7 @@ func TestDrawGolden(t *testing.T) {
 			t.Fatal(err)
 		}
 		h := u.draw(g.view)
+		defer func() { u.g.release(); u.canvas.release() }()
 		if err := u.canvas.savePNG(filepath.Join(dir, "draw-"+g.name+".png"), h); err != nil {
 			t.Fatal(err)
 		}

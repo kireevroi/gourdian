@@ -1,6 +1,9 @@
 package overlay
 
 import (
+	"fmt"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,20 +30,60 @@ func line(text, kind string) hud.Line { return hud.Line{Text: text, Kind: kind} 
 
 func goldenLayout() config.OverlaySettings { return config.Default().Settings.Overlay }
 
-// TestPaintGolden writes the pure-Go renderer's frames to GOLDEN_DIR, to compare with an
-// earlier run's.
+// TestPaintGolden renders the fixed views and compares them pixel by pixel with the PNGs in
+// testdata, so any change to the HUD's layout, colours or text has to be looked at and
+// accepted. Run with UPDATE_GOLDEN=1 to accept the current renders, then look at the diff.
 func TestPaintGolden(t *testing.T) {
-	dir := os.Getenv("GOLDEN_DIR")
-	if dir == "" {
-		t.Skip("set GOLDEN_DIR to write the frames")
-	}
 	for _, g := range goldenViews {
-		p, err := newPainter(1, goldenLayout())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := savePaintedPNG(filepath.Join(dir, "paint-"+g.name+".png"), p.paint(g.view, g.editing)); err != nil {
-			t.Fatal(err)
+		t.Run(g.name, func(t *testing.T) {
+			p, err := newPainter(1, goldenLayout())
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := p.paint(g.view, g.editing)
+			path := filepath.Join("testdata", "paint-"+g.name+".png")
+			if os.Getenv("UPDATE_GOLDEN") != "" {
+				if err := savePaintedPNG(path, got); err != nil {
+					t.Fatal(err)
+				}
+				t.Log("wrote " + path)
+				return
+			}
+			want, err := readPNG(path)
+			if err != nil {
+				t.Fatalf("%v; run the test with UPDATE_GOLDEN=1 to make it", err)
+			}
+			if err := samePixels(paintedNRGBA(got), want); err != nil {
+				out := filepath.Join(t.TempDir(), "paint-"+g.name+".png")
+				savePaintedPNG(out, got)
+				t.Fatalf("%v\nthe render is at %s; if the change is meant, rerun with UPDATE_GOLDEN=1", err, out)
+			}
+		})
+	}
+}
+
+func readPNG(path string) (image.Image, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return png.Decode(f)
+}
+
+// samePixels says where two renders first differ, in the HUD's own coordinates.
+func samePixels(got, want image.Image) error {
+	if got.Bounds() != want.Bounds() {
+		return fmt.Errorf("the render is %v, the golden is %v", got.Bounds(), want.Bounds())
+	}
+	for y := got.Bounds().Min.Y; y < got.Bounds().Max.Y; y++ {
+		for x := got.Bounds().Min.X; x < got.Bounds().Max.X; x++ {
+			gr, gg, gb, ga := got.At(x, y).RGBA()
+			wr, wg, wb, wa := want.At(x, y).RGBA()
+			if gr != wr || gg != wg || gb != wb || ga != wa {
+				return fmt.Errorf("pixel %d,%d is %v, the golden has %v", x, y, got.At(x, y), want.At(x, y))
+			}
 		}
 	}
+	return nil
 }
