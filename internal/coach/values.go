@@ -266,14 +266,16 @@ func (m *match) seeBuildings(s *gsi.State, clock int) {
 	if len(own) == 0 {
 		return
 	}
-	if n := len(m.buildings); n > 0 && m.buildings[n-1].clock == clock {
-		return
-	}
 	pct := make(map[string]int, len(own))
 	for key, b := range own {
 		if b.MaxHealth > 0 {
 			pct[key] = b.Health * 100 / b.MaxHealth
 		}
+	}
+	// A second's last update stands for it, so a building that just fell isn't still dropping.
+	if n := len(m.buildings); n > 0 && m.buildings[n-1].clock == clock {
+		m.buildings[n-1].pct = pct
+		return
 	}
 	m.buildings = append(m.buildings, buildingSample{clock: clock, pct: pct})
 	for len(m.buildings) > 0 && clock-m.buildings[0].clock > dropWindow {
