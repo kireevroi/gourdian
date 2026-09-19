@@ -133,6 +133,9 @@ func run(args []string) error {
 	}
 	log, closeLog := newLogger(dir)
 	defer closeLog()
+	if reset := store.Repaired(); len(reset) > 0 {
+		log.Warn("config.json had settings the trainer can't use; they're back to their defaults, and the file as it was is config.json.bad", "settings", reset)
+	}
 	cfg := store.Get()
 	addr := cmp.Or(*listen, cfg.Listen)
 
