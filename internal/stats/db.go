@@ -73,7 +73,7 @@ func Open(configDir string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("prepare %s: %w", DataFile, err)
 	}
-	if err := addColumns(db); err != nil {
+	if err := migrate(db); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -84,17 +84,55 @@ func Open(configDir string) (*Store, error) {
 	return s, nil
 }
 
-// addColumns adds columns that newer versions store, to a file made by an older one.
-func addColumns(db *sql.DB) error {
-	for _, stmt := range []string{
-		`ALTER TABLE reviews ADD COLUMN followed_focus TEXT`,
-	} {
-		// SQLite has no "add column if missing"; the error when it is already there is fine.
-		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+// migrations bring a data file made by an older version up to date, in order and each once;
+// PRAGMA user_version counts how many a file has had. Add new ones at the end and never
+// change one that has shipped.
+var migrations = []func(tx *sql.Tx) error{
+	// 1 (1.2): reviews say whether the last game's focus was followed.
+	func(tx *sql.Tx) error { return addColumn(tx, "reviews", "followed_focus", "TEXT") },
+	// 2 (1.7): indexes for what's looked up during a match.
+	func(tx *sql.Tx) error {
+		_, err := tx.Exec(`CREATE INDEX IF NOT EXISTS matches_hero_role ON matches(hero_id, role);
+			CREATE INDEX IF NOT EXISTS matches_role ON matches(role);
+			CREATE INDEX IF NOT EXISTS items_match ON items(match_id);
+			CREATE INDEX IF NOT EXISTS reviews_match ON reviews(match_id)`)
+		return err
+	},
+}
+
+func migrate(db *sql.DB) error {
+	var version int
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		return err
+	}
+	for i := version; i < len(migrations); i++ {
+		tx, err := db.Begin()
+		if err != nil {
+			return err
+		}
+		if err := migrations[i](tx); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("upgrade %s to version %d: %w", DataFile, i+1, err)
+		}
+		if _, err := tx.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, i+1)); err != nil {
+			tx.Rollback()
+			return err
+		}
+		if err := tx.Commit(); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// addColumn adds a column unless the table has it, as a file made from the current schema does.
+func addColumn(tx *sql.Tx, table, column, typ string) error {
+	var n int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	_, err := tx.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + typ)
+	return err
 }
 
 func (s *Store) Close() error { return s.db.Close() }

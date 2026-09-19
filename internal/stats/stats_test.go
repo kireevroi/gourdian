@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"database/sql"
 	"encoding/csv"
 	"errors"
 	"os"
@@ -285,6 +286,34 @@ func TestCSVImportIsAllOrNothing(t *testing.T) {
 	for range 2 { // the retry imports everything once; later starts import nothing
 		if tips, goals := counts(); tips != 2 || goals != 1 {
 			t.Fatalf("%d tips (want 2) and %d goals (want 1) after the retry", tips, goals)
+		}
+	}
+}
+
+// A data file from an older version gets the columns and indexes it lacks, once.
+func TestOpenUpgradesAnOlderFile(t *testing.T) {
+	dir := t.TempDir()
+	old, err := sql.Open("sqlite", "file:"+filepath.Join(dir, DataFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Exec(`CREATE TABLE reviews (date TEXT, match_id TEXT, hero TEXT, hero_id INTEGER, role TEXT, result TEXT,
+		summary TEXT, strengths TEXT, improve TEXT, next_game_focus TEXT)`); err != nil { // before 1.2: no followed_focus
+		t.Fatal(err)
+	}
+	old.Close()
+	for range 2 {
+		st, err := Open(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var version, hasColumn, hasIndex int
+		st.db.QueryRow(`PRAGMA user_version`).Scan(&version)
+		st.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('reviews') WHERE name = 'followed_focus'`).Scan(&hasColumn)
+		st.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'matches_hero_role'`).Scan(&hasIndex)
+		st.Close()
+		if version != len(migrations) || hasColumn != 1 || hasIndex != 1 {
+			t.Fatalf("version %d of %d, followed_focus %d, index %d", version, len(migrations), hasColumn, hasIndex)
 		}
 	}
 }
