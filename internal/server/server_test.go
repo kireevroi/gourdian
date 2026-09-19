@@ -401,6 +401,28 @@ func TestRoleGuessForNewHero(t *testing.T) {
 	}
 }
 
+// Posts about two heroes at once, as during a repick, must leave the role of whichever hero
+// was handled last, never the other's.
+func TestHeroRoleFollowsTheLastHero(t *testing.T) {
+	srv, _, _ := newTestServer(t, func(s *config.Settings) {
+		s.HeroRoles = map[string]string{"1": config.RoleCarry, "26": config.RoleHardSupport}
+	})
+	for range 50 {
+		var wg sync.WaitGroup
+		for _, hero := range []int{1, 26} {
+			wg.Go(func() { srv.applyHeroRole(hero, srv.cfg.Settings()) })
+		}
+		wg.Wait()
+		srv.roleMu.Lock()
+		hero := srv.roleHero
+		srv.roleHero = 0
+		srv.roleMu.Unlock()
+		if want := srv.cfg.Settings().HeroRoles[fmt.Sprint(hero)]; srv.cfg.Settings().Role != want {
+			t.Fatalf("handled hero %d last, but the role is %s", hero, srv.cfg.Settings().Role)
+		}
+	}
+}
+
 func TestRoleFromHeroRoles(t *testing.T) {
 	cases := map[string][]string{
 		config.RoleSoftSupport: {"Support", "Disabler", "Nuker", "Initiator"},
