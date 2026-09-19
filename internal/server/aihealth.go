@@ -243,20 +243,24 @@ func (s *Server) forgetStatus(id string) {
 }
 
 // watchLogin re-checks a provider every interval until it works, or until `until` passes when set.
+// A provider has at most one open-ended watch (until 0), marked in watching; the short watch
+// after the player starts a login runs beside it and leaves the mark alone.
 func (s *Server) watchLogin(id string, interval, until time.Duration) {
-	p := s.ai.providers
-	p.mu.Lock()
-	if p.watching[id] && until == 0 {
-		p.mu.Unlock()
-		return
-	}
-	p.watching[id] = true
-	p.mu.Unlock()
-	defer func() {
+	if until == 0 {
+		p := s.ai.providers
 		p.mu.Lock()
-		delete(p.watching, id)
+		if p.watching[id] {
+			p.mu.Unlock()
+			return
+		}
+		p.watching[id] = true
 		p.mu.Unlock()
-	}()
+		defer func() {
+			p.mu.Lock()
+			delete(p.watching, id)
+			p.mu.Unlock()
+		}()
+	}
 	deadline := time.Now().Add(until)
 	t := time.NewTicker(interval)
 	defer t.Stop()
