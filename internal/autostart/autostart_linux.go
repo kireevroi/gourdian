@@ -82,7 +82,7 @@ func Set(enable bool) error {
 // for the application menu.
 func Entry(exe, args string) string {
 	quoted := exe
-	if strings.ContainsAny(exe, " \\t") {
+	if strings.ContainsAny(exe, " \t") {
 		quoted = `"` + exe + `"`
 	}
 	return strings.Join([]string{
