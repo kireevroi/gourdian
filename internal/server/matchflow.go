@@ -165,7 +165,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Count int `json:"count"`
 	}
-	if err := readJSON(w, r, 1<<10, &body); err != nil {
+	if err := readOptionalJSON(w, r, 1<<10, &body); err != nil {
 		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}

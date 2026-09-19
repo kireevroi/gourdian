@@ -91,7 +91,7 @@ func (s *Server) handleAISetupStart(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		IDs []string `json:"ids"`
 	}
-	if err := readJSON(w, r, 4<<10, &body); err != nil {
+	if err := readOptionalJSON(w, r, 4<<10, &body); err != nil {
 		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}

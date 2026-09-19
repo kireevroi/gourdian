@@ -741,14 +741,19 @@ func (s *Server) handleVoiceTest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"voice": set.Voice})
 }
 
-// readJSON decodes a request body of at most limit bytes into v. An empty body leaves v as it
-// is and isn't an error, since some requests have only optional fields.
+// readJSON decodes a request body of at most limit bytes into v. A body that is missing or
+// empty is an error: taken as v's zero value, it would quietly mean "clear everything".
 func readJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) error {
-	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit)).Decode(v)
-	if errors.Is(err, io.EOF) {
-		return nil
+	return json.NewDecoder(http.MaxBytesReader(w, r.Body, limit)).Decode(v)
+}
+
+// readOptionalJSON is readJSON for the few requests whose fields are all optional, where a
+// button in the dashboard sends no body at all and the defaults are meant.
+func readOptionalJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) error {
+	if err := readJSON(w, r, limit, v); err != nil && !errors.Is(err, io.EOF) {
+		return err
 	}
-	return err
+	return nil
 }
 
 func writeJSON(w http.ResponseWriter, v any) { writeJSONStatus(w, http.StatusOK, v) }

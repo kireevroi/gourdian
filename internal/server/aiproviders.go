@@ -231,7 +231,7 @@ func (s *Server) handleProviderTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var choice config.AIChoice
-	if err := readJSON(w, r, 4<<10, &choice); err != nil {
+	if err := readOptionalJSON(w, r, 4<<10, &choice); err != nil {
 		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}

@@ -554,6 +554,12 @@ func TestRulesAPISaveApplyAndTestOnRecording(t *testing.T) {
 	if rec := do(http.MethodPut, "/api/rules/builtin/low_hp", `{"severity":"urgent"}`); rec.Code != http.StatusOK {
 		t.Fatalf("changing a built-in rule's severity: %d %s", rec.Code, rec.Body)
 	}
+	if rec := do(http.MethodPut, "/api/rules/builtin/low_hp", ""); rec.Code != http.StatusBadRequest {
+		t.Fatalf("an edit that says nothing must be refused, not clear the rule: %d", rec.Code)
+	}
+	if o := srv.rules.Get().Overrides["low_hp"]; o.Severity != string(coach.Urgent) {
+		t.Fatalf("the earlier edit was lost: %+v", o)
+	}
 	if rec := do(http.MethodDelete, "/api/rules/custom/"+custom[0].ID, ""); rec.Code != http.StatusOK || len(srv.rules.Get().Custom) != 0 {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
 	}
@@ -756,19 +762,23 @@ func TestHubDropsEventsForAClientThatFallsBehind(t *testing.T) {
 	h.mu.Unlock()
 }
 
-// Optional request bodies may be empty, but a malformed one is refused rather than ignored.
-func TestReadJSONTakesAnEmptyBodyButNotABrokenOne(t *testing.T) {
+// A request that says nothing is refused, so a mistake never reads as "change everything to
+// nothing"; only the handlers whose fields are all optional take an empty body.
+func TestReadJSONRefusesAnEmptyBody(t *testing.T) {
 	var v struct{ N int }
-	ok := func(body string) error {
-		return readJSON(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)), 1<<10, &v)
+	read := func(f func(http.ResponseWriter, *http.Request, int64, any) error, body string) error {
+		return f(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)), 1<<10, &v)
 	}
-	if err := ok(""); err != nil {
-		t.Fatalf("empty body: %v", err)
+	if err := read(readJSON, ""); err == nil {
+		t.Fatal("an empty body was accepted")
 	}
-	if err := ok(`{"N": 3}`); err != nil || v.N != 3 {
+	if err := read(readJSON, `{"N": 3}`); err != nil || v.N != 3 {
 		t.Fatalf("good body: %v, %+v", err, v)
 	}
-	if err := ok(`{"N": `); err == nil {
+	if err := read(readOptionalJSON, ""); err != nil {
+		t.Fatalf("empty optional body: %v", err)
+	}
+	if err := read(readOptionalJSON, `{"N": `); err == nil {
 		t.Fatal("a broken body was accepted")
 	}
 }
