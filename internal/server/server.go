@@ -2,7 +2,6 @@
 package server
 
 import (
-	"maps"
 	"context"
 	"crypto/subtle"
 	"embed"
@@ -13,6 +12,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"runtime"

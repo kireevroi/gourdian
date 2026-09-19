@@ -29,7 +29,7 @@ type piperState struct {
 	mu          sync.Mutex
 	busy        bool
 	failed      string
-	done, total int64 // MB downloaded so far
+	done, total int64  // MB downloaded so far
 	applied     string // the voices and player last given to the speaker
 }
 

@@ -3,7 +3,7 @@ GOFLAGS := -buildvcs=false
 VERSION := $(shell cat VERSION)
 LDFLAGS := -X dotatrainer/internal/buildinfo.Version=$(VERSION)
 
-.PHONY: all linux windows test install winres cert installer app clean linux-dist linux-install linux-uninstall
+.PHONY: all linux windows test lint install winres cert installer app clean linux-dist linux-install linux-uninstall
 
 all: linux windows
 
@@ -30,8 +30,14 @@ installer: winres all
 app: installer
 	cd /mnt/c && "$(CURDIR)/dist/DotaTrainer-Setup-$(VERSION).exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 
+# Formatting, vet for Linux and Windows, then the tests with the race detector.
 test:
-	go vet ./... && GOOS=windows go vet ./... && go test ./...
+	@files=$$(gofmt -l $$(git ls-files '*.go')); if [ -n "$$files" ]; then echo "not gofmt'ed:" $$files >&2; exit 1; fi
+	go vet ./... && GOOS=windows go vet ./... && go test -race ./...
+
+# staticcheck, pinned so results don't change under us.
+lint:
+	go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
 
 install: all
 	mkdir -p $(HOME)/.local/bin

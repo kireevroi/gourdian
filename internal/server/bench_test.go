@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -95,5 +96,33 @@ func BenchmarkPickHelp(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		srv.pickHelp(config.RoleHardSupport)
+	}
+}
+
+// BenchmarkPickHelpLongHistory is BenchmarkPickHelp over several seasons of matches.
+func BenchmarkPickHelpLongHistory(b *testing.B) {
+	srv, _ := benchServer(b, 1000)
+	for b.Loop() {
+		srv.pickHelp(config.RoleHardSupport)
+	}
+}
+
+// BenchmarkGSI is one game-state post from Dota, start to finish, with several seasons of
+// matches stored.
+func BenchmarkGSI(b *testing.B) {
+	srv, h, _ := newTestServer(b, nil)
+	seed(b, srv, 1000)
+	var bodies [][]byte
+	for clock := 0; clock < 3600; clock++ {
+		body, err := json.Marshal(payload(clock, func(s *gsi.State) { s.Hero.ID = 26 }))
+		if err != nil {
+			b.Fatal(err)
+		}
+		bodies = append(bodies, body)
+	}
+	i := 0
+	for b.Loop() {
+		post(b, h, bodies[i%len(bodies)])
+		i++
 	}
 }

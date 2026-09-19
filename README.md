@@ -195,7 +195,8 @@ From WSL:
 ```sh
 winget.exe install JRSoftware.InnoSetup --scope user   # once
 make cert        # once: creates the signing certificate; click Yes in the Windows dialog
-make test        # vet (Linux and Windows) and unit tests
+make test        # gofmt check, vet (Linux and Windows), tests with the race detector
+make lint        # staticcheck
 make installer   # signed installer in dist/ and your Downloads folder
 make app         # build the installer and install it silently over the current version
 ```
