@@ -75,7 +75,10 @@ jobs:
           if (-not $iscc) { throw 'ISCC.exe not found after installing Inno Setup' }
           "ISCC=$($iscc.FullName)" >> $env:GITHUB_ENV
       - name: Build the installer
-        shell: pwsh
+        # Windows PowerShell, not pwsh: Inno Setup starts powershell.exe for sign.ps1, and a
+        # powershell.exe started through another program under pwsh inherits pwsh's module path
+        # and loses the Cert: drive.
+        shell: powershell
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
           $stage = Join-Path $env:RUNNER_TEMP 'stage'
