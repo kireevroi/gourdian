@@ -93,6 +93,10 @@ type Server struct {
 	// baseCtx bounds background work (OpenDota waits, imports) to the server's lifetime.
 	baseCtx context.Context
 	cancel  context.CancelFunc
+	// tasks counts the background work Close waits for; closing stops new work starting.
+	tasksMu sync.Mutex
+	closing bool
+	tasks   sync.WaitGroup
 }
 
 func New(cfg *config.Store, engine *coach.Engine, st *stats.Store, data *dotadata.Client, speaker *speech.Speaker, workDir, cacheDir string, log *slog.Logger) *Server {
@@ -218,12 +222,41 @@ func sameOrigin(next http.Handler) http.Handler {
 	})
 }
 
+// spawn runs work in the background for the server's lifetime: its ctx ends when the server
+// closes, and Close waits for it, so nothing writes to the data file after main closes it.
+// Once the server is closing, spawn does nothing.
+func (s *Server) spawn(work func(ctx context.Context)) {
+	if !s.track() {
+		return
+	}
+	go func() {
+		defer s.tasks.Done()
+		work(s.baseCtx)
+	}()
+}
+
+// track counts work that Close waits for, and reports false once the server is closing.
+func (s *Server) track() bool {
+	s.tasksMu.Lock()
+	defer s.tasksMu.Unlock()
+	if s.closing {
+		return false
+	}
+	s.tasks.Add(1)
+	return true
+}
+
 // Run pushes dashboard snapshots until ctx ends: on change, and every few seconds so
 // the connection indicator notices when Dota stops posting.
 func (s *Server) Run(ctx context.Context) {
-	go s.resumePending()
-	go s.startupAICheck()
-	go s.ensurePiper()
+	// Finishing a match writes to the data file, so Close waits for this loop too.
+	if !s.track() {
+		return
+	}
+	defer s.tasks.Done()
+	s.spawn(func(context.Context) { s.resumePending() })
+	s.spawn(func(context.Context) { s.startupAICheck() })
+	s.spawn(func(context.Context) { s.ensurePiper() })
 	tick := time.NewTicker(400 * time.Millisecond)
 	defer tick.Stop()
 	var n int

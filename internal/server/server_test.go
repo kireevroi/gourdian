@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -664,5 +666,27 @@ func TestSettingsSaveKeepsChangesMadeMeanwhile(t *testing.T) {
 	wg.Wait()
 	if n := len(srv.cfg.Settings().HeroRoles); n != 20 {
 		t.Fatalf("%d of 20 remembered positions survived the saves", n)
+	}
+}
+
+// Close must wait for background work, like a match review being saved, so main doesn't close
+// the data file under it; and nothing may start once the server is closing.
+func TestCloseWaitsForBackgroundWork(t *testing.T) {
+	srv, _, _ := newTestServer(t, nil)
+	var finished atomic.Bool
+	srv.spawn(func(ctx context.Context) {
+		<-ctx.Done()
+		time.Sleep(100 * time.Millisecond) // still writing when told to stop
+		finished.Store(true)
+	})
+	srv.Close()
+	if !finished.Load() {
+		t.Fatal("Close returned before the background work finished")
+	}
+	var ran atomic.Bool
+	srv.spawn(func(context.Context) { ran.Store(true) })
+	time.Sleep(50 * time.Millisecond)
+	if ran.Load() {
+		t.Fatal("work started after Close")
 	}
 }

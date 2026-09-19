@@ -103,7 +103,7 @@ func (s *Server) aiFailed(p ai.Provider, err error) {
 		}
 		_, canLogin := p.(ai.Loginer)
 		if s.setAIProblem(aiHealth{Problem: aiLoggedOut, Provider: info.ID, Message: s.withFallback(msg, info.ID), CanLogin: canLogin && runtime.GOOS == "windows"}) {
-			go s.watchLogin(info.ID, authRecheck, 0)
+			s.spawn(func(context.Context) { s.watchLogin(info.ID, authRecheck, 0) })
 		}
 	case ai.ErrLimit:
 		s.setAIProblem(aiHealth{Problem: aiLimited, Provider: info.ID, Until: time.Now().Add(limitBackoff),
@@ -174,7 +174,7 @@ func (s *Server) clearAIProblem(id string) {
 	}
 	s.log.Info("AI provider resumed", "provider", id, "was", had)
 	s.hub.publish("ai_health", s.aiBanner())
-	go s.resumePending()
+	s.spawn(func(context.Context) { s.resumePending() })
 }
 
 // aiBanner is the problem the dashboard shows: the first one among the providers in use.
@@ -216,7 +216,7 @@ func (s *Server) checkProvider(ctx context.Context, id string) ai.Status {
 		}
 		if was != ai.StateReady {
 			// Newly connected: read its real models and pick from them.
-			go s.refreshModels(s.baseCtx, id)
+			s.spawn(func(ctx context.Context) { s.refreshModels(ctx, id) })
 		}
 	case ai.StateLogin, ai.StateKey, ai.StateMissing:
 		if s.providerInUse(id) {

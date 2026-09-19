@@ -119,8 +119,8 @@ func (s *Server) installPiper() bool {
 	s.piper.mu.Unlock()
 	set := s.cfg.Settings()
 	voices := []string{chosenVoice(set, set.Language)}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	s.spawn(func(ctx context.Context) {
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
 		s.log.Info("downloading Piper voice", "voices", voices, "into", s.piperHome())
 		s.hub.publish("settings", s.settingsResponse())
@@ -149,7 +149,7 @@ func (s *Server) installPiper() bool {
 			s.hub.publish("voice_install", voiceStatus{State: "done", Text: "The natural voice is ready."})
 		}
 		s.hub.publish("settings", s.settingsResponse())
-	}()
+	})
 	return true
 }
 

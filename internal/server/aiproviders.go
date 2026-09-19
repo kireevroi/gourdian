@@ -146,7 +146,7 @@ func (s *Server) handleProviderLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	go s.watchLogin(p.Info().ID, 5*time.Second, loginWatchFor)
+	s.spawn(func(context.Context) { s.watchLogin(p.Info().ID, 5*time.Second, loginWatchFor) })
 	writeJSON(w, map[string]string{"status": "Finish logging in in the window that opened. The dashboard updates when it's done."})
 }
 
@@ -170,7 +170,7 @@ func (s *Server) handleProviderSwitch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	go s.watchLogin(p.Info().ID, 5*time.Second, loginWatchFor)
+	s.spawn(func(context.Context) { s.watchLogin(p.Info().ID, 5*time.Second, loginWatchFor) })
 	writeJSON(w, map[string]string{"status": "Sign in as the other account in the window that opened. The dashboard updates when it's done."})
 }
 
@@ -244,7 +244,7 @@ func (s *Server) handleProviderTest(w http.ResponseWriter, r *http.Request) {
 	tips, err := aicoach.Suggest(ctx, p, choice, set.AI, set.Language, prompt)
 	if err != nil {
 		if k := ai.KindOf(err); k == ai.ErrAuth || k == ai.ErrLimit {
-			s.checkProvider(context.Background(), choice.Provider)
+			s.checkProvider(s.baseCtx, choice.Provider)
 		}
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
