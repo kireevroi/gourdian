@@ -735,8 +735,13 @@ func (s *Server) handleVoiceTest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"voice": set.Voice})
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
+func writeJSON(w http.ResponseWriter, v any) { writeJSONStatus(w, http.StatusOK, v) }
+
+// writeJSONStatus answers with v and a status other than 200. Headers must be set before the
+// status is written, or they're dropped.
+func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
 }
 

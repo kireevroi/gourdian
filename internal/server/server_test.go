@@ -690,3 +690,14 @@ func TestCloseWaitsForBackgroundWork(t *testing.T) {
 		t.Fatal("work started after Close")
 	}
 }
+
+// Headers set after the status is written are dropped, which left 202 answers without their
+// JSON content type.
+func TestJSONAnswersWithAStatusKeepTheirContentType(t *testing.T) {
+	rec := httptest.NewRecorder()
+	writeJSONStatus(rec, http.StatusAccepted, map[string]string{"state": "running"})
+	res := rec.Result()
+	if res.StatusCode != http.StatusAccepted || res.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("status %d, content type %q", res.StatusCode, res.Header.Get("Content-Type"))
+	}
+}

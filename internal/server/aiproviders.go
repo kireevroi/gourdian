@@ -184,8 +184,7 @@ func (s *Server) handleProviderInstall(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
-	w.WriteHeader(http.StatusAccepted)
-	writeJSON(w, st)
+	writeJSONStatus(w, http.StatusAccepted, st)
 }
 
 func (s *Server) handleProviderKey(w http.ResponseWriter, r *http.Request) {
