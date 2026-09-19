@@ -82,7 +82,7 @@ func BenchmarkSnapshotWhilePicking(b *testing.B) {
 	seed(b, srv, 200)
 	postState(b, h, payload(-60, func(s *gsi.State) {
 		s.Hero = &gsi.Hero{}
-		s.Map.GameState = gsi.StatePreGame
+		s.Map.GameState = gsi.StateHeroSelection
 	}))
 	set := srv.cfg.Settings()
 	b.ResetTimer()
