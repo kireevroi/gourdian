@@ -3,6 +3,7 @@ package stats
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -108,14 +109,18 @@ func (s *Store) Log(msg string, err error) {
 // OnError sets where problems that don't stop the trainer are reported.
 func (s *Store) OnError(f func(msg string, err error)) { s.onError = f }
 
-func (s *Store) meta(key string) string {
+// meta reads a flag the store keeps about itself; a missing one is "".
+func (s *Store) meta(key string) (string, error) {
 	var v string
-	s.db.QueryRow(`SELECT value FROM meta WHERE key = ?`, key).Scan(&v)
-	return v
+	err := s.db.QueryRow(`SELECT value FROM meta WHERE key = ?`, key).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return v, err
 }
 
-func (s *Store) setMeta(key, value string) error {
-	_, err := s.db.Exec(`INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
+func setMeta(q execer, key, value string) error {
+	_, err := q.Exec(`INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	return err
 }
 

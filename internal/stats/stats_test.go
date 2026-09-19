@@ -243,3 +243,48 @@ func TestEntriesSortByTimeAcrossTimeZones(t *testing.T) {
 		t.Fatalf("newest match = %+v", recent)
 	}
 }
+
+// A failed import of an older version's CSV files must leave nothing behind and run again on
+// the next start. It used to mark itself done first, so everything after the failure was lost.
+func TestCSVImportIsAllOrNothing(t *testing.T) {
+	dir := t.TempDir()
+	statsDir := filepath.Join(dir, "stats")
+	if err := os.MkdirAll(filepath.Join(statsDir, GoalsFile), 0o755); err != nil { // unreadable: a folder
+		t.Fatal(err)
+	}
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(statsDir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(TipsFile, "at,match_id,clock,rule,category,severity,habit,text\n"+
+		"2026-01-01T00:00:00Z,m1,60,no_tp,items,warn,true,No TP\n2026-01-01T00:01:00Z,m1,120,no_tp,items,warn,true,No TP\n")
+	counts := func() (tips, goals int) {
+		st, err := Open(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer st.Close()
+		tt, err := st.Tips()
+		if err != nil {
+			t.Fatal(err)
+		}
+		gg, err := st.Goals()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(tt), len(gg)
+	}
+	if tips, _ := counts(); tips != 0 {
+		t.Fatalf("the failed import left %d tips behind", tips)
+	}
+	if err := os.Remove(filepath.Join(statsDir, GoalsFile)); err != nil {
+		t.Fatal(err)
+	}
+	write(GoalsFile, "created,week,metric,comparator,target,label,match_id\n2026-01-01T00:00:00Z,2026-W01,deaths,<=,5,Die less,m1\n")
+	for range 2 { // the retry imports everything once; later starts import nothing
+		if tips, goals := counts(); tips != 2 || goals != 1 {
+			t.Fatalf("%d tips (want 2) and %d goals (want 1) after the retry", tips, goals)
+		}
+	}
+}

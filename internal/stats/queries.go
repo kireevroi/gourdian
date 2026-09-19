@@ -2,6 +2,7 @@ package stats
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -45,12 +46,24 @@ func scanMatch(rows *sql.Rows) (MatchSummary, error) {
 }
 
 func (s *Store) AppendMatch(m MatchSummary) error {
+	return s.tx(func(tx *sql.Tx) error { return appendMatch(tx, m) })
+}
+
+// execer runs statements on the store's connection or inside a transaction.
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+func appendMatch(q execer, m MatchSummary) error {
 	var seen int
-	s.db.QueryRow(`SELECT 1 FROM matches WHERE match_id = ?`, m.MatchID).Scan(&seen)
-	if seen == 1 {
+	switch err := q.QueryRow(`SELECT 1 FROM matches WHERE match_id = ?`, m.MatchID).Scan(&seen); {
+	case err == nil:
 		return ErrDuplicate
+	case !errors.Is(err, sql.ErrNoRows):
+		return err
 	}
-	_, err := s.db.Exec(`INSERT INTO matches (`+matchColumnList+`) VALUES (`+placeholders(35)+`)`, matchValues(m)...)
+	_, err := q.Exec(`INSERT INTO matches (`+matchColumnList+`) VALUES (`+placeholders(35)+`)`, matchValues(m)...)
 	return err
 }
 
@@ -127,16 +140,18 @@ func (s *Store) AppendItems(items []ItemTiming) error {
 	if len(items) == 0 {
 		return nil
 	}
-	return s.tx(func(tx *sql.Tx) error {
-		for _, it := range items {
-			_, err := tx.Exec(`INSERT OR IGNORE INTO items (match_id, hero, item, time, source) VALUES (?, ?, ?, ?, ?)`,
-				it.MatchID, it.Hero, it.Item, it.Time, it.Source)
-			if err != nil {
-				return err
-			}
+	return s.tx(func(tx *sql.Tx) error { return appendItems(tx, items) })
+}
+
+func appendItems(q execer, items []ItemTiming) error {
+	for _, it := range items {
+		_, err := q.Exec(`INSERT OR IGNORE INTO items (match_id, hero, item, time, source) VALUES (?, ?, ?, ?, ?)`,
+			it.MatchID, it.Hero, it.Item, it.Time, it.Source)
+		if err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 func (s *Store) Items() ([]ItemTiming, error) {
@@ -160,17 +175,19 @@ func (s *Store) AppendSamples(samples []Sample) error {
 	if len(samples) == 0 {
 		return nil
 	}
-	return s.tx(func(tx *sql.Tx) error {
-		for _, x := range samples {
-			_, err := tx.Exec(`REPLACE INTO samples (match_id, clock, gold, gpm, xpm, last_hits, denies, kills, deaths, assists, level, alive)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				x.MatchID, x.Clock, x.Gold, x.GPM, x.XPM, x.LastHits, x.Denies, x.Kills, x.Deaths, x.Assists, x.Level, boolInt(x.Alive))
-			if err != nil {
-				return err
-			}
+	return s.tx(func(tx *sql.Tx) error { return appendSamples(tx, samples) })
+}
+
+func appendSamples(q execer, samples []Sample) error {
+	for _, x := range samples {
+		_, err := q.Exec(`REPLACE INTO samples (match_id, clock, gold, gpm, xpm, last_hits, denies, kills, deaths, assists, level, alive)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			x.MatchID, x.Clock, x.Gold, x.GPM, x.XPM, x.LastHits, x.Denies, x.Kills, x.Deaths, x.Assists, x.Level, boolInt(x.Alive))
+		if err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 func (s *Store) Timeline() ([]Sample, error) {
@@ -198,17 +215,19 @@ func (s *Store) AppendTips(tips []TipRecord) error {
 	if len(tips) == 0 {
 		return nil
 	}
-	return s.tx(func(tx *sql.Tx) error {
-		for _, t := range tips {
-			_, err := tx.Exec(`INSERT INTO tips (at, match_id, clock, rule, category, severity, habit, text)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-				timeValue(t.At), t.MatchID, t.Clock, t.Rule, t.Category, t.Severity, boolInt(t.Habit), t.Text)
-			if err != nil {
-				return err
-			}
+	return s.tx(func(tx *sql.Tx) error { return appendTips(tx, tips) })
+}
+
+func appendTips(q execer, tips []TipRecord) error {
+	for _, t := range tips {
+		_, err := q.Exec(`INSERT INTO tips (at, match_id, clock, rule, category, severity, habit, text)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			timeValue(t.At), t.MatchID, t.Clock, t.Rule, t.Category, t.Severity, boolInt(t.Habit), t.Text)
+		if err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // RuleCounts counts the tips each rule gave in the given matches.
@@ -293,12 +312,17 @@ func (s *Store) FiresByMatch(rule string) (map[string]int, error) {
 }
 
 func (s *Store) AppendMMR(e MMREntry) error {
+	return s.tx(func(tx *sql.Tx) error { return appendMMR(tx, e) })
+}
+
+// appendMMR replaces a match's entry, so logging a match again doesn't count it twice.
+func appendMMR(q execer, e MMREntry) error {
 	if e.MatchID != "" {
-		if _, err := s.db.Exec(`DELETE FROM mmr WHERE match_id = ?`, e.MatchID); err != nil {
+		if _, err := q.Exec(`DELETE FROM mmr WHERE match_id = ?`, e.MatchID); err != nil {
 			return err
 		}
 	}
-	_, err := s.db.Exec(`INSERT INTO mmr (date, mmr, note, match_id) VALUES (?, ?, ?, ?)`,
+	_, err := q.Exec(`INSERT INTO mmr (date, mmr, note, match_id) VALUES (?, ?, ?, ?)`,
 		timeValue(e.Date), e.MMR, e.Note, e.MatchID)
 	return err
 }
@@ -322,8 +346,10 @@ func (s *Store) MMR() ([]MMREntry, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) AppendReview(r Review) error {
-	_, err := s.db.Exec(`INSERT INTO reviews (date, match_id, hero, hero_id, role, result, summary, strengths, improve, next_game_focus, followed_focus)
+func (s *Store) AppendReview(r Review) error { return appendReview(s.db, r) }
+
+func appendReview(q execer, r Review) error {
+	_, err := q.Exec(`INSERT INTO reviews (date, match_id, hero, hero_id, role, result, summary, strengths, improve, next_game_focus, followed_focus)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		timeValue(r.Date), r.MatchID, r.Hero, r.HeroID, r.Role, r.Result, r.Summary,
 		jsonValue(r.Strengths), jsonValue(r.Improve), r.NextGameFocus, r.FollowedFocus)
@@ -357,17 +383,19 @@ func (s *Store) AppendGoals(goals []Goal) error {
 	if len(goals) == 0 {
 		return nil
 	}
-	return s.tx(func(tx *sql.Tx) error {
-		for _, g := range goals {
-			_, err := tx.Exec(`INSERT INTO goals (created, week, metric, comparator, target, label, match_id)
-				VALUES (?, ?, ?, ?, ?, ?, ?)`,
-				timeValue(g.Created), g.Week, g.Metric, g.Comparator, g.Target, g.Label, g.MatchID)
-			if err != nil {
-				return err
-			}
+	return s.tx(func(tx *sql.Tx) error { return appendGoals(tx, goals) })
+}
+
+func appendGoals(q execer, goals []Goal) error {
+	for _, g := range goals {
+		_, err := q.Exec(`INSERT INTO goals (created, week, metric, comparator, target, label, match_id)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			timeValue(g.Created), g.Week, g.Metric, g.Comparator, g.Target, g.Label, g.MatchID)
+		if err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // Goals returns every goal ever set, oldest first.
@@ -431,7 +459,12 @@ func (s *Store) ReplaceRules(rows []RuleRow) error {
 }
 
 // RulesImported reports whether the rules of an older version have been taken over already.
-func (s *Store) RulesImported() bool { return s.meta("rules_imported") != "" }
+// If the flag can't be read it counts as set: importing again would put an old rules file back
+// over the player's rules.
+func (s *Store) RulesImported() bool {
+	v, err := s.meta("rules_imported")
+	return err != nil || v != ""
+}
 
 // MarkRulesImported records that the old rules file has been read.
-func (s *Store) MarkRulesImported() error { return s.setMeta("rules_imported", "yes") }
+func (s *Store) MarkRulesImported() error { return setMeta(s.db, "rules_imported", "yes") }

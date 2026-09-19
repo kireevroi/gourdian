@@ -1,6 +1,8 @@
 package stats
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -22,41 +24,29 @@ const (
 
 var Files = []string{MatchesFile, TimelineFile, TipsFile, MMRFile, ReviewsFile, ItemsFile, GoalsFile}
 
-// importCSV moves the CSV files of an older version into the data file, once.
+// importCSV moves the CSV files of an older version into the data file, once. It all happens
+// in one transaction, together with the flag that it's done, so a failure leaves nothing behind
+// and the next start tries again.
 func (s *Store) importCSV() error {
-	if s.meta("csv_imported") != "" {
-		return nil
-	}
-	if err := s.setMeta("csv_imported", time.Now().Format(time.RFC3339)); err != nil {
+	done, err := s.meta("csv_imported")
+	if err != nil || done != "" {
 		return err
 	}
-	matches, err := readRows(s.path(MatchesFile))
-	if err != nil {
-		return err
-	}
-	for _, r := range matches {
-		if err := s.AppendMatch(matchFromRow(r)); err != nil && err != ErrDuplicate {
+	var rows [7][]map[string]string
+	for i, name := range []string{MatchesFile, TimelineFile, TipsFile, ItemsFile, MMRFile, ReviewsFile, GoalsFile} {
+		if rows[i], err = readRows(s.path(name)); err != nil {
 			return err
 		}
 	}
-	samples, err := readRows(s.path(TimelineFile))
-	if err != nil {
-		return err
-	}
-	batch := make([]Sample, 0, len(samples))
+	matches, samples, tips, items, mmr, reviews, goals := rows[0], rows[1], rows[2], rows[3], rows[4], rows[5], rows[6]
+
+	sampleBatch := make([]Sample, 0, len(samples))
 	for _, r := range samples {
-		batch = append(batch, Sample{
+		sampleBatch = append(sampleBatch, Sample{
 			MatchID: r["match_id"], Clock: atoi(r["clock"]), Gold: atoi(r["gold"]), GPM: atoi(r["gpm"]), XPM: atoi(r["xpm"]),
 			LastHits: atoi(r["last_hits"]), Denies: atoi(r["denies"]), Kills: atoi(r["kills"]), Deaths: atoi(r["deaths"]),
 			Assists: atoi(r["assists"]), Level: atoi(r["level"]), Alive: r["alive"] == "true",
 		})
-	}
-	if err := s.AppendSamples(batch); err != nil {
-		return err
-	}
-	tips, err := readRows(s.path(TipsFile))
-	if err != nil {
-		return err
 	}
 	tipBatch := make([]TipRecord, 0, len(tips))
 	for _, r := range tips {
@@ -65,45 +55,9 @@ func (s *Store) importCSV() error {
 			Category: r["category"], Severity: r["severity"], Habit: r["habit"] == "true", Text: r["text"],
 		})
 	}
-	if err := s.AppendTips(tipBatch); err != nil {
-		return err
-	}
-	items, err := readRows(s.path(ItemsFile))
-	if err != nil {
-		return err
-	}
 	itemBatch := make([]ItemTiming, 0, len(items))
 	for _, r := range items {
 		itemBatch = append(itemBatch, ItemTiming{MatchID: r["match_id"], Hero: r["hero"], Item: r["item"], Time: atoi(r["time"]), Source: r["source"]})
-	}
-	if err := s.AppendItems(itemBatch); err != nil {
-		return err
-	}
-	mmr, err := readRows(s.path(MMRFile))
-	if err != nil {
-		return err
-	}
-	for _, r := range mmr {
-		if err := s.AppendMMR(MMREntry{Date: parseTime(r["date"]), MMR: atoi(r["mmr"]), Note: r["note"]}); err != nil {
-			return err
-		}
-	}
-	reviews, err := readRows(s.path(ReviewsFile))
-	if err != nil {
-		return err
-	}
-	for _, r := range reviews {
-		if err := s.AppendReview(Review{
-			Date: parseTime(r["date"]), MatchID: r["match_id"], Hero: r["hero"], HeroID: atoi(r["hero_id"]),
-			Role: r["role"], Result: r["result"], Summary: r["summary"], Strengths: splitList(r["strengths"]),
-			Improve: splitList(r["improve"]), NextGameFocus: r["next_game_focus"],
-		}); err != nil {
-			return err
-		}
-	}
-	goals, err := readRows(s.path(GoalsFile))
-	if err != nil {
-		return err
 	}
 	goalBatch := make([]Goal, 0, len(goals))
 	for _, r := range goals {
@@ -111,7 +65,41 @@ func (s *Store) importCSV() error {
 		goalBatch = append(goalBatch, Goal{Created: parseTime(r["created"]), Week: r["week"], Metric: r["metric"],
 			Comparator: r["comparator"], Target: target, Label: r["label"], MatchID: r["match_id"]})
 	}
-	return s.AppendGoals(goalBatch)
+
+	return s.tx(func(tx *sql.Tx) error {
+		for _, r := range matches {
+			if err := appendMatch(tx, matchFromRow(r)); err != nil && !errors.Is(err, ErrDuplicate) {
+				return err
+			}
+		}
+		if err := appendSamples(tx, sampleBatch); err != nil {
+			return err
+		}
+		if err := appendTips(tx, tipBatch); err != nil {
+			return err
+		}
+		if err := appendItems(tx, itemBatch); err != nil {
+			return err
+		}
+		for _, r := range mmr {
+			if err := appendMMR(tx, MMREntry{Date: parseTime(r["date"]), MMR: atoi(r["mmr"]), Note: r["note"]}); err != nil {
+				return err
+			}
+		}
+		for _, r := range reviews {
+			if err := appendReview(tx, Review{
+				Date: parseTime(r["date"]), MatchID: r["match_id"], Hero: r["hero"], HeroID: atoi(r["hero_id"]),
+				Role: r["role"], Result: r["result"], Summary: r["summary"], Strengths: splitList(r["strengths"]),
+				Improve: splitList(r["improve"]), NextGameFocus: r["next_game_focus"],
+			}); err != nil {
+				return err
+			}
+		}
+		if err := appendGoals(tx, goalBatch); err != nil {
+			return err
+		}
+		return setMeta(tx, "csv_imported", time.Now().Format(time.RFC3339))
+	})
 }
 
 // Export writes every table to the CSV files, for opening in a spreadsheet.
