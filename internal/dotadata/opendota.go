@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -22,6 +21,7 @@ const (
 )
 
 type Client struct {
+	limit    *limiter        // every call to OpenDota waits its turn here
 	ctx      context.Context // from Start: background fetches end with it
 	base     string
 	http     *http.Client
@@ -62,6 +62,7 @@ func New(cacheDir string, log *slog.Logger) *Client {
 		cacheDir: cacheDir,
 		log:      log,
 		ready:    make(chan struct{}),
+		limit:    newLimiter(),
 		builds:   map[int]*Build{},
 		failedAt: map[int]time.Time{},
 		pending:  map[int]bool{},
@@ -215,52 +216,62 @@ func (c *Client) RankTier(accountID string) int {
 	return 0
 }
 
+// getJSON decodes OpenDota's answer at path into out, cached as cacheName for maxAge.
 func (c *Client) getJSON(ctx context.Context, path, cacheName string, maxAge time.Duration, out any) error {
-	cachePath := filepath.Join(c.cacheDir, cacheName)
-	if fi, err := os.Stat(cachePath); err == nil && time.Since(fi.ModTime()) < maxAge {
-		if data, err := os.ReadFile(cachePath); err == nil && json.Unmarshal(data, out) == nil {
-			return nil
+	raw, err := cached(c, cacheName, maxAge, func() (json.RawMessage, error) {
+		data, err := c.fetch(ctx, path)
+		if err == nil && !json.Valid(data) {
+			err = fmt.Errorf("decode %s: not JSON", path)
 		}
+		return data, err
+	}, nil)
+	if err != nil {
+		return err
 	}
-	data, fetchErr := c.fetch(ctx, path)
-	if fetchErr == nil {
-		if err := json.Unmarshal(data, out); err != nil {
-			return fmt.Errorf("decode %s: %w", path, err)
-		}
-		if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err == nil {
-			_ = os.WriteFile(cachePath, data, 0o644)
-		}
-		return nil
+	if err := json.Unmarshal(raw, out); err != nil {
+		return fmt.Errorf("decode %s: %w", path, err)
 	}
-	if data, err := os.ReadFile(cachePath); err == nil && json.Unmarshal(data, out) == nil {
-		c.log.Warn("using stale cache", "path", path, "err", fetchErr)
-		return nil
-	}
-	return fetchErr
+	return nil
 }
 
 func (c *Client) fetch(ctx context.Context, path string) ([]byte, error) {
 	return c.do(ctx, http.MethodGet, path)
 }
 
+// do calls OpenDota within the free tier's rate, waiting out and retrying a 429 twice.
 func (c *Client) do(ctx context.Context, method, path string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, c.base+path, nil)
-	if err != nil {
-		return nil, err
+	for attempt := 0; ; attempt++ {
+		if err := c.limit.wait(ctx); err != nil {
+			return nil, err
+		}
+		req, err := http.NewRequestWithContext(ctx, method, c.base+path, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode == http.StatusTooManyRequests && attempt < 2 {
+			c.limit.pause(retryAfter(resp))
+			resp.Body.Close()
+			continue
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("%s %s: %s", method, path, resp.Status)
+		}
+		return io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s %s: %s", method, path, resp.Status)
-	}
-	return io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 }
 
 // SetBaseURL points the client at another OpenDota-compatible API, such as a test server.
-func (c *Client) SetBaseURL(u string) { c.base = u }
+// SetBaseURL points the client at another server, as tests do with a fake OpenDota, which
+// has no rate limit to keep to.
+func (c *Client) SetBaseURL(u string) {
+	c.base = u
+	c.limit = &limiter{}
+}
 
 // WaitReady blocks until hero and item data has loaded (or failed to).
 func (c *Client) WaitReady(ctx context.Context) {

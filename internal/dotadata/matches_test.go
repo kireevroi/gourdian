@@ -13,11 +13,6 @@ import (
 	"testing"
 )
 
-func TestMain(m *testing.M) {
-	matchLimiter.interval = 0
-	os.Exit(m.Run())
-}
-
 func loadMatch(t *testing.T, name string) *Match {
 	t.Helper()
 	data, err := os.ReadFile("testdata/" + name)

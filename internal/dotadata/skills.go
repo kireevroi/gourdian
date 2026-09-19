@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -98,37 +97,28 @@ func (c *Client) loadSkillBuild(ctx context.Context, key positionKey) (*SkillBui
 	if !ok {
 		return nil, fmt.Errorf("unknown hero %d", key.hero)
 	}
-	var seqs [][]int
-	cachePath := filepath.Join(c.cacheDir, "builds", key.file("-skills"))
-	if fi, err := os.Stat(cachePath); err == nil && time.Since(fi.ModTime()) < buildMaxAge {
-		if raw, err := os.ReadFile(cachePath); err == nil && json.Unmarshal(raw, &seqs) == nil {
-			return c.skillBuildFrom(key, hero.Name, seqs), nil
+	seqs, err := cached(c, filepath.Join("builds", key.file("-skills")), buildMaxAge, func() ([][]int, error) {
+		raw, err := c.fetch(ctx, "/explorer?sql="+url.QueryEscape(skillSQL(key)))
+		var resp struct {
+			Rows []struct {
+				Order []int `json:"ability_upgrades_arr"`
+			} `json:"rows"`
+			Err any `json:"err"`
 		}
-	}
-	raw, err := c.fetch(ctx, "/explorer?sql="+url.QueryEscape(skillSQL(key)))
-	var resp struct {
-		Rows []struct {
-			Order []int `json:"ability_upgrades_arr"`
-		} `json:"rows"`
-		Err any `json:"err"`
-	}
-	if err == nil {
-		err = json.Unmarshal(raw, &resp)
-	}
-	if err == nil && resp.Err != nil {
-		err = fmt.Errorf("explorer: %v", resp.Err)
-	}
+		if err == nil {
+			err = json.Unmarshal(raw, &resp)
+		}
+		if err == nil && resp.Err != nil {
+			err = fmt.Errorf("explorer: %v", resp.Err)
+		}
+		var seqs [][]int
+		for _, r := range resp.Rows {
+			seqs = append(seqs, r.Order)
+		}
+		return seqs, err
+	}, nil)
 	if err != nil {
-		if raw, readErr := os.ReadFile(cachePath); readErr == nil && json.Unmarshal(raw, &seqs) == nil {
-			return c.skillBuildFrom(key, hero.Name, seqs), nil
-		}
 		return nil, err
-	}
-	for _, r := range resp.Rows {
-		seqs = append(seqs, r.Order)
-	}
-	if saved, err := json.Marshal(seqs); err == nil && os.MkdirAll(filepath.Dir(cachePath), 0o755) == nil {
-		_ = os.WriteFile(cachePath, saved, 0o644)
 	}
 	return c.skillBuildFrom(key, hero.Name, seqs), nil
 }
