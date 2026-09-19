@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -166,7 +165,10 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Count int `json:"count"`
 	}
-	json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body)
+	if err := readJSON(w, r, 1<<10, &body); err != nil {
+		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	count := min(max(body.Count, 1), 100)
 	if body.Count == 0 {
 		count = 50

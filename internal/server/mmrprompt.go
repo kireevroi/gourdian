@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"gourdian/internal/model"
 	"gourdian/internal/stats"
@@ -99,7 +98,7 @@ func (s *Server) handleMatchRanked(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Ranked bool `json:"ranked"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil {
+	if err := readJSON(w, r, 4<<10, &body); err != nil {
 		http.Error(w, `send {"ranked": true}`, http.StatusBadRequest)
 		return
 	}
@@ -142,7 +141,7 @@ func (s *Server) handleMatchMMR(w http.ResponseWriter, r *http.Request) {
 		MMR    int `json:"mmr"`
 		Change int `json:"change"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil {
+	if err := readJSON(w, r, 4<<10, &body); err != nil {
 		http.Error(w, `send {"mmr": 3025} or {"change": 25}`, http.StatusBadRequest)
 		return
 	}
@@ -198,7 +197,7 @@ func (s *Server) handleMMRChange(w http.ResponseWriter, r *http.Request) {
 		Change int    `json:"change"`
 		Note   string `json:"note"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil || body.Change == 0 {
+	if err := readJSON(w, r, 4<<10, &body); err != nil || body.Change == 0 {
 		http.Error(w, `send {"change": 25}`, http.StatusBadRequest)
 		return
 	}

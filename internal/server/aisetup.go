@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"slices"
 	"strings"
@@ -92,7 +91,10 @@ func (s *Server) handleAISetupStart(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		IDs []string `json:"ids"`
 	}
-	json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body)
+	if err := readJSON(w, r, 4<<10, &body); err != nil {
+		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	if len(body.IDs) == 0 {
 		body.IDs = s.installable()
 	}

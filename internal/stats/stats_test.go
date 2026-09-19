@@ -368,7 +368,7 @@ func TestUnknownMatchSaysSo(t *testing.T) {
 	if _, err := st.Match("9000000009"); !errors.Is(err, ErrNoMatch) {
 		t.Errorf("Match: %v, want ErrNoMatch", err)
 	}
-	if err := st.UpdateMatch("9000000009", func(*MatchSummary) {}); !errors.Is(err, ErrNoMatch) {
+	if err := st.UpdateMatch("9000000009", func(*model.MatchSummary) {}); !errors.Is(err, ErrNoMatch) {
 		t.Errorf("UpdateMatch: %v, want ErrNoMatch", err)
 	}
 }
@@ -382,7 +382,7 @@ func TestItemTimingsCountAsHistory(t *testing.T) {
 	}
 	defer st.Close()
 	before := st.HistoryVersion()
-	if err := st.AppendItems([]ItemTiming{{MatchID: "a", Item: "bfury", Time: 1000, Source: SourceOpenDota}}); err != nil {
+	if err := st.AppendItems([]model.ItemTiming{{MatchID: "a", Item: "bfury", Time: 1000, Source: model.SourceOpenDota}}); err != nil {
 		t.Fatal(err)
 	}
 	if st.HistoryVersion() == before {

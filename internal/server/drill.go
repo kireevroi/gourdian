@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"slices"
 	"time"
@@ -118,7 +117,7 @@ func (s *Server) handleSetDrill(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Rule string `json:"rule"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil {
+	if err := readJSON(w, r, 4<<10, &body); err != nil {
 		http.Error(w, `send {"rule": "no_tp"} or {"rule": ""}`, http.StatusBadRequest)
 		return
 	}
@@ -133,7 +132,7 @@ func (s *Server) handleSetDrill(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.hub.publish("settings", s.settingsResponse())
+	s.publishSettings()
 	s.dirty.Store(true)
 	writeJSON(w, s.drill())
 }

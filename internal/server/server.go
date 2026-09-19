@@ -444,9 +444,7 @@ func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings 
 
 // publishSettingsLater sends the dashboard the new settings without holding up the
 // game-state post, since settingsResponse asks Windows about autostart and voices.
-func (s *Server) publishSettingsLater() {
-	s.spawn(func(context.Context) { s.hub.publish("settings", s.settingsResponse()) })
-}
+func (s *Server) publishSettingsLater() { s.spawn(func(context.Context) { s.publishSettings() }) }
 
 // roleFor tries the role last played on the hero, then the player's most common role on it
 // (imported matches count), then the hero's own roles from OpenDota.
@@ -608,6 +606,9 @@ func (s *Server) settingsResponse() settingsResponse {
 	}
 }
 
+// publishSettings sends every open dashboard the settings as they are now.
+func (s *Server) publishSettings() { s.hub.publish("settings", s.settingsResponse()) }
+
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.settingsResponse())
 }
@@ -737,6 +738,16 @@ func (s *Server) handleVoiceTest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, map[string]string{"voice": set.Voice})
+}
+
+// readJSON decodes a request body of at most limit bytes into v. An empty body leaves v as it
+// is and isn't an error, since some requests have only optional fields.
+func readJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) error {
+	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit)).Decode(v)
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
 }
 
 func writeJSON(w http.ResponseWriter, v any) { writeJSONStatus(w, http.StatusOK, v) }

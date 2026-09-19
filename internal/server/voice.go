@@ -73,7 +73,7 @@ func (s *Server) recheckVoices(lang string) bool {
 	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); time.Sleep(250 * time.Millisecond) {
 		if langs := s.speaker.Languages(); langs != nil {
 			found := slices.Contains(langs, lang)
-			s.hub.publish("settings", s.settingsResponse())
+			s.publishSettings()
 			return found
 		}
 	}

@@ -755,3 +755,20 @@ func TestHubDropsEventsForAClientThatFallsBehind(t *testing.T) {
 	}
 	h.mu.Unlock()
 }
+
+// Optional request bodies may be empty, but a malformed one is refused rather than ignored.
+func TestReadJSONTakesAnEmptyBodyButNotABrokenOne(t *testing.T) {
+	var v struct{ N int }
+	ok := func(body string) error {
+		return readJSON(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)), 1<<10, &v)
+	}
+	if err := ok(""); err != nil {
+		t.Fatalf("empty body: %v", err)
+	}
+	if err := ok(`{"N": 3}`); err != nil || v.N != 3 {
+		t.Fatalf("good body: %v, %+v", err, v)
+	}
+	if err := ok(`{"N": `); err == nil {
+		t.Fatal("a broken body was accepted")
+	}
+}

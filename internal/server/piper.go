@@ -123,7 +123,7 @@ func (s *Server) installPiper() bool {
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
 		s.log.Info("downloading Piper voice", "voices", voices, "into", s.piperHome())
-		s.hub.publish("settings", s.settingsResponse())
+		s.publishSettings()
 		last := time.Time{}
 		err := speech.InstallPiper(ctx, s.piperHome(), voices, func(p speech.Progress) {
 			if time.Since(last) < time.Second && p.Done < p.Total {
@@ -148,7 +148,7 @@ func (s *Server) installPiper() bool {
 			s.usePiper()
 			s.hub.publish("voice_install", voiceStatus{State: "done", Text: "The natural voice is ready."})
 		}
-		s.hub.publish("settings", s.settingsResponse())
+		s.publishSettings()
 	})
 	return true
 }

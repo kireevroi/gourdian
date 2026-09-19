@@ -2,7 +2,6 @@ package server
 
 import (
 	"cmp"
-	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -204,7 +203,7 @@ func (s *Server) handleMMR(w http.ResponseWriter, r *http.Request) {
 		MMR  int    `json:"mmr"`
 		Note string `json:"note"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil || body.MMR <= 0 || body.MMR > 20000 {
+	if err := readJSON(w, r, 4<<10, &body); err != nil || body.MMR <= 0 || body.MMR > 20000 {
 		http.Error(w, "send {\"mmr\": 1234}", http.StatusBadRequest)
 		return
 	}
