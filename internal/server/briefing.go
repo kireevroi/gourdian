@@ -10,6 +10,7 @@ import (
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
 	"gourdian/internal/dota"
+	"gourdian/internal/model"
 	"gourdian/internal/stats"
 )
 
@@ -103,7 +104,7 @@ func (s *Server) briefMatch(matchID string, set config.Settings) {
 		speech = append(speech, fmt.Sprintf("%s by %d minutes.", it.Name, (it.By+30)/60))
 	}
 	for _, g := range b.Goals[:min(len(b.Goals), 1)] {
-		text = append(text, fmt.Sprintf("goal: %s (%d/%d)", g.Label, g.Met, stats.GoalsDone))
+		text = append(text, fmt.Sprintf("goal: %s (%d/%d)", g.Label, g.Met, model.GoalsDone))
 		speech = append(speech, "This week's goal: "+g.Label+".")
 	}
 	if len(text) == 0 {

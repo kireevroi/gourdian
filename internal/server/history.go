@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gourdian/internal/coach"
+	"gourdian/internal/model"
 	"gourdian/internal/stats"
 )
 
@@ -35,9 +36,9 @@ const habitSample = 10
 
 // summarize describes the last few real matches, falling back to simulated ones so the
 // dashboard has something to show before the first real game.
-func summarize(recent []stats.MatchSummary, rules []coach.Rule) summary {
+func summarize(recent []model.MatchSummary, rules []coach.Rule) summary {
 	var sum summary
-	var sample []stats.MatchSummary
+	var sample []model.MatchSummary
 	for _, m := range recent {
 		if m.Real() && len(sample) < habitSample {
 			sample = append(sample, m)
@@ -47,7 +48,7 @@ func summarize(recent []stats.MatchSummary, rules []coach.Rule) summary {
 		sample, sum.FromSimulated = recent[:min(len(recent), habitSample)], len(recent) > 0
 	}
 	sum.Sample = len(sample)
-	sum.Habits = habits(slices.DeleteFunc(slices.Clone(sample), func(m stats.MatchSummary) bool { return !m.Coached() }), rules)
+	sum.Habits = habits(slices.DeleteFunc(slices.Clone(sample), func(m model.MatchSummary) bool { return !m.Coached() }), rules)
 	var wins, decided, lh10n int
 	for _, m := range sample {
 		sum.AvgDeaths += float64(m.Deaths)
@@ -76,7 +77,7 @@ func summarize(recent []stats.MatchSummary, rules []coach.Rule) summary {
 	return sum
 }
 
-func habits(sample []stats.MatchSummary, rules []coach.Rule) []Habit {
+func habits(sample []model.MatchSummary, rules []coach.Rule) []Habit {
 	var out []Habit
 	for _, r := range rules {
 		if r.Advice == "" {
@@ -107,7 +108,7 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, struct {
-		Matches []stats.MatchSummary `json:"matches"`
+		Matches []model.MatchSummary `json:"matches"`
 		summary
 	}{recent[:min(len(recent), 20)], summarize(recent, s.engine.Rules())})
 }
@@ -126,8 +127,8 @@ type ruleLabel struct {
 type statsResponse struct {
 	Dir     string               `json:"dir"`
 	Files   []statsFile          `json:"files"`
-	Matches []stats.MatchSummary `json:"matches"`
-	MMR     []stats.MMREntry     `json:"mmr"`
+	Matches []model.MatchSummary `json:"matches"`
+	MMR     []model.MMREntry     `json:"mmr"`
 	Habits  []ruleLabel          `json:"habits"`
 	// LastHitsByMinute maps match id to last hits at each minute (-1 where no sample was taken).
 	LastHitsByMinute map[string][]int `json:"last_hits_by_minute"`
@@ -193,7 +194,7 @@ func (s *Server) handleMMRList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if entries == nil {
-		entries = []stats.MMREntry{}
+		entries = []model.MMREntry{}
 	}
 	writeJSON(w, entries)
 }
@@ -207,7 +208,7 @@ func (s *Server) handleMMR(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "send {\"mmr\": 1234}", http.StatusBadRequest)
 		return
 	}
-	entry := stats.MMREntry{Date: time.Now(), MMR: body.MMR, Note: body.Note}
+	entry := model.MMREntry{Date: time.Now(), MMR: body.MMR, Note: body.Note}
 	if err := s.stats.AppendMMR(entry); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

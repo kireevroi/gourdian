@@ -15,7 +15,7 @@ import (
 	"gourdian/internal/config"
 	"gourdian/internal/dota"
 	"gourdian/internal/matchdata"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 const liveSystemPrompt = `You are a Dota 2 coach speaking to one player during their match. Their goal is to climb in MMR. Your words appear on their screen and are read aloud, so each suggestion is one short, concrete instruction.
@@ -74,7 +74,7 @@ type History struct {
 type Context struct {
 	Profile string
 	History History
-	MMR     []stats.MMREntry
+	MMR     []model.MMREntry
 	Focus   string
 	// Hero is what is known about the hero being played, when the trainer has it.
 	Hero *HeroFacts
@@ -101,19 +101,19 @@ type Input struct {
 	Snapshot coach.Snapshot
 	Facts    coach.MatchFacts
 	Tips     []coach.Tip
-	Timeline []stats.Sample
+	Timeline []model.Sample
 }
 
 type ReviewInput struct {
 	Context
-	Match    stats.MatchSummary
+	Match    model.MatchSummary
 	Targets  map[string]int
-	Timeline []stats.Sample
+	Timeline []model.Sample
 	Warnings []string
 	Detail   *matchdata.Detail
 	// Metrics are the goal metrics the review may use, with what each measures.
 	Metrics   map[string]string
-	WeekGoals []stats.GoalProgress
+	WeekGoals []model.GoalProgress
 	// LastFocus is what the previous review told them to do, so this one can say whether
 	// it happened before asking for anything new.
 	LastFocus string

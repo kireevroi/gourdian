@@ -7,16 +7,16 @@ import (
 	"gourdian/internal/config"
 	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 func TestPickHelpUsesYourOwnRecord(t *testing.T) {
 	srv, _, _ := newTestServer(t, nil)
 	add := func(hero string, id int, role, result string, n int) {
 		for i := range n {
-			srv.stats.AppendMatch(stats.MatchSummary{
+			srv.stats.AppendMatch(model.MatchSummary{
 				MatchID: hero + role + result + string(rune('a'+i)), Hero: hero, HeroID: id, Role: role,
-				Result: result, Source: stats.SourceLive, EndedAt: time.Now().Add(-time.Duration(i+1) * time.Hour),
+				Result: result, Source: model.SourceLive, EndedAt: time.Now().Add(-time.Duration(i+1) * time.Hour),
 				LastHitsAt: map[string]int{"10:00": 50},
 			})
 		}

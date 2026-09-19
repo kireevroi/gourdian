@@ -10,6 +10,7 @@ import (
 
 	"gourdian/internal/config"
 	"gourdian/internal/matchdata"
+	"gourdian/internal/model"
 	"gourdian/internal/stats"
 )
 
@@ -21,7 +22,7 @@ const (
 	importTimeout = 30 * time.Minute
 )
 
-func isOpenDotaMatch(m stats.MatchSummary) bool {
+func isOpenDotaMatch(m model.MatchSummary) bool {
 	_, err := strconv.ParseInt(m.MatchID, 10, 64)
 	return err == nil && m.Real() && m.MatchID != "0"
 }
@@ -60,7 +61,7 @@ func (s *Server) checkRanked(matchID string) {
 // already marked stays ranked.
 func (s *Server) saveRanked(matchID string, lobbyType int) {
 	ranked := lobbyType == rankedLobby
-	if err := s.stats.UpdateMatch(matchID, func(row *stats.MatchSummary) {
+	if err := s.stats.UpdateMatch(matchID, func(row *model.MatchSummary) {
 		row.Ranked = row.Ranked || ranked
 		ranked = row.Ranked
 	}); err != nil {
@@ -69,7 +70,7 @@ func (s *Server) saveRanked(matchID string, lobbyType int) {
 	s.confirmRanked(matchID, ranked)
 }
 
-func (s *Server) afterMatch(m stats.MatchSummary, set config.Settings) {
+func (s *Server) afterMatch(m model.MatchSummary, set config.Settings) {
 	if !isOpenDotaMatch(m) {
 		s.reviewMatch(m, set, false, nil)
 		return
@@ -123,7 +124,7 @@ func (s *Server) resumePending() {
 		}
 	}
 	for _, m := range matches {
-		if m.Source == stats.SourceLive && !reviewed[m.MatchID] && time.Since(m.EndedAt) < resumeWithin && isOpenDotaMatch(m) {
+		if m.Source == model.SourceLive && !reviewed[m.MatchID] && time.Since(m.EndedAt) < resumeWithin && isOpenDotaMatch(m) {
 			s.log.Info("resuming match data and review", "match", m.MatchID)
 			s.afterMatch(m, s.cfg.Settings())
 		}

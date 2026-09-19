@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"errors"
+	"gourdian/internal/model"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,7 +15,7 @@ import (
 
 func TestMatchRoundTrip(t *testing.T) {
 	st := openTest(t, t.TempDir())
-	want := MatchSummary{
+	want := model.MatchSummary{
 		MatchID: "8001", HeroID: 1, Hero: "Anti-Mage", Role: "carry", Team: "radiant", Result: "win",
 		EndedAt: time.Date(2026, 9, 17, 20, 0, 0, 0, time.UTC), DurationSec: 2400, Kills: 7, Deaths: 3, Assists: 9,
 		LastHits: 310, Denies: 12, GPM: 610, XPM: 700, RankTier: 43,
@@ -38,10 +39,10 @@ func TestMatchRoundTrip(t *testing.T) {
 
 func TestAppendMatchSkipsDuplicates(t *testing.T) {
 	st := openTest(t, t.TempDir())
-	if err := st.AppendMatch(MatchSummary{MatchID: "42"}); err != nil {
+	if err := st.AppendMatch(model.MatchSummary{MatchID: "42"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.AppendMatch(MatchSummary{MatchID: "42"}); !errors.Is(err, ErrDuplicate) {
+	if err := st.AppendMatch(model.MatchSummary{MatchID: "42"}); !errors.Is(err, ErrDuplicate) {
 		t.Fatalf("second append: %v", err)
 	}
 	if got, _ := st.Matches(); len(got) != 1 {
@@ -51,8 +52,8 @@ func TestAppendMatchSkipsDuplicates(t *testing.T) {
 
 func TestExportWritesSpreadsheetFiles(t *testing.T) {
 	st := openTest(t, t.TempDir())
-	st.AppendMatch(MatchSummary{MatchID: "1", TipCounts: map[string]int{"no_tp": 1}})
-	st.AppendMatch(MatchSummary{MatchID: "2", TipCounts: map[string]int{"wards": 4}})
+	st.AppendMatch(model.MatchSummary{MatchID: "1", TipCounts: map[string]int{"no_tp": 1}})
+	st.AppendMatch(model.MatchSummary{MatchID: "2", TipCounts: map[string]int{"wards": 4}})
 	if _, err := st.Export(); err != nil {
 		t.Fatal(err)
 	}
@@ -77,10 +78,10 @@ func TestExportWritesSpreadsheetFiles(t *testing.T) {
 
 func TestUpdateMatchAddsParsedData(t *testing.T) {
 	st := openTest(t, t.TempDir())
-	st.AppendMatch(MatchSummary{MatchID: "1", Hero: "Lina", GPM: 400, TipCounts: map[string]int{"no_tp": 2}})
-	st.AppendMatch(MatchSummary{MatchID: "2", Hero: "Axe"})
-	err := st.UpdateMatch("1", func(m *MatchSummary) {
-		m.Parsed, m.Source, m.LaneRole, m.NetWorth, m.GPMPct = true, SourceOpenDota, 2, 15300, 0.42
+	st.AppendMatch(model.MatchSummary{MatchID: "1", Hero: "Lina", GPM: 400, TipCounts: map[string]int{"no_tp": 2}})
+	st.AppendMatch(model.MatchSummary{MatchID: "2", Hero: "Axe"})
+	err := st.UpdateMatch("1", func(m *model.MatchSummary) {
+		m.Parsed, m.Source, m.LaneRole, m.NetWorth, m.GPMPct = true, model.SourceOpenDota, 2, 15300, 0.42
 		m.EnemyHeroes = []string{"Pudge", "Sniper"}
 		m.LastHitsAt["10:00"] = 51
 	})
@@ -93,24 +94,24 @@ func TestUpdateMatchAddsParsedData(t *testing.T) {
 		!slices.Equal(m.EnemyHeroes, []string{"Pudge", "Sniper"}) || m.TipCounts["no_tp"] != 2 || m.GPM != 400 {
 		t.Fatalf("updated match = %+v", m)
 	}
-	if got[1].Parsed || got[1].Hero != "Axe" || got[1].Source != SourceLive {
+	if got[1].Parsed || got[1].Hero != "Axe" || got[1].Source != model.SourceLive {
 		t.Fatalf("other match changed: %+v", got[1])
 	}
-	if err := st.UpdateMatch("404", func(*MatchSummary) {}); err == nil {
+	if err := st.UpdateMatch("404", func(*model.MatchSummary) {}); err == nil {
 		t.Fatal("updating an unknown match should fail")
 	}
 }
 
 func TestItemsRoundTrip(t *testing.T) {
 	st := openTest(t, t.TempDir())
-	want := []ItemTiming{{MatchID: "1", Hero: "Lina", Item: "blink", Time: 840, Source: "opendota"}}
+	want := []model.ItemTiming{{MatchID: "1", Hero: "Lina", Item: "blink", Time: 840, Source: "opendota"}}
 	if err := st.AppendItems(want); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := st.Items(); err != nil || !slices.Equal(got, want) {
 		t.Fatalf("items = %+v, %v", got, err)
 	}
-	gsi := ItemTiming{MatchID: "1", Hero: "Lina", Item: "blink", Time: 845, Source: "gsi"}
+	gsi := model.ItemTiming{MatchID: "1", Hero: "Lina", Item: "blink", Time: 845, Source: "gsi"}
 	st.AppendItems(append(want, gsi))
 	if got, _ := st.Items(); len(got) != 2 || got[1] != gsi {
 		t.Fatalf("re-appending should add only the new source: %+v", got)
@@ -120,7 +121,7 @@ func TestItemsRoundTrip(t *testing.T) {
 func TestRecentIsNewestFirst(t *testing.T) {
 	st := openTest(t, t.TempDir())
 	for _, id := range []string{"a", "b", "c"} {
-		st.AppendMatch(MatchSummary{MatchID: id})
+		st.AppendMatch(model.MatchSummary{MatchID: id})
 	}
 	got, _ := st.Recent(2)
 	if len(got) != 2 || got[0].MatchID != "c" || got[1].MatchID != "b" {
@@ -130,9 +131,9 @@ func TestRecentIsNewestFirst(t *testing.T) {
 
 func TestTimelineTipsAndMMR(t *testing.T) {
 	st := openTest(t, t.TempDir())
-	st.AppendSamples([]Sample{{MatchID: "1", Clock: 60, LastHits: 8, Alive: true}, {MatchID: "1", Clock: 120, LastHits: 17}})
-	st.AppendTips([]TipRecord{{At: time.Now(), MatchID: "1", Clock: 90, Rule: "no_tp", Habit: true, Text: `Buy a "TP", now`}})
-	st.AppendMMR(MMREntry{Date: time.Now(), MMR: 2450, Note: "after placement"})
+	st.AppendSamples([]model.Sample{{MatchID: "1", Clock: 60, LastHits: 8, Alive: true}, {MatchID: "1", Clock: 120, LastHits: 17}})
+	st.AppendTips([]model.TipRecord{{At: time.Now(), MatchID: "1", Clock: 90, Rule: "no_tp", Habit: true, Text: `Buy a "TP", now`}})
+	st.AppendMMR(model.MMREntry{Date: time.Now(), MMR: 2450, Note: "after placement"})
 
 	timeline, _ := st.Timeline()
 	if len(timeline) != 2 || timeline[1].LastHits != 17 || !timeline[0].Alive {
@@ -150,7 +151,7 @@ func TestTimelineTipsAndMMR(t *testing.T) {
 
 func TestReviewRoundTrip(t *testing.T) {
 	st := openTest(t, t.TempDir())
-	want := Review{Date: time.Date(2026, 9, 17, 21, 0, 0, 0, time.UTC), MatchID: "9", Hero: "Lina", Result: "loss",
+	want := model.Review{Date: time.Date(2026, 9, 17, 21, 0, 0, 0, time.UTC), MatchID: "9", Hero: "Lina", Result: "loss",
 		Summary: "Strong lane, then 6 deaths, all\nwithout vision.", Strengths: []string{"Lane", "Rune control"},
 		Improve: []string{"Ward before pushing", "Carry a TP"}, NextGameFocus: "Die at most 5 times"}
 	if err := st.AppendReview(want); err != nil {
@@ -170,30 +171,30 @@ func TestReviewRoundTrip(t *testing.T) {
 func TestGoalProgress(t *testing.T) {
 	st := openTest(t, t.TempDir())
 	monday := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
-	week := Week(monday)
-	st.AppendGoals([]Goal{
+	week := model.Week(monday)
+	st.AppendGoals([]model.Goal{
 		{Created: monday, Week: week, Metric: "lh_10", Comparator: "at_least", Target: 50, Label: "50 LH at 10:00", MatchID: "r1"},
 		{Created: monday, Week: week, Metric: "deaths", Comparator: "at_most", Target: 6, Label: "6 deaths or fewer"},
 		{Created: monday.Add(time.Hour), Week: week, Metric: "lh_10", Comparator: "at_least", Target: 55, Label: "55 LH at 10:00"},
 	})
 	all, _ := st.Goals()
-	goals := WeekGoals(all, week)
+	goals := model.WeekGoals(all, week)
 	if len(goals) != 2 || goals[0].Target != 55 {
 		t.Fatalf("goals = %+v", goals)
 	}
-	match := func(id string, hours int, lh, deaths int, source string) MatchSummary {
-		return MatchSummary{MatchID: id, EndedAt: monday.Add(time.Duration(hours) * time.Hour), Source: source,
+	match := func(id string, hours int, lh, deaths int, source string) model.MatchSummary {
+		return model.MatchSummary{MatchID: id, EndedAt: monday.Add(time.Duration(hours) * time.Hour), Source: source,
 			Deaths: deaths, LastHitsAt: map[string]int{"10:00": lh}}
 	}
-	matches := []MatchSummary{
-		match("before", -1, 70, 2, SourceLive),
-		match("a", 2, 56, 8, SourceLive),
-		match("b", 3, 40, 3, SourceOpenDota),
-		match("c", 4, 60, 5, SourcePractice),
-		match("d", 5, 58, 4, SourceLive),
-		match("next-week", 24*8, 90, 0, SourceLive),
+	matches := []model.MatchSummary{
+		match("before", -1, 70, 2, model.SourceLive),
+		match("a", 2, 56, 8, model.SourceLive),
+		match("b", 3, 40, 3, model.SourceOpenDota),
+		match("c", 4, 60, 5, model.SourcePractice),
+		match("d", 5, 58, 4, model.SourceLive),
+		match("next-week", 24*8, 90, 0, model.SourceLive),
 	}
-	p := Progress(goals, matches)
+	p := model.Progress(goals, matches)
 	if p[0].Met != 2 || p[0].Tried != 3 || p[0].Streak != 1 || !p[0].LastMet || p[1].Met != 2 || p[1].Streak != 2 {
 		t.Fatalf("progress = %+v", p)
 	}
@@ -211,9 +212,9 @@ func openTest(t *testing.T, dir string) *Store {
 
 func TestMMRForAMatchReplacesTheEarlierReading(t *testing.T) {
 	st := openTest(t, t.TempDir())
-	st.AppendMMR(MMREntry{Date: time.Now(), MMR: 3000})
-	st.AppendMMR(MMREntry{Date: time.Now(), MMR: 3025, MatchID: "1", Note: "win"})
-	st.AppendMMR(MMREntry{Date: time.Now(), MMR: 3030, MatchID: "1", Note: "win"})
+	st.AppendMMR(model.MMREntry{Date: time.Now(), MMR: 3000})
+	st.AppendMMR(model.MMREntry{Date: time.Now(), MMR: 3025, MatchID: "1", Note: "win"})
+	st.AppendMMR(model.MMREntry{Date: time.Now(), MMR: 3030, MatchID: "1", Note: "win"})
 	got, err := st.MMR()
 	if err != nil || len(got) != 2 {
 		t.Fatalf("mmr = %+v, %v", got, err)
@@ -228,12 +229,12 @@ func TestEntriesSortByTimeAcrossTimeZones(t *testing.T) {
 	tbilisi, brazil := time.FixedZone("GET", 4*3600), time.FixedZone("BRT", -3*3600)
 	first := time.Date(2026, 9, 18, 10, 0, 0, 0, tbilisi) // 06:00 UTC
 	second := time.Date(2026, 9, 18, 5, 0, 0, 0, brazil)  // 08:00 UTC
-	for _, e := range []MMREntry{{Date: second, MMR: 3025}, {Date: first, MMR: 3000}} {
+	for _, e := range []model.MMREntry{{Date: second, MMR: 3025}, {Date: first, MMR: 3000}} {
 		if err := s.AppendMMR(e); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, m := range []MatchSummary{{MatchID: "2", EndedAt: second}, {MatchID: "1", EndedAt: first}} {
+	for _, m := range []model.MatchSummary{{MatchID: "2", EndedAt: second}, {MatchID: "1", EndedAt: first}} {
 		if err := s.AppendMatch(m); err != nil {
 			t.Fatal(err)
 		}
@@ -322,10 +323,10 @@ func TestOpenUpgradesAnOlderFile(t *testing.T) {
 // Every field of a match survives being saved and read back. The sample must set every field,
 // so a new one can't be left out of the matches table unnoticed.
 func TestMatchKeepsEveryField(t *testing.T) {
-	m := MatchSummary{MatchID: "m1", HeroID: 26, Hero: "Lion", Role: "hard_support", Team: "radiant", Result: "win",
+	m := model.MatchSummary{MatchID: "m1", HeroID: 26, Hero: "Lion", Role: "hard_support", Team: "radiant", Result: "win",
 		EndedAt: time.Date(2026, 9, 19, 20, 0, 0, 0, time.UTC), DurationSec: 2400, Kills: 3, Deaths: 4, Assists: 20,
 		LastHits: 40, Denies: 5, GPM: 300, XPM: 400, LastHitsAt: map[string]int{"10:00": 12}, DeathClocks: []int{300, 900},
-		TipCounts: map[string]int{"no_tp": 2}, RankTier: 45, Simulated: true, Ranked: true, Source: SourcePractice,
+		TipCounts: map[string]int{"no_tp": 2}, RankTier: 45, Simulated: true, Ranked: true, Source: model.SourcePractice,
 		Parsed: true, LaneRole: 3, NetWorth: 9000, HeroDamage: 12000, TowerDamage: 500, ObsPlaced: 8, SenPlaced: 6,
 		CampsStacked: 4, TeamfightParticipation: 0.75, GPMPct: 0.4, LHPct: 0.3, HeroDamagePct: 0.2,
 		EnemyHeroes: []string{"Axe", "Lina"}}
@@ -398,17 +399,17 @@ func TestMatchesWhere(t *testing.T) {
 	start := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 	add := func(id string, hero int, role string, day int, source string) {
 		t.Helper()
-		if err := st.AppendMatch(MatchSummary{MatchID: id, HeroID: hero, Role: role, Source: source, EndedAt: start.AddDate(0, 0, day)}); err != nil {
+		if err := st.AppendMatch(model.MatchSummary{MatchID: id, HeroID: hero, Role: role, Source: source, EndedAt: start.AddDate(0, 0, day)}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	before := st.HistoryVersion()
-	add("a", 26, "hard_support", 0, SourceLive)
-	add("b", 26, "hard_support", 1, SourcePractice)
-	add("c", 26, "mid", 2, SourceLive)
-	add("d", 26, "hard_support", 3, SourceOpenDota)
-	add("e", 74, "hard_support", 4, SourceLive)
-	add("f", 26, "hard_support", 5, SourceLive)
+	add("a", 26, "hard_support", 0, model.SourceLive)
+	add("b", 26, "hard_support", 1, model.SourcePractice)
+	add("c", 26, "mid", 2, model.SourceLive)
+	add("d", 26, "hard_support", 3, model.SourceOpenDota)
+	add("e", 74, "hard_support", 4, model.SourceLive)
+	add("f", 26, "hard_support", 5, model.SourceLive)
 	if st.HistoryVersion() == before {
 		t.Fatal("saving matches didn't change the history version")
 	}
@@ -441,7 +442,7 @@ func TestMatchesWhere(t *testing.T) {
 	if role, err := st.UsualRole(26, []string{"hard_support", "mid"}); err != nil || role != "hard_support" {
 		t.Errorf("usual role %q, %v", role, err)
 	}
-	st.AppendItems([]ItemTiming{{MatchID: "a", Item: "blink", Time: 900}, {MatchID: "c", Item: "bkb", Time: 1500}})
+	st.AppendItems([]model.ItemTiming{{MatchID: "a", Item: "blink", Time: 900}, {MatchID: "c", Item: "bkb", Time: 1500}})
 	if items, err := st.ItemsIn([]string{"a", "f"}); err != nil || len(items) != 1 || items[0].Item != "blink" {
 		t.Errorf("items %+v, %v", items, err)
 	}

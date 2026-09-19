@@ -12,6 +12,7 @@ import (
 
 	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
+	"gourdian/internal/model"
 	"gourdian/internal/stats"
 )
 
@@ -56,7 +57,7 @@ func newService(t *testing.T) Service {
 
 func TestEnrichStoresParsedData(t *testing.T) {
 	s := newService(t)
-	live := stats.MatchSummary{MatchID: matchID, HeroID: 44, Hero: "Phantom Assassin", Source: stats.SourceLive,
+	live := model.MatchSummary{MatchID: matchID, HeroID: 44, Hero: "Phantom Assassin", Source: model.SourceLive,
 		LastHitsAt: map[string]int{"5:00": 12}}
 	if err := s.Stats.AppendMatch(live); err != nil {
 		t.Fatal(err)
@@ -94,7 +95,7 @@ func TestImportAddsMissingMatchesOnce(t *testing.T) {
 	}
 	rows, _ := s.Stats.Matches()
 	m := rows[0]
-	if m.Source != stats.SourceOpenDota || m.Result != "loss" || m.Role != dota.HardSupport || m.LastHitsAt["5:00"] != 11 || !m.Parsed {
+	if m.Source != model.SourceOpenDota || m.Result != "loss" || m.Role != dota.HardSupport || m.LastHitsAt["5:00"] != 11 || !m.Parsed {
 		t.Fatalf("imported match = %+v", m)
 	}
 	if added, err := s.Import(t.Context(), accountID, 5, nil); err != nil || added != 0 {

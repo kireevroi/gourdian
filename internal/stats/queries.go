@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"gourdian/internal/model"
 	"slices"
 	"strings"
 	"time"
 )
 
-func (s *Store) AppendMatch(m MatchSummary) error {
+func (s *Store) AppendMatch(m model.MatchSummary) error {
 	err := s.tx(func(tx *sql.Tx) error { return appendMatch(tx, m) })
 	if err == nil {
 		s.history.Add(1)
@@ -24,7 +25,7 @@ type execer interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
-func appendMatch(q execer, m MatchSummary) error {
+func appendMatch(q execer, m model.MatchSummary) error {
 	var seen int
 	switch err := q.QueryRow(`SELECT 1 FROM matches WHERE match_id = ?`, m.MatchID).Scan(&seen); {
 	case err == nil:
@@ -37,7 +38,7 @@ func appendMatch(q execer, m MatchSummary) error {
 }
 
 // UpdateMatch changes one match, for example to add OpenDota's data after the game.
-func (s *Store) UpdateMatch(matchID string, update func(*MatchSummary)) error {
+func (s *Store) UpdateMatch(matchID string, update func(*model.MatchSummary)) error {
 	defer s.history.Add(1)
 	return s.tx(func(tx *sql.Tx) error {
 		var rowID int64
@@ -68,13 +69,13 @@ func (s *Store) UpdateMatch(matchID string, update func(*MatchSummary)) error {
 	})
 }
 
-func (s *Store) queryMatches(where string, args ...any) ([]MatchSummary, error) {
+func (s *Store) queryMatches(where string, args ...any) ([]model.MatchSummary, error) {
 	rows, err := s.db.Query(`SELECT `+matchColumnList+` FROM matches `+where, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []MatchSummary
+	var out []model.MatchSummary
 	for rows.Next() {
 		m, err := scanMatch(rows)
 		if err != nil {
@@ -86,29 +87,29 @@ func (s *Store) queryMatches(where string, args ...any) ([]MatchSummary, error) 
 }
 
 // Matches returns every recorded match, oldest first.
-func (s *Store) Matches() ([]MatchSummary, error) {
+func (s *Store) Matches() ([]model.MatchSummary, error) {
 	return s.queryMatches(`ORDER BY julianday(ended_at), rowid`)
 }
 
 // Recent returns up to n matches, newest first.
-func (s *Store) Recent(n int) ([]MatchSummary, error) {
+func (s *Store) Recent(n int) ([]model.MatchSummary, error) {
 	return s.queryMatches(`ORDER BY julianday(ended_at) DESC, rowid DESC LIMIT ?`, n)
 }
 
 // Match returns one match by id.
-func (s *Store) Match(matchID string) (MatchSummary, error) {
+func (s *Store) Match(matchID string) (model.MatchSummary, error) {
 	found, err := s.queryMatches(`WHERE match_id = ?`, matchID)
 	if err != nil {
-		return MatchSummary{}, err
+		return model.MatchSummary{}, err
 	}
 	if len(found) == 0 {
-		return MatchSummary{}, fmt.Errorf("match %s: %w", matchID, ErrNoMatch)
+		return model.MatchSummary{}, fmt.Errorf("match %s: %w", matchID, ErrNoMatch)
 	}
 	return found[0], nil
 }
 
 // AppendItems stores item timings, ignoring ones already known for the same match and source.
-func (s *Store) AppendItems(items []ItemTiming) error {
+func (s *Store) AppendItems(items []model.ItemTiming) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -116,7 +117,7 @@ func (s *Store) AppendItems(items []ItemTiming) error {
 	return s.tx(func(tx *sql.Tx) error { return appendItems(tx, items) })
 }
 
-func appendItems(q execer, items []ItemTiming) error {
+func appendItems(q execer, items []model.ItemTiming) error {
 	for _, it := range items {
 		_, err := q.Exec(`INSERT OR IGNORE INTO items (match_id, hero, item, time, source) VALUES (?, ?, ?, ?, ?)`,
 			it.MatchID, it.Hero, it.Item, it.Time, it.Source)
@@ -127,15 +128,15 @@ func appendItems(q execer, items []ItemTiming) error {
 	return nil
 }
 
-func (s *Store) Items() ([]ItemTiming, error) {
+func (s *Store) Items() ([]model.ItemTiming, error) {
 	rows, err := s.db.Query(`SELECT match_id, hero, item, time, source FROM items ORDER BY rowid`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ItemTiming
+	var out []model.ItemTiming
 	for rows.Next() {
-		var it ItemTiming
+		var it model.ItemTiming
 		if err := rows.Scan(&it.MatchID, &it.Hero, &it.Item, &it.Time, &it.Source); err != nil {
 			return nil, err
 		}
@@ -144,14 +145,14 @@ func (s *Store) Items() ([]ItemTiming, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) AppendSamples(samples []Sample) error {
+func (s *Store) AppendSamples(samples []model.Sample) error {
 	if len(samples) == 0 {
 		return nil
 	}
 	return s.tx(func(tx *sql.Tx) error { return appendSamples(tx, samples) })
 }
 
-func appendSamples(q execer, samples []Sample) error {
+func appendSamples(q execer, samples []model.Sample) error {
 	for _, x := range samples {
 		_, err := q.Exec(`REPLACE INTO samples (match_id, clock, gold, gpm, xpm, last_hits, denies, kills, deaths, assists, level, alive)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -163,16 +164,16 @@ func appendSamples(q execer, samples []Sample) error {
 	return nil
 }
 
-func (s *Store) Timeline() ([]Sample, error) {
+func (s *Store) Timeline() ([]model.Sample, error) {
 	rows, err := s.db.Query(`SELECT match_id, clock, gold, gpm, xpm, last_hits, denies, kills, deaths, assists, level, alive
 		FROM samples ORDER BY match_id, clock`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Sample
+	var out []model.Sample
 	for rows.Next() {
-		var x Sample
+		var x model.Sample
 		var alive int
 		if err := rows.Scan(&x.MatchID, &x.Clock, &x.Gold, &x.GPM, &x.XPM, &x.LastHits, &x.Denies, &x.Kills,
 			&x.Deaths, &x.Assists, &x.Level, &alive); err != nil {
@@ -184,14 +185,14 @@ func (s *Store) Timeline() ([]Sample, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) AppendTips(tips []TipRecord) error {
+func (s *Store) AppendTips(tips []model.TipRecord) error {
 	if len(tips) == 0 {
 		return nil
 	}
 	return s.tx(func(tx *sql.Tx) error { return appendTips(tx, tips) })
 }
 
-func appendTips(q execer, tips []TipRecord) error {
+func appendTips(q execer, tips []model.TipRecord) error {
 	for _, t := range tips {
 		_, err := q.Exec(`INSERT INTO tips (at, match_id, clock, rule, category, severity, habit, text)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -230,7 +231,7 @@ func (s *Store) RuleCounts(matchIDs map[string]bool) (map[string]int, error) {
 }
 
 // Tips returns every tip ever shown, oldest first.
-func (s *Store) Tips() ([]TipRecord, error) { return s.tipRecords() }
+func (s *Store) Tips() ([]model.TipRecord, error) { return s.tipRecords() }
 
 // AppendMMR logs an MMR reading. One logged against a match replaces an earlier reading for
 // that same match, so correcting a number doesn't leave two.
@@ -284,12 +285,12 @@ func (s *Store) FiresByMatch(rule string) (map[string]int, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) AppendMMR(e MMREntry) error {
+func (s *Store) AppendMMR(e model.MMREntry) error {
 	return s.tx(func(tx *sql.Tx) error { return appendMMR(tx, e) })
 }
 
 // appendMMR replaces a match's entry, so logging a match again doesn't count it twice.
-func appendMMR(q execer, e MMREntry) error {
+func appendMMR(q execer, e model.MMREntry) error {
 	if e.MatchID != "" {
 		if _, err := q.Exec(`DELETE FROM mmr WHERE match_id = ?`, e.MatchID); err != nil {
 			return err
@@ -300,15 +301,15 @@ func appendMMR(q execer, e MMREntry) error {
 	return err
 }
 
-func (s *Store) MMR() ([]MMREntry, error) {
+func (s *Store) MMR() ([]model.MMREntry, error) {
 	rows, err := s.db.Query(`SELECT date, mmr, note, match_id FROM mmr ORDER BY julianday(date), rowid`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []MMREntry
+	var out []model.MMREntry
 	for rows.Next() {
-		var e MMREntry
+		var e model.MMREntry
 		var date string
 		if err := rows.Scan(&date, &e.MMR, &e.Note, &e.MatchID); err != nil {
 			return nil, err
@@ -319,9 +320,9 @@ func (s *Store) MMR() ([]MMREntry, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) AppendReview(r Review) error { return appendReview(s.db, r) }
+func (s *Store) AppendReview(r model.Review) error { return appendReview(s.db, r) }
 
-func appendReview(q execer, r Review) error {
+func appendReview(q execer, r model.Review) error {
 	_, err := q.Exec(`INSERT INTO reviews (date, match_id, hero, hero_id, role, result, summary, strengths, improve, next_game_focus, followed_focus)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		timeValue(r.Date), r.MatchID, r.Hero, r.HeroID, r.Role, r.Result, r.Summary,
@@ -330,16 +331,16 @@ func appendReview(q execer, r Review) error {
 }
 
 // Reviews returns every post-match review, oldest first.
-func (s *Store) Reviews() ([]Review, error) {
+func (s *Store) Reviews() ([]model.Review, error) {
 	rows, err := s.db.Query(`SELECT date, match_id, hero, hero_id, role, result, summary, strengths, improve, next_game_focus,
 		COALESCE(followed_focus, '') FROM reviews ORDER BY julianday(date), rowid`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Review
+	var out []model.Review
 	for rows.Next() {
-		var r Review
+		var r model.Review
 		var date, strengths, improve string
 		if err := rows.Scan(&date, &r.MatchID, &r.Hero, &r.HeroID, &r.Role, &r.Result, &r.Summary,
 			&strengths, &improve, &r.NextGameFocus, &r.FollowedFocus); err != nil {
@@ -352,14 +353,14 @@ func (s *Store) Reviews() ([]Review, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) AppendGoals(goals []Goal) error {
+func (s *Store) AppendGoals(goals []model.Goal) error {
 	if len(goals) == 0 {
 		return nil
 	}
 	return s.tx(func(tx *sql.Tx) error { return appendGoals(tx, goals) })
 }
 
-func appendGoals(q execer, goals []Goal) error {
+func appendGoals(q execer, goals []model.Goal) error {
 	for _, g := range goals {
 		_, err := q.Exec(`INSERT INTO goals (created, week, metric, comparator, target, label, match_id)
 			VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -372,15 +373,15 @@ func appendGoals(q execer, goals []Goal) error {
 }
 
 // Goals returns every goal ever set, oldest first.
-func (s *Store) Goals() ([]Goal, error) {
+func (s *Store) Goals() ([]model.Goal, error) {
 	rows, err := s.db.Query(`SELECT created, week, metric, comparator, target, label, match_id FROM goals ORDER BY julianday(created), rowid`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Goal
+	var out []model.Goal
 	for rows.Next() {
-		var g Goal
+		var g model.Goal
 		var created string
 		if err := rows.Scan(&created, &g.Week, &g.Metric, &g.Comparator, &g.Target, &g.Label, &g.MatchID); err != nil {
 			return nil, err
@@ -447,13 +448,13 @@ type MatchFilter struct {
 	HeroID int       // 0: any hero
 	Role   string    // "": any position
 	Since  time.Time // zero: any time
-	Real   bool      // only matches the player really played, as MatchSummary.Real says
+	Real   bool      // only matches the player really played, as model.MatchSummary.Real says
 	Limit  int       // 0: all; otherwise only the newest this many
 }
 
 // MatchesWhere returns the matches f describes, oldest first, asking the data file for only
 // those instead of reading the whole history.
-func (s *Store) MatchesWhere(f MatchFilter) ([]MatchSummary, error) {
+func (s *Store) MatchesWhere(f MatchFilter) ([]model.MatchSummary, error) {
 	var where []string
 	var args []any
 	if f.HeroID != 0 {
@@ -466,7 +467,7 @@ func (s *Store) MatchesWhere(f MatchFilter) ([]MatchSummary, error) {
 		where, args = append(where, "julianday(ended_at) >= julianday(?)"), append(args, timeValue(f.Since))
 	}
 	if f.Real {
-		where, args = append(where, "simulated = 0 AND IFNULL(source, '') != ?"), append(args, SourcePractice)
+		where, args = append(where, "simulated = 0 AND IFNULL(source, '') != ?"), append(args, model.SourcePractice)
 	}
 	q := ""
 	if len(where) > 0 {
@@ -481,7 +482,7 @@ func (s *Store) MatchesWhere(f MatchFilter) ([]MatchSummary, error) {
 }
 
 // ItemsIn returns the item timings of the given matches.
-func (s *Store) ItemsIn(matchIDs []string) ([]ItemTiming, error) {
+func (s *Store) ItemsIn(matchIDs []string) ([]model.ItemTiming, error) {
 	if len(matchIDs) == 0 {
 		return nil, nil
 	}
@@ -494,9 +495,9 @@ func (s *Store) ItemsIn(matchIDs []string) ([]ItemTiming, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ItemTiming
+	var out []model.ItemTiming
 	for rows.Next() {
-		var it ItemTiming
+		var it model.ItemTiming
 		if err := rows.Scan(&it.MatchID, &it.Hero, &it.Item, &it.Time, &it.Source); err != nil {
 			return nil, err
 		}

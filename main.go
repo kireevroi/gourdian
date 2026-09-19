@@ -26,6 +26,7 @@ import (
 	"gourdian/internal/dotadata"
 	"gourdian/internal/install"
 	"gourdian/internal/matchdata"
+	"gourdian/internal/model"
 	"gourdian/internal/overlay"
 	"gourdian/internal/server"
 	"gourdian/internal/sim"
@@ -364,7 +365,7 @@ func statsCmd() error {
 		return err
 	}
 	fmt.Println("CSV files:", st.Dir())
-	var real []stats.MatchSummary
+	var real []model.MatchSummary
 	for _, m := range matches {
 		if m.Real() {
 			real = append(real, m)
@@ -469,7 +470,7 @@ func mmrCmd(args []string) error {
 		return err
 	}
 	defer st.Close()
-	if err := st.AppendMMR(stats.MMREntry{Date: time.Now(), MMR: mmr, Note: strings.Join(args[1:], " ")}); err != nil {
+	if err := st.AppendMMR(model.MMREntry{Date: time.Now(), MMR: mmr, Note: strings.Join(args[1:], " ")}); err != nil {
 		return err
 	}
 	fmt.Println("logged MMR", mmr, "in", st.Dir())

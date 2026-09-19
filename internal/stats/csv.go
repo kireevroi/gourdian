@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"gourdian/internal/model"
 	"os"
 	"strconv"
 	"strings"
@@ -40,29 +41,29 @@ func (s *Store) importCSV() error {
 	}
 	matches, samples, tips, items, mmr, reviews, goals := rows[0], rows[1], rows[2], rows[3], rows[4], rows[5], rows[6]
 
-	sampleBatch := make([]Sample, 0, len(samples))
+	sampleBatch := make([]model.Sample, 0, len(samples))
 	for _, r := range samples {
-		sampleBatch = append(sampleBatch, Sample{
+		sampleBatch = append(sampleBatch, model.Sample{
 			MatchID: r["match_id"], Clock: atoi(r["clock"]), Gold: atoi(r["gold"]), GPM: atoi(r["gpm"]), XPM: atoi(r["xpm"]),
 			LastHits: atoi(r["last_hits"]), Denies: atoi(r["denies"]), Kills: atoi(r["kills"]), Deaths: atoi(r["deaths"]),
 			Assists: atoi(r["assists"]), Level: atoi(r["level"]), Alive: r["alive"] == "true",
 		})
 	}
-	tipBatch := make([]TipRecord, 0, len(tips))
+	tipBatch := make([]model.TipRecord, 0, len(tips))
 	for _, r := range tips {
-		tipBatch = append(tipBatch, TipRecord{
+		tipBatch = append(tipBatch, model.TipRecord{
 			At: parseTime(r["at"]), MatchID: r["match_id"], Clock: atoi(r["clock"]), Rule: r["rule"],
 			Category: r["category"], Severity: r["severity"], Habit: r["habit"] == "true", Text: r["text"],
 		})
 	}
-	itemBatch := make([]ItemTiming, 0, len(items))
+	itemBatch := make([]model.ItemTiming, 0, len(items))
 	for _, r := range items {
-		itemBatch = append(itemBatch, ItemTiming{MatchID: r["match_id"], Hero: r["hero"], Item: r["item"], Time: atoi(r["time"]), Source: r["source"]})
+		itemBatch = append(itemBatch, model.ItemTiming{MatchID: r["match_id"], Hero: r["hero"], Item: r["item"], Time: atoi(r["time"]), Source: r["source"]})
 	}
-	goalBatch := make([]Goal, 0, len(goals))
+	goalBatch := make([]model.Goal, 0, len(goals))
 	for _, r := range goals {
 		target, _ := strconv.ParseFloat(r["target"], 64)
-		goalBatch = append(goalBatch, Goal{Created: parseTime(r["created"]), Week: r["week"], Metric: r["metric"],
+		goalBatch = append(goalBatch, model.Goal{Created: parseTime(r["created"]), Week: r["week"], Metric: r["metric"],
 			Comparator: r["comparator"], Target: target, Label: r["label"], MatchID: r["match_id"]})
 	}
 
@@ -82,12 +83,12 @@ func (s *Store) importCSV() error {
 			return err
 		}
 		for _, r := range mmr {
-			if err := appendMMR(tx, MMREntry{Date: parseTime(r["date"]), MMR: atoi(r["mmr"]), Note: r["note"]}); err != nil {
+			if err := appendMMR(tx, model.MMREntry{Date: parseTime(r["date"]), MMR: atoi(r["mmr"]), Note: r["note"]}); err != nil {
 				return err
 			}
 		}
 		for _, r := range reviews {
-			if err := appendReview(tx, Review{
+			if err := appendReview(tx, model.Review{
 				Date: parseTime(r["date"]), MatchID: r["match_id"], Hero: r["hero"], HeroID: atoi(r["hero_id"]),
 				Role: r["role"], Result: r["result"], Summary: r["summary"], Strengths: splitList(r["strengths"]),
 				Improve: splitList(r["improve"]), NextGameFocus: r["next_game_focus"],
@@ -214,15 +215,15 @@ func (s *Store) Export() (string, error) {
 	return s.dir, nil
 }
 
-func (s *Store) tipRecords() ([]TipRecord, error) {
+func (s *Store) tipRecords() ([]model.TipRecord, error) {
 	rows, err := s.db.Query(`SELECT at, match_id, clock, rule, category, severity, habit, text FROM tips ORDER BY rowid`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []TipRecord
+	var out []model.TipRecord
 	for rows.Next() {
-		var t TipRecord
+		var t model.TipRecord
 		var at string
 		var habit int
 		if err := rows.Scan(&at, &t.MatchID, &t.Clock, &t.Rule, &t.Category, &t.Severity, &habit, &t.Text); err != nil {
@@ -244,7 +245,7 @@ func contains(list []string, s string) bool {
 }
 
 // matchRow is the CSV shape of a match, kept for the export.
-func matchRow(m MatchSummary) ([]string, map[string]string) {
+func matchRow(m model.MatchSummary) ([]string, map[string]string) {
 	row := map[string]string{
 		"ended_at": timeValue(m.EndedAt), "match_id": m.MatchID, "source": m.Source, "hero_id": itoa(m.HeroID),
 		"hero": m.Hero, "role": m.Role, "team": m.Team, "result": m.Result, "duration_sec": itoa(m.DurationSec),

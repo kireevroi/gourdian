@@ -8,7 +8,7 @@ import (
 
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 // drillMatches is how many recent matches the drill is scored over.
@@ -59,7 +59,7 @@ func (s *Server) drill() drillView {
 	if err != nil {
 		return v
 	}
-	recent = slices.DeleteFunc(recent, func(m stats.MatchSummary) bool { return !m.Real() || !m.Coached() })
+	recent = slices.DeleteFunc(recent, func(m model.MatchSummary) bool { return !m.Real() || !m.Coached() })
 	if len(recent) > drillMatches {
 		recent = recent[:drillMatches]
 	}
@@ -139,7 +139,7 @@ func (s *Server) handleSetDrill(w http.ResponseWriter, r *http.Request) {
 }
 
 // drillResult is the line the player hears after a match they drilled.
-func (s *Server) drillResult(m stats.MatchSummary, set config.Settings) {
+func (s *Server) drillResult(m model.MatchSummary, set config.Settings) {
 	if set.Drill == "" || !m.Real() {
 		return
 	}

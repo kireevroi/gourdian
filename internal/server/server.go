@@ -33,6 +33,7 @@ import (
 	"gourdian/internal/gsi"
 	"gourdian/internal/hud"
 	"gourdian/internal/matchdata"
+	"gourdian/internal/model"
 	"gourdian/internal/rules"
 	"gourdian/internal/secrets"
 	"gourdian/internal/speech"
@@ -363,7 +364,7 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 
 const matchIdleTimeout = 3 * time.Minute
 
-func (s *Server) recordMatch(m *stats.MatchSummary, set config.Settings) {
+func (s *Server) recordMatch(m *model.MatchSummary, set config.Settings) {
 	s.stopAutoRecording(set.Recording.Keep)
 	if acct, _ := s.accountID.Load().(string); acct != "" {
 		m.RankTier = s.data.RankTier(acct)
@@ -510,14 +511,14 @@ func (s *Server) emitTips(matchID string, tips []coach.Tip, set config.Settings)
 
 // deliver sends tips to the dashboard, the voice and tips.csv.
 func (s *Server) deliver(matchID string, tips []coach.Tip, set config.Settings) {
-	records := make([]stats.TipRecord, 0, len(tips))
+	records := make([]model.TipRecord, 0, len(tips))
 	for _, tip := range tips {
 		s.hub.publish("tip", tip)
 		if !tip.Quiet && set.Voice == config.VoiceSystem && s.speaker != nil && speakable(tip, set.VoiceLevel) {
 			s.speaker.SayIn(set.Language, tip.Speech, tip.SpeechEN, tip.Severity == coach.Urgent)
 		}
 		s.log.Info("tip", "clock", tip.Clock, "rule", tip.Rule, "text", tip.Text)
-		records = append(records, stats.TipRecord{At: tip.At, MatchID: matchID, Clock: tip.Clock, Rule: tip.Rule,
+		records = append(records, model.TipRecord{At: tip.At, MatchID: matchID, Clock: tip.Clock, Rule: tip.Rule,
 			Category: tip.Category, Severity: string(tip.Severity), Habit: tip.Habit, Text: tip.Text})
 	}
 	if err := s.stats.AppendTips(records); err != nil {
