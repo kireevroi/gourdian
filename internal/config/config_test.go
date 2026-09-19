@@ -128,3 +128,16 @@ func widgetByID(s *Settings, id string) *HUDWidget {
 	}
 	return &HUDWidget{}
 }
+
+// The Go code finds a custom install folder through the installer's uninstall entry, so its
+// AppID must be the installer's.
+func TestAppIDMatchesTheInstaller(t *testing.T) {
+	iss, err := os.ReadFile("../../installer/Gourdian.iss")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `#define AppGuid "` + strings.Trim(AppID, "{}") + `"`
+	if !strings.Contains(string(iss), want) {
+		t.Fatalf("installer/Gourdian.iss should have %s", want)
+	}
+}

@@ -449,10 +449,23 @@ const (
 // IsAppExe reports whether an exe file name is the installed app's, under either name.
 func IsAppExe(name string) bool { return name == AppExe || name == LegacyAppExe }
 
-// InstallDirs are where the installer puts the app: its own folder for new installs, then the
-// folder that installs upgraded from Dota Trainer keep.
+// AppID is the installer's AppId (installer/Gourdian.iss). Its uninstall entry records the
+// folder the app was installed in, which the player can choose.
+const AppID = "{6F4C2B1E-8D2A-4C5B-9E3F-1A7D2C9B4E51}"
+
+const uninstallKey = `Software\Microsoft\Windows\CurrentVersion\Uninstall\` + AppID + `_is1`
+
+// InstallDirs are where the installed app may be: the folder its installer recorded, the
+// default folder, and the one that installs upgraded from Dota Trainer keep.
 func InstallDirs(localAppData string) []string {
-	return []string{filepath.Join(localAppData, "Programs", AppName), filepath.Join(localAppData, "Programs", LegacyAppName)}
+	var dirs []string
+	if dir := registeredInstallDir(); dir != "" {
+		dirs = append(dirs, dir)
+	}
+	if localAppData != "" {
+		dirs = append(dirs, filepath.Join(localAppData, "Programs", AppName), filepath.Join(localAppData, "Programs", LegacyAppName))
+	}
+	return dirs
 }
 
 // HomeOverride is the data folder a test profile sets with GOURDIAN_HOME (or DOTATRAINER_HOME,
@@ -471,11 +484,9 @@ func Dir() (string, error) {
 	if runtime.GOOS == "linux" {
 		localAppData, appData = wslFolders()
 	}
-	if localAppData != "" {
-		for _, app := range InstallDirs(localAppData) {
-			if isAppDir(app) {
-				return app, nil
-			}
+	for _, app := range InstallDirs(localAppData) {
+		if isAppDir(app) {
+			return app, nil
 		}
 	}
 	if appData != "" {
