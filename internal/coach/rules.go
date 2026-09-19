@@ -47,8 +47,6 @@ func upcoming(clock, at, lead int) bool { return clock >= at-lead && clock < at 
 
 func within(clock, at, window int) bool { return clock >= at && clock < at+window }
 
-// RoleName is a position in words, in the player's language.
-
 // backpackActive is the first item in the backpack that does nothing there, or "".
 func backpackActive(s *gsi.State) string {
 	for _, it := range s.ItemsIn(gsi.Backpack) {

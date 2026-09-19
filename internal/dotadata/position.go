@@ -20,7 +20,7 @@ const (
 	ProDays = 120
 )
 
-// Positions numbers the trainer's roles the way players do.
+// positionKey is one hero in one position, as the builds and skill orders are looked up.
 type positionKey struct {
 	hero, pos int
 	won       bool // only games the hero's team won

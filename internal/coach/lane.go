@@ -7,9 +7,6 @@ import (
 	"gourdian/internal/gsi"
 )
 
-// Lanes as the player's team sees them.
-const ()
-
 const (
 	laneFrom     = 45  // skip walking out of base
 	laneDecideAt = 150 // 2:30, before supports start rotating
