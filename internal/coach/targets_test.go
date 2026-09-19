@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"gourdian/internal/config"
 	"gourdian/internal/dotadata"
@@ -94,4 +95,37 @@ func TestMedian(t *testing.T) {
 			t.Errorf("Median(%v) = %d, want %d", c.in, got, c.want)
 		}
 	}
+}
+
+type slowTargets struct{ release chan struct{} }
+
+func (s slowTargets) TargetsFor(int, string) Targets {
+	<-s.release // working targets out from the data file
+	return RoleTargets(config.RoleCarry)
+}
+
+// Working out targets can read the data file; the dashboard and HUD mustn't wait for it on
+// the engine's lock.
+func TestTargetsAreAskedForOutsideTheEngineLock(t *testing.T) {
+	e := newEngine(nil)
+	src := slowTargets{release: make(chan struct{})}
+	e.SetTargetSource(src)
+	done := make(chan struct{})
+	go func() {
+		e.Update(state(60), settings(config.RoleCarry))
+		close(done)
+	}()
+	time.Sleep(50 * time.Millisecond) // Update is waiting for the targets now
+	answered := make(chan struct{})
+	go func() {
+		e.RecentTips()
+		close(answered)
+	}()
+	select {
+	case <-answered:
+	case <-time.After(2 * time.Second):
+		t.Error("the engine was locked while the targets were worked out")
+	}
+	close(src.release)
+	<-done
 }

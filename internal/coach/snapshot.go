@@ -149,6 +149,7 @@ func (e *Engine) ruleLabel(id string) string {
 }
 
 func (e *Engine) Snapshot(set config.Settings) Snapshot {
+	targets := e.targetsFor(e.HeroID(), set.Role)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	snap := Snapshot{LastUpdate: e.lastSeen, Connected: !e.lastSeen.IsZero() && e.now().Sub(e.lastSeen) < connectedWindow, Focus: e.focus,
@@ -217,7 +218,6 @@ func (e *Engine) Snapshot(set config.Settings) Snapshot {
 		}
 	}
 
-	targets := e.targetsFor(h.ID, set.Role)
 	if s.Player != nil {
 		if exp, ok := expectedLastHits(targets.LastHits, s.Map.ClockTime); ok {
 			snap.Pace = &Pace{LastHits: s.Player.LastHits, Expected: exp}

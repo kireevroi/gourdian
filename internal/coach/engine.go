@@ -165,11 +165,16 @@ func (e *Engine) SetTargetSource(src TargetSource) {
 	e.mu.Unlock()
 }
 
+// targetsFor asks the target source, which may read the data file, so it's called without
+// e.mu: the dashboard and HUD wait on that lock.
 func (e *Engine) targetsFor(heroID int, role string) Targets {
-	if e.targets == nil || heroID == 0 {
+	e.mu.Lock()
+	src := e.targets
+	e.mu.Unlock()
+	if src == nil || heroID == 0 {
 		return RoleTargets(role)
 	}
-	return e.targets.TargetsFor(heroID, role)
+	return src.TargetsFor(heroID, role)
 }
 
 // SetOverrides applies the player's changes to built-in rules.
@@ -181,10 +186,11 @@ func (e *Engine) SetOverrides(o map[string]RuleOverride) {
 }
 
 // newCtx is what rules see for state s. The rule editor's live check builds it the same way,
-// so it shows the values the rule really gets. The caller holds e.mu.
-func (e *Engine) newCtx(s, prev *gsi.State, set config.Settings, now time.Time) *Ctx {
+// so it shows the values the rule really gets. The caller holds e.mu, and asked for the
+// targets before taking it.
+func (e *Engine) newCtx(s, prev *gsi.State, set config.Settings, targets Targets, now time.Time) *Ctx {
 	return &Ctx{S: s, Prev: prev, Clock: s.Map.ClockTime, Settings: set, T: set.Timings, Focus: e.focus, RoleNote: e.roleNote,
-		Targets: e.targetsFor(s.Hero.ID, set.Role), data: e.data, m: e.match, now: now}
+		Targets: targets, data: e.data, m: e.match, now: now}
 }
 
 func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
@@ -204,6 +210,10 @@ type Result struct {
 }
 
 func (e *Engine) Update(s *gsi.State, set config.Settings) Result {
+	var targets Targets
+	if s.InMatch() {
+		targets = e.targetsFor(s.Hero.ID, set.Role)
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	now := e.now()
@@ -258,7 +268,7 @@ func (e *Engine) Update(s *gsi.State, set config.Settings) Result {
 		return res
 	}
 
-	c := e.newCtx(s, prev, set, now)
+	c := e.newCtx(s, prev, set, targets, now)
 	for i := range e.rules {
 		r := &e.rules[i]
 		o, hasOverride := e.overrides[r.ID]

@@ -408,12 +408,15 @@ func (s *Server) rememberHeroRole(heroID int, role string) {
 // applyHeroRole picks the role when a match starts on a different hero. The pre-game
 // role line tells the player where the choice came from.
 func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings {
+	// The lock only decides which post handles a new hero; the lookups, the settings write and
+	// the dashboard update run without it.
 	s.roleMu.Lock()
-	defer s.roleMu.Unlock()
 	if s.roleHero == heroID {
+		s.roleMu.Unlock()
 		return set
 	}
 	s.roleHero = heroID
+	s.roleMu.Unlock()
 	role, note := s.roleFor(heroID, set)
 	s.engine.SetRoleNote(note)
 	defer func() { s.applyFocus(s.cfg.Settings().Role, heroID) }()
@@ -428,7 +431,8 @@ func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings 
 		s.log.Error("apply hero role", "err", err)
 		return set
 	}
-	s.hub.publish("settings", s.settingsResponse())
+	// settingsResponse asks Windows about autostart and voices: not on the game-state post.
+	s.spawn(func(context.Context) { s.hub.publish("settings", s.settingsResponse()) })
 	s.log.Info("role set for hero", "role", role, "why", note)
 	return set
 }
