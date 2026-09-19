@@ -83,12 +83,11 @@ func Open(configDir string) (*Store, error) {
 var migrations = []func(tx *sql.Tx) error{
 	// 1 (1.2): reviews say whether the last game's focus was followed.
 	func(tx *sql.Tx) error { return addColumn(tx, "reviews", "followed_focus", "TEXT") },
-	// 2 (1.7): indexes for what's looked up during a match.
+	// 2 (1.7): indexes for the matches looked up during a game. Items need none: their
+	// UNIQUE (match_id, item, source) is one already, and reviews are always read whole.
 	func(tx *sql.Tx) error {
 		_, err := tx.Exec(`CREATE INDEX IF NOT EXISTS matches_hero_role ON matches(hero_id, role);
-			CREATE INDEX IF NOT EXISTS matches_role ON matches(role);
-			CREATE INDEX IF NOT EXISTS items_match ON items(match_id);
-			CREATE INDEX IF NOT EXISTS reviews_match ON reviews(match_id)`)
+			CREATE INDEX IF NOT EXISTS matches_role ON matches(role)`)
 		return err
 	},
 }
