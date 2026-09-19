@@ -470,6 +470,9 @@ type match struct {
 
 	lhAt   map[string]int
 	deaths []int
+	// unreliable is the unreliable gold the last time the hero had health. Dota can take the
+	// death's share an update before it reports the hero dead.
+	unreliable int
 
 	specTrue  map[string]bool // custom "becomes true" rules: whether conditions held last update
 	newEvents []string        // GSI event types first seen in this update
@@ -605,6 +608,9 @@ func (m *match) observe(s, prev *gsi.State, t config.Timings) {
 	}
 	if prev != nil && died(prev, s) {
 		m.deaths = append(m.deaths, clock)
+	}
+	if s.Hero.Alive && s.Hero.Health > 0 {
+		m.unreliable = s.Player.Gold - s.Player.GoldReliable
 	}
 	if prev != nil && prev.Hero != nil && s.Hero.Alive && prev.Hero.HealthPercent-s.Hero.HealthPercent >= hurtDrop {
 		m.hurtAt = clock
