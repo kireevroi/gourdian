@@ -147,6 +147,15 @@ func (e *Engine) rebuild() {
 	e.rules = rules
 }
 
+// Configure sets the language, the player's rules and their changes to built-in ones together,
+// compiling the rules once.
+func (e *Engine) Configure(lang string, custom []RuleSpec, overrides map[string]RuleOverride) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.lang, e.custom, e.overrides = lang, custom, overrides
+	e.rebuild()
+}
+
 // SetLanguage words the built-in rules, and so the HUD and voice, in lang.
 func (e *Engine) SetLanguage(lang string) {
 	e.mu.Lock()

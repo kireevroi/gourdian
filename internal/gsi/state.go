@@ -234,20 +234,18 @@ const (
 	Stash     = "stash"     // stash0-5
 )
 
+// slotNames are the item slots of each kind, spelled out: rules look through them many times
+// a second, and formatting the names each time was a third of the rules' work.
+var slotNames = map[string][]string{
+	Inventory: {"slot0", "slot1", "slot2", "slot3", "slot4", "slot5"},
+	Backpack:  {"slot6", "slot7", "slot8"},
+	Stash:     {"stash0", "stash1", "stash2", "stash3", "stash4", "stash5"},
+}
+
 func (s *State) slots(kind string) []Item {
-	var prefix string
-	var from, to int
-	switch kind {
-	case Inventory:
-		prefix, from, to = "slot", 0, 5
-	case Backpack:
-		prefix, from, to = "slot", 6, 8
-	case Stash:
-		prefix, from, to = "stash", 0, 5
-	}
 	var out []Item
-	for i := from; i <= to; i++ {
-		if it, ok := s.Items[fmt.Sprintf("%s%d", prefix, i)]; ok && !it.Empty() {
+	for _, name := range slotNames[kind] {
+		if it, ok := s.Items[name]; ok && !it.Empty() {
 			out = append(out, it)
 		}
 	}
