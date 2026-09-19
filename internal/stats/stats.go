@@ -21,6 +21,9 @@ import (
 // ErrDuplicate means the match was already recorded, for example by replaying a recording.
 var ErrDuplicate = errors.New("match already recorded")
 
+// ErrNoMatch means no match with that id is recorded.
+var ErrNoMatch = errors.New("match not recorded")
+
 type MatchSummary struct {
 	MatchID     string         `json:"match_id"`
 	HeroID      int            `json:"hero_id"`

@@ -272,7 +272,7 @@ func (s *Server) handleReviewMatch(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	m, err := s.stats.Match(id)
 	if err != nil {
-		http.Error(w, "match not found", http.StatusNotFound)
+		http.Error(w, err.Error(), matchErrorStatus(err))
 		return
 	}
 	set := s.cfg.Settings()

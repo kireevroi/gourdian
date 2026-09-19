@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"cmp"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -40,8 +41,10 @@ func (s *Store) UpdateMatch(matchID string, update func(*MatchSummary)) error {
 	defer s.history.Add(1)
 	return s.tx(func(tx *sql.Tx) error {
 		var rowID int64
-		if err := tx.QueryRow(`SELECT rowid FROM matches WHERE match_id = ?`, matchID).Scan(&rowID); err != nil {
-			return fmt.Errorf("match %s not recorded", matchID)
+		if err := tx.QueryRow(`SELECT rowid FROM matches WHERE match_id = ?`, matchID).Scan(&rowID); errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("match %s: %w", matchID, ErrNoMatch)
+		} else if err != nil {
+			return err
 		}
 		rows, err := tx.Query(`SELECT `+matchColumnList+` FROM matches WHERE match_id = ?`, matchID)
 		if err != nil {
@@ -49,7 +52,7 @@ func (s *Store) UpdateMatch(matchID string, update func(*MatchSummary)) error {
 		}
 		if !rows.Next() {
 			rows.Close()
-			return fmt.Errorf("match %s not recorded", matchID)
+			return cmp.Or(rows.Err(), fmt.Errorf("match %s: %w", matchID, ErrNoMatch))
 		}
 		m, err := scanMatch(rows)
 		rows.Close()
@@ -99,7 +102,7 @@ func (s *Store) Match(matchID string) (MatchSummary, error) {
 		return MatchSummary{}, err
 	}
 	if len(found) == 0 {
-		return MatchSummary{}, fmt.Errorf("match %s not recorded", matchID)
+		return MatchSummary{}, fmt.Errorf("match %s: %w", matchID, ErrNoMatch)
 	}
 	return found[0], nil
 }

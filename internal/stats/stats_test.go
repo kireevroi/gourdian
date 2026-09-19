@@ -356,6 +356,22 @@ func TestMatchKeepsEveryField(t *testing.T) {
 	}
 }
 
+// A match that isn't recorded is told apart from a database that won't answer, so the
+// dashboard can say "no such match" rather than blaming the player's request.
+func TestUnknownMatchSaysSo(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, err := st.Match("9000000009"); !errors.Is(err, ErrNoMatch) {
+		t.Errorf("Match: %v, want ErrNoMatch", err)
+	}
+	if err := st.UpdateMatch("9000000009", func(*MatchSummary) {}); !errors.Is(err, ErrNoMatch) {
+		t.Errorf("UpdateMatch: %v, want ErrNoMatch", err)
+	}
+}
+
 func TestMatchesWhere(t *testing.T) {
 	st, err := Open(t.TempDir())
 	if err != nil {
