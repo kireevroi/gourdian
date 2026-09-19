@@ -131,7 +131,9 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []stats.MatchS
 				chosen = append(chosen, n)
 			}
 		}
-		slices.SortFunc(chosen, func(a, b string) int { return cmp.Or(counts[b]-counts[a], medianOf(times[a])-medianOf(times[b])) })
+		slices.SortFunc(chosen, func(a, b string) int {
+			return cmp.Or(counts[b]-counts[a], coach.Median(times[a])-coach.Median(times[b]))
+		})
 		if len(chosen) > 0 {
 			fromGames = len(perMatch)
 		}
@@ -159,7 +161,7 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []stats.MatchS
 		good, hasGood := dotadata.GoodTiming(buckets)
 		usual := 0
 		if len(times[name]) >= 3 {
-			usual = medianOf(times[name])
+			usual = coach.Median(times[name])
 		}
 		by := good
 		// Aim a minute under your usual, but never earlier than the timing that wins most.
@@ -173,15 +175,6 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []stats.MatchS
 	}
 	slices.SortFunc(goals, func(a, b coach.ItemGoal) int { return a.By - b.By })
 	return goals, fromGames, complete
-}
-
-func medianOf(values []int) int {
-	if len(values) == 0 {
-		return 0
-	}
-	s := slices.Clone(values)
-	slices.Sort(s)
-	return s[len(s)/2]
 }
 
 func roundTo(v, step int) int { return int(math.Round(float64(v)/float64(step))) * step }

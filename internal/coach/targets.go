@@ -69,7 +69,7 @@ func PersonalLastHits(role string, history []stats.MatchSummary) Targets {
 			continue
 		}
 		t.Games = max(t.Games, len(values))
-		t.Usual[i] = median(values)
+		t.Usual[i] = Median(values)
 		t.LastHits[i] = int(math.Round(float64(t.Usual[i]) * personalStretch))
 	}
 	for i := 1; i < len(t.LastHits); i++ {
@@ -78,7 +78,12 @@ func PersonalLastHits(role string, history []stats.MatchSummary) Targets {
 	return t
 }
 
-func median(values []int) int {
+// Median is the middle value, or the mean of the two middle ones, and 0 for none. Every
+// personal target uses it, so "your usual" means the same everywhere.
+func Median(values []int) int {
+	if len(values) == 0 {
+		return 0
+	}
 	s := slices.Clone(values)
 	slices.Sort(s)
 	if n := len(s); n%2 == 0 {
