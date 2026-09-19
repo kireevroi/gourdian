@@ -537,7 +537,10 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
-		case msg := <-ch:
+		case msg, ok := <-ch:
+			if !ok {
+				return // fell behind: the browser reconnects
+			}
 			w.Write(msg)
 		case <-ping.C:
 			fmt.Fprint(w, ": ping\n\n")
@@ -773,7 +776,9 @@ func (h *hub) publish(event string, v any) {
 	h.publishRaw(event, data)
 }
 
-// publishRaw sends an event whose JSON is already encoded.
+// publishRaw sends an event whose JSON is already encoded. A client that has fallen a whole
+// buffer behind is disconnected rather than silently missing events: its browser reconnects
+// and gets the current state afresh.
 func (h *hub) publishRaw(event string, data []byte) {
 	msg := fmt.Appendf(nil, "event: %s\ndata: %s\n\n", event, data)
 	h.mu.Lock()
@@ -782,6 +787,8 @@ func (h *hub) publishRaw(event string, data []byte) {
 		select {
 		case ch <- msg:
 		default:
+			delete(h.clients, ch)
+			close(ch)
 		}
 	}
 }

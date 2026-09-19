@@ -701,3 +701,34 @@ func TestJSONAnswersWithAStatusKeepTheirContentType(t *testing.T) {
 		t.Fatalf("status %d, content type %q", res.StatusCode, res.Header.Get("Content-Type"))
 	}
 }
+
+// A dashboard that stops reading gets disconnected, so its browser reconnects to the current
+// state, instead of silently losing events like a finished review.
+func TestHubDisconnectsAClientThatFallsBehind(t *testing.T) {
+	h := hub{clients: map[chan []byte]struct{}{}}
+	ch := h.subscribe()
+	for i := range cap(ch) + 5 {
+		h.publish("tip", i)
+	}
+	got := 0
+	for open := true; open; {
+		select {
+		case _, open = <-ch:
+			if open {
+				got++
+			}
+		case <-time.After(time.Second):
+			t.Fatal("the client is still connected after falling behind")
+		}
+	}
+	if got != cap(ch) {
+		t.Fatalf("read %d events before the disconnect, want the %d buffered", got, cap(ch))
+	}
+	h.mu.Lock()
+	left := len(h.clients)
+	h.mu.Unlock()
+	if left != 0 {
+		t.Fatal("the client is still subscribed")
+	}
+	h.unsubscribe(ch) // what handleEvents does on its way out: must not panic
+}
