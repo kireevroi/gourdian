@@ -1,0 +1,3 @@
+# Keep LF everywhere, so a Windows checkout builds the same files (and the same
+# dashboard fingerprint) as Linux.
+* text=auto eol=lf

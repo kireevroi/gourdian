@@ -133,6 +133,9 @@ func TestWindowsScript(t *testing.T) {
 }
 
 func TestANewVoiceIsFoundAndUsed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake PowerShell is a shell script")
+	}
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "powershell.exe")
 	fake := `#!/bin/sh

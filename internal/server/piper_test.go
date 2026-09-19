@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"dotatrainer/internal/config"
@@ -14,6 +15,9 @@ import (
 // linuxDesktop makes the trainer think it runs on a Linux desktop whose only sound player is a
 // stand-in, so nothing is played.
 func linuxDesktop(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("natural voices are for Linux desktops")
+	}
 	t.Setenv("WSL_DISTRO_NAME", "")
 	bin := t.TempDir()
 	os.WriteFile(filepath.Join(bin, "pw-play"), []byte("#!/bin/sh\n"), 0o755)

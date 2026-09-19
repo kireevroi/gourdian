@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,9 @@ import (
 // fakePiper stands in for piper --json-input: it logs each line with its model and writes the
 // WAV file it's asked for. The fake player logs what it plays.
 func fakePiper(t *testing.T) (exe string, player []string, log string) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake Piper is a shell script")
+	}
 	dir := t.TempDir()
 	log = filepath.Join(dir, "log")
 	exe = filepath.Join(dir, "piper")
@@ -125,6 +129,9 @@ func tarball(t *testing.T, entries []tar.Header) string {
 }
 
 func TestUntarKeepsInsideTheFolder(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Piper is only unpacked on Linux, where modes and symlinks exist")
+	}
 	good := tarball(t, []tar.Header{
 		{Name: "piper/", Typeflag: tar.TypeDir, Mode: 0o755},
 		{Name: "piper/piper", Typeflag: tar.TypeReg, Mode: 0o755},

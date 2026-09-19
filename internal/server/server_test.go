@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -272,6 +273,9 @@ func TestImportNeedsAccountID(t *testing.T) {
 // the file "logged-in" exists next to it.
 func fakeClaude(t *testing.T) (exe, loginFlag string) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake Claude CLI is a shell script")
+	}
 	dir := t.TempDir()
 	exe, loginFlag = filepath.Join(dir, "claude"), filepath.Join(dir, "logged-in")
 	script := `#!/bin/sh
