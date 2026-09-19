@@ -24,16 +24,45 @@ render winres/icon.svg 1024 1024 icon.png
 render installer/wizard.svg 656 1256 wizard.png
 
 python3 - "$tmp" <<'PY'
-import sys
+import io, struct, sys
 from PIL import Image
 tmp = sys.argv[1]
+
+
+def write_ico(path, images):
+    """Writes an ICO the way Windows' own icons are laid out: 32-bit bitmaps up to 128 px and
+    PNG only at 256 px. All-PNG icons show in Explorer, but some icon readers, such as the one
+    in Chromium browsers' downloads list, draw a generic icon instead."""
+    blobs = []
+    for im in images:
+        w, h = im.size
+        if w >= 256:
+            buf = io.BytesIO()
+            im.save(buf, "PNG")
+            blobs.append(buf.getvalue())
+            continue
+        rows = im.tobytes("raw", "BGRA")
+        pixels = b"".join(rows[y * w * 4:(y + 1) * w * 4] for y in reversed(range(h)))  # bottom-up
+        mask = b"\0" * (((w + 31) // 32) * 4 * h)  # all shown: the alpha channel decides
+        header = struct.pack("<IiiHHIIiiII", 40, w, h * 2, 1, 32, 0, len(pixels) + len(mask), 0, 0, 0, 0)
+        blobs.append(header + pixels + mask)
+    out = struct.pack("<HHH", 0, 1, len(images))
+    offset = 6 + 16 * len(images)
+    for im, blob in zip(images, blobs):
+        w, h = im.size
+        out += struct.pack("<BBBBHHII", w % 256, h % 256, 0, 0, 1, 32, len(blob), offset)
+        offset += len(blob)
+    with open(path, "wb") as f:
+        f.write(out + b"".join(blobs))
+
+
 icon = Image.open(f"{tmp}/icon.png").convert("RGBA").crop((0, 0, 1024, 1024))
 sizes = [256, 128, 96, 64, 48, 40, 32, 24, 20, 16]
 for s in sizes:
     name = "icon.png" if s == 256 else f"icon{s}.png"
     icon.resize((s, s), Image.LANCZOS).save(f"winres/{name}")
 for ico in ("winres/icon.ico", "installer/icon.ico"):
-    icon.resize((256, 256), Image.LANCZOS).save(ico, sizes=[(s, s) for s in sizes])
+    write_ico(ico, [icon.resize((s, s), Image.LANCZOS) for s in sizes])
 
 def flat(im, size):
     # BMPs have no transparency: put the image on white
