@@ -1,0 +1,98 @@
+name: Release
+
+# `make release` pushes a tag vX.Y.Z. This workflow tests that commit, builds the Windows
+# installer and the Linux tarball, and publishes them with checksums as a GitHub release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Tag matches VERSION
+        run: |
+          want="v$(tr -d '[:space:]' < VERSION)"
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "tag is $GITHUB_REF_NAME but VERSION says $want" >&2
+            exit 1
+          fi
+      - run: make test
+      # winres stamps the exe's version info from VERSION
+      - run: make winres windows linux-dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: exe
+          path: bin/dotatrainer.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-linux
+          path: dist/dotatrainer-*-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  installer:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: exe
+          path: bin
+      # Code signing (SignPath) goes here once approved: sign bin/dotatrainer.exe before
+      # packaging, then the finished installer.
+      - name: Find or install Inno Setup
+        shell: pwsh
+        run: |
+          function Find-Iscc { Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup *\ISCC.exe", "$env:ProgramFiles\Inno Setup *\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 }
+          $iscc = Find-Iscc
+          if (-not $iscc) { choco install innosetup --no-progress -y; $iscc = Find-Iscc }
+          if (-not $iscc) { throw 'ISCC.exe not found after installing Inno Setup' }
+          "ISCC=$($iscc.FullName)" >> $env:GITHUB_ENV
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $stage = Join-Path $env:RUNNER_TEMP 'stage'
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item bin\dotatrainer.exe (Join-Path $stage 'Dota Trainer.exe')
+          Copy-Item installer\DotaTrainer.iss, installer\README.txt, installer\icon.ico, installer\wizard*.bmp $stage
+          & $env:ISCC /Q "/DAppVersion=$version" /DUnsigned (Join-Path $stage 'DotaTrainer.iss')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item (Join-Path $stage "DotaTrainer-Setup-$version.exe") dist\
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows
+          path: dist/DotaTrainer-Setup-*.exe
+          if-no-files-found: error
+
+  publish:
+    needs: installer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: out
+          merge-multiple: true
+      - name: Checksums
+        run: cd out && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" out/*
+          --repo "$GITHUB_REPOSITORY"
+          --title "Dota Trainer ${GITHUB_REF_NAME#v}"
+          --generate-notes

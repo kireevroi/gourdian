@@ -1,5 +1,6 @@
 ; Inno Setup script for Dota Trainer. Built by installer/build.sh, which passes
-; /DAppVersion=<VERSION> and defines the "dotatrainer" sign tool.
+; /DAppVersion=<VERSION> and defines the "dotatrainer" sign tool. The release workflow
+; passes /DUnsigned instead and signs the finished files separately.
 
 #define AppName "Dota Trainer"
 #define AppExe "Dota Trainer.exe"
@@ -30,8 +31,10 @@ WizardImageFile=wizard.bmp,wizard-200.bmp
 WizardSmallImageFile=wizard-small.bmp,wizard-small-200.bmp
 Compression=lzma2/max
 SolidCompression=yes
+#ifndef Unsigned
 SignTool=dotatrainer
 SignedUninstaller=yes
+#endif
 CloseApplications=force
 RestartApplications=no
 VersionInfoVersion={#AppVersion}

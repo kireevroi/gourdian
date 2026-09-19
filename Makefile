@@ -1,9 +1,9 @@
-# -buildvcs=false: the parent home directory is a root-owned git repo, which breaks VCS stamping.
+# -buildvcs=false: builds don't depend on the state of git (and work outside a checkout).
 GOFLAGS := -buildvcs=false
 VERSION := $(shell cat VERSION)
 LDFLAGS := -X dotatrainer/internal/buildinfo.Version=$(VERSION)
 
-.PHONY: all linux windows test lint install winres cert installer app clean linux-dist linux-install linux-uninstall
+.PHONY: all linux windows test lint release install winres cert installer app clean linux-dist linux-install linux-uninstall
 
 all: linux windows
 
@@ -38,6 +38,15 @@ test:
 # staticcheck, pinned so results don't change under us.
 lint:
 	go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+
+# Publishes VERSION: tags the current main commit v$(VERSION) and pushes it. GitHub then
+# builds the installer and the Linux tarball and attaches them to a release.
+release: test
+	@git diff --quiet HEAD || { echo "commit your changes first" >&2; exit 1; }
+	@[ "$$(git branch --show-current)" = main ] || { echo "release from main" >&2; exit 1; }
+	@! git rev-parse -q --verify refs/tags/v$(VERSION) >/dev/null || { echo "v$(VERSION) is already released; bump VERSION" >&2; exit 1; }
+	git tag -a v$(VERSION) -m "Dota Trainer $(VERSION)"
+	git push origin main v$(VERSION)
 
 install: all
 	mkdir -p $(HOME)/.local/bin

@@ -18,7 +18,7 @@ It reads Valve's official Game State Integration feed, which only describes your
 
 Run **DotaTrainer-Setup-<version>.exe**. The setup wizard installs to `%LOCALAPPDATA%\Programs\Dota Trainer` without admin rights, adds Start menu and (optionally) desktop shortcuts, can start the app when you sign in to Windows, and connects Dota 2. Setup quits a running copy before upgrading and keeps your settings and statistics. Uninstall from Windows Settings › Apps; you're asked whether to keep your statistics.
 
-The installer and app are signed by **Dota Trainer**. The certificate is self-signed, so it's only trusted on a PC where `make cert` has been run. Other PCs show "Unknown publisher".
+Downloads are on the [Releases page](https://github.com/kireevroi/gourdian/releases): the Windows installer, the Linux tarball and `SHA256SUMS`. Release builds aren't code-signed yet (signing through the SignPath Foundation is being set up), so Windows SmartScreen says "Unknown publisher": choose **More info › Run anyway**. Installers built locally with `make installer` are signed with a self-signed **Dota Trainer** certificate that is only trusted on a PC where `make cert` has been run.
 
 Requirements:
 
@@ -201,9 +201,13 @@ make installer   # signed installer in dist/ and your Downloads folder
 make app         # build the installer and install it silently over the current version
 ```
 
-To sign with a purchased certificate instead, change `$signArgs` in `installer/sign.ps1`. Bump `VERSION` for each release. `go build` needs `-buildvcs=false` here because the home directory is a root-owned git repository; the Makefile passes it.
+To sign with a purchased certificate instead, change `$signArgs` in `installer/sign.ps1`. Bump `VERSION` for each release. The Makefile builds with `-buildvcs=false`, so a build doesn't depend on the state of git.
 
 For experiments, start a trainer with `DOTATRAINER_HOME=/some/folder` and its own `listen` port in that folder's `config.json`. Such a profile never touches Dota's game-state config. WSL can't reach an app listening on Windows' localhost, so run Windows-side commands with `"Dota Trainer.exe"`.
+
+### Releases
+
+Bump `VERSION` (and `pkgver` in `packaging/arch/PKGBUILD`), commit, then `make release`. It runs the tests, tags the commit `v<VERSION>` and pushes it; the Release workflow in `.github/workflows` tests it again, builds the installer on Windows and the tarball on Linux, and publishes them with checksums as a GitHub release. The CI workflow runs the tests on Linux and Windows for every push to `main`.
 
 ### Commands
 
