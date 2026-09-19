@@ -3,6 +3,7 @@ package dotadata
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,43 +15,71 @@ import (
 // forever is a maxAge for cached answers that never change, like a parsed match.
 const forever = time.Duration(-1)
 
-// cached answers from the disk cache while the file is younger than maxAge. Otherwise it fetches
-// a fresh value and saves it when keep says so (nil keeps everything); if the fetch fails, an
-// older cached copy is better than nothing.
-func cached[T any](c *Client, name string, maxAge time.Duration, fetch func() (T, error), keep func(T) bool) (T, error) {
+// cachedBytes answers from the disk cache while the file is younger than maxAge and decode
+// takes it. Otherwise it fetches a fresh answer, and saves it when decode takes it and keep
+// says so; if fetching or decoding fails, an older cached copy that decodes is better than
+// nothing. The cache holds the bytes as they came, so a field read by a later version is
+// there for answers cached before it.
+func (c *Client) cachedBytes(name string, maxAge time.Duration, fetch func() ([]byte, error), decode func([]byte) error, keep func() bool) error {
 	path := filepath.Join(c.cacheDir, name)
-	var v T
 	if fi, err := os.Stat(path); err == nil && (maxAge == forever || time.Since(fi.ModTime()) < maxAge) {
-		if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &v) == nil {
-			return v, nil
+		if data, err := os.ReadFile(path); err == nil && decode(data) == nil {
+			return nil
 		}
 	}
-	fresh, err := fetch()
+	data, err := fetch()
+	if err == nil {
+		if err = decode(data); err != nil {
+			err = fmt.Errorf("decode %s: %w", name, err)
+		}
+	}
 	if err != nil {
-		var stale T
-		if data, readErr := os.ReadFile(path); readErr == nil && json.Unmarshal(data, &stale) == nil {
+		if old, readErr := os.ReadFile(path); readErr == nil && decode(old) == nil {
 			c.log.Warn("using stale cache", "file", name, "err", err)
-			return stale, nil
+			return nil
 		}
-		return v, err
+		return err
 	}
-	if keep == nil || keep(fresh) {
-		c.save(name, fresh)
+	if keep == nil || keep() {
+		c.save(name, data)
 	}
-	return fresh, nil
+	return nil
 }
 
-// save writes v to the cache through a temporary file, so a crash never leaves half a file.
-func (c *Client) save(name string, v any) {
+// cached is cachedBytes for answers that decode as a T; keep, if set, decides whether a fresh
+// one is saved.
+func cached[T any](c *Client, name string, maxAge time.Duration, fetch func() ([]byte, error), keep func(T) bool) (T, error) {
+	var v T
+	err := c.cachedBytes(name, maxAge, fetch, func(data []byte) error {
+		var fresh T // decoded apart, so a copy that fails leaves nothing behind in v
+		if err := json.Unmarshal(data, &fresh); err != nil {
+			return err
+		}
+		v = fresh
+		return nil
+	}, func() bool { return keep == nil || keep(v) })
+	return v, err
+}
+
+// save writes data to the cache through a temporary file of its own, so a crash never leaves
+// half a file and two saves of the same file can't trip over each other.
+func (c *Client) save(name string, data []byte) {
 	path := filepath.Join(c.cacheDir, name)
-	data, err := json.Marshal(v)
+	err := os.MkdirAll(filepath.Dir(path), 0o755)
+	var tmp *os.File
 	if err == nil {
-		err = os.MkdirAll(filepath.Dir(path), 0o755)
+		tmp, err = os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
 	}
 	if err == nil {
-		tmp := path + ".tmp"
-		if err = os.WriteFile(tmp, data, 0o644); err == nil {
-			err = os.Rename(tmp, path)
+		_, err = tmp.Write(data)
+		if closeErr := tmp.Close(); err == nil {
+			err = closeErr
+		}
+		if err == nil {
+			err = os.Rename(tmp.Name(), path)
+		}
+		if err != nil {
+			os.Remove(tmp.Name())
 		}
 	}
 	if err != nil {

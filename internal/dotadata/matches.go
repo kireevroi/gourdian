@@ -174,18 +174,9 @@ func (c *Client) Match(ctx context.Context, matchID string) (*Match, error) {
 	if _, err := strconv.ParseInt(matchID, 10, 64); err != nil {
 		return nil, fmt.Errorf("not an OpenDota match id: %q", matchID)
 	}
-	m, err := cached(c, filepath.Join("matches", matchID+".json"), forever, func() (*Match, error) {
-		data, err := c.fetch(ctx, "/matches/"+matchID)
-		if err != nil {
-			return nil, err
-		}
-		var m Match
-		if err := json.Unmarshal(data, &m); err != nil {
-			return nil, fmt.Errorf("decode match %s: %w", matchID, err)
-		}
-		return &m, nil
-	}, (*Match).Parsed) // an unparsed match changes once OpenDota parses it
-	return m, err
+	return cached(c, filepath.Join("matches", matchID+".json"), forever,
+		func() ([]byte, error) { return c.fetch(ctx, "/matches/"+matchID) },
+		(*Match).Parsed) // an unparsed match changes once OpenDota parses it
 }
 
 // parseRetryAt is how often the parse is requested again while waiting.

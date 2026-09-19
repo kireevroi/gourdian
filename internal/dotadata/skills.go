@@ -97,7 +97,7 @@ func (c *Client) loadSkillBuild(ctx context.Context, key positionKey) (*SkillBui
 	if !ok {
 		return nil, fmt.Errorf("unknown hero %d", key.hero)
 	}
-	seqs, err := cached(c, filepath.Join("builds", key.file("-skills")), buildMaxAge, func() ([][]int, error) {
+	seqs, err := cached[[][]int](c, filepath.Join("builds", key.file("-skills")), buildMaxAge, func() ([]byte, error) {
 		raw, err := c.fetch(ctx, "/explorer?sql="+url.QueryEscape(skillSQL(key)))
 		var resp struct {
 			Rows []struct {
@@ -111,11 +111,14 @@ func (c *Client) loadSkillBuild(ctx context.Context, key positionKey) (*SkillBui
 		if err == nil && resp.Err != nil {
 			err = fmt.Errorf("explorer: %v", resp.Err)
 		}
+		if err != nil {
+			return nil, err
+		}
 		var seqs [][]int
 		for _, r := range resp.Rows {
 			seqs = append(seqs, r.Order)
 		}
-		return seqs, err
+		return json.Marshal(seqs)
 	}, nil)
 	if err != nil {
 		return nil, err

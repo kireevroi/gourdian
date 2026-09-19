@@ -118,7 +118,7 @@ func (c *Client) fetchPositionBuild(key positionKey) {
 }
 
 func (c *Client) loadPositionData(ctx context.Context, key positionKey) (positionData, error) {
-	return cached(c, filepath.Join("builds", key.file("")), buildMaxAge, func() (positionData, error) {
+	return cached[positionData](c, filepath.Join("builds", key.file("")), buildMaxAge, func() ([]byte, error) {
 		var out positionData
 		raw, err := c.fetch(ctx, "/explorer?sql="+url.QueryEscape(positionSQL(key)))
 		var resp struct {
@@ -137,7 +137,7 @@ func (c *Client) loadPositionData(ctx context.Context, key positionKey) (positio
 			err = fmt.Errorf("explorer: %v", resp.Err)
 		}
 		if err != nil {
-			return out, err
+			return nil, err
 		}
 		items := c.Items()
 		out.Pop = Popularity{}
@@ -152,6 +152,6 @@ func (c *Client) loadPositionData(ctx context.Context, key positionKey) (positio
 			}
 			out.Pop[r.Phase][strconv.Itoa(info.ID)] = r.Games
 		}
-		return out, nil
+		return json.Marshal(out)
 	}, nil)
 }

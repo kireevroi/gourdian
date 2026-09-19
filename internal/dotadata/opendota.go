@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"sync"
 	"time"
@@ -218,20 +219,15 @@ func (c *Client) RankTier(accountID string) int {
 
 // getJSON decodes OpenDota's answer at path into out, cached as cacheName for maxAge.
 func (c *Client) getJSON(ctx context.Context, path, cacheName string, maxAge time.Duration, out any) error {
-	raw, err := cached(c, cacheName, maxAge, func() (json.RawMessage, error) {
-		data, err := c.fetch(ctx, path)
-		if err == nil && !json.Valid(data) {
-			err = fmt.Errorf("decode %s: not JSON", path)
+	return c.cachedBytes(cacheName, maxAge, func() ([]byte, error) { return c.fetch(ctx, path) }, func(data []byte) error {
+		// Decoded into a fresh value, so a copy that fails leaves nothing behind in out.
+		fresh := reflect.New(reflect.TypeOf(out).Elem())
+		if err := json.Unmarshal(data, fresh.Interface()); err != nil {
+			return err
 		}
-		return data, err
+		reflect.ValueOf(out).Elem().Set(fresh.Elem())
+		return nil
 	}, nil)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(raw, out); err != nil {
-		return fmt.Errorf("decode %s: %w", path, err)
-	}
-	return nil
 }
 
 func (c *Client) fetch(ctx context.Context, path string) ([]byte, error) {
@@ -252,10 +248,13 @@ func (c *Client) do(ctx context.Context, method, path string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if resp.StatusCode == http.StatusTooManyRequests && attempt < 2 {
+		if resp.StatusCode == http.StatusTooManyRequests {
+			// Every call waits out the pause, whether or not this one tries again.
 			c.limit.pause(retryAfter(resp))
-			resp.Body.Close()
-			continue
+			if attempt < 2 {
+				resp.Body.Close()
+				continue
+			}
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
@@ -265,9 +264,8 @@ func (c *Client) do(ctx context.Context, method, path string) ([]byte, error) {
 	}
 }
 
-// SetBaseURL points the client at another OpenDota-compatible API, such as a test server.
-// SetBaseURL points the client at another server, as tests do with a fake OpenDota, which
-// has no rate limit to keep to.
+// SetBaseURL points the client at another OpenDota-compatible server, as tests do with a
+// fake OpenDota, which has no rate limit to keep to.
 func (c *Client) SetBaseURL(u string) {
 	c.base = u
 	c.limit = &limiter{}

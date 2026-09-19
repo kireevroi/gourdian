@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -60,15 +62,38 @@ func TestLimiterAllowsABurstThenSlowsDown(t *testing.T) {
 // When OpenDota is down, an old cached answer is better than none.
 func TestCachedFallsBackToAStaleCopy(t *testing.T) {
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
-	fresh := func() (int, error) { return 7, nil }
-	down := func() (int, error) { return 0, errors.New("OpenDota is down") }
-	if v, err := cached(c, "n.json", 0, fresh, nil); err != nil || v != 7 {
+	fresh := func() ([]byte, error) { return []byte("7"), nil }
+	down := func() ([]byte, error) { return nil, errors.New("OpenDota is down") }
+	if v, err := cached[int](c, "n.json", 0, fresh, nil); err != nil || v != 7 {
 		t.Fatalf("%d, %v", v, err)
 	}
-	if v, err := cached(c, "n.json", 0, down, nil); err != nil || v != 7 { // maxAge 0: always stale
+	if v, err := cached[int](c, "n.json", 0, down, nil); err != nil || v != 7 { // maxAge 0: always stale
 		t.Fatalf("got %d, %v; want the stale 7", v, err)
 	}
-	if _, err := cached(c, "other.json", 0, down, nil); err == nil {
+	if _, err := cached[int](c, "other.json", 0, down, nil); err == nil {
 		t.Fatal("no cache and no OpenDota, yet no error")
+	}
+}
+
+// An answer of the wrong shape, like an error object, is neither cached over a good copy nor
+// served; a cached copy that no longer decodes is fetched again.
+func TestCachedKeepsOnlyAnswersThatDecode(t *testing.T) {
+	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	answer := `[1, 2]`
+	fetch := func() ([]byte, error) { return []byte(answer), nil }
+	if v, err := cached[[]int](c, "list.json", time.Hour, fetch, nil); err != nil || len(v) != 2 {
+		t.Fatalf("%v, %v", v, err)
+	}
+	answer = `{"error": "rate limited"}`
+	if v, err := cached[[]int](c, "list.json", 0, fetch, nil); err != nil || len(v) != 2 {
+		t.Fatalf("got %v, %v; want the good copy kept", v, err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(c.cacheDir, "list.json")); string(data) != "[1, 2]" {
+		t.Fatalf("the cache now holds %q", data)
+	}
+	os.WriteFile(filepath.Join(c.cacheDir, "list.json"), []byte(`{"old": "shape"}`), 0o644)
+	answer = `[3]`
+	if v, err := cached[[]int](c, "list.json", time.Hour, fetch, nil); err != nil || len(v) != 1 || v[0] != 3 {
+		t.Fatalf("got %v, %v; a copy that no longer decodes should be fetched again", v, err)
 	}
 }
