@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"slices"
 	"time"
@@ -152,14 +151,19 @@ func (s *Server) drillResult(m stats.MatchSummary, set config.Settings) {
 		}
 	}
 	before := v.Average
-	text := fmt.Sprintf("Drill: %s %d times this game", v.Label, count)
-	switch {
-	case before <= 0:
-	case float64(count) < before:
-		text = fmt.Sprintf("Drill: %s %d times, under your usual %.1f", v.Label, count, before)
-	case float64(count) > before:
-		text = fmt.Sprintf("Drill: %s %d times, above your usual %.1f", v.Label, count, before)
+	line := func(lang string) string {
+		switch {
+		case before > 0 && float64(count) < before:
+			return roleSay(lang, "Drill: %s %d times, under your usual %.1f", v.Label, count, before)
+		case before > 0 && float64(count) > before:
+			return roleSay(lang, "Drill: %s %d times, above your usual %.1f", v.Label, count, before)
+		}
+		return roleSay(lang, "Drill: %s %d times this game", v.Label, count)
 	}
-	s.engine.AddTips([]coach.Tip{{Rule: "drill", Category: "focus", Severity: coach.Info, Clock: m.DurationSec,
-		At: time.Now(), Text: text, Speech: text, Quiet: false}})
+	tip := coach.Tip{Rule: "drill", Category: "focus", Severity: coach.Info, Clock: m.DurationSec, At: time.Now(),
+		Text: line(set.Language), Speech: line(set.Language)}
+	if set.Language != "en" {
+		tip.SpeechEN = line("en")
+	}
+	s.emitTips(m.MatchID, []coach.Tip{tip}, set)
 }

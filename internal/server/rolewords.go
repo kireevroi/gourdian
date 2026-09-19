@@ -19,6 +19,10 @@ var roleWordsRU = map[string]string{
 	"You're %s. Coaching you as %s.": "Вы %s. Тренирую вас как %s.",
 	"%s (from your %s game as %s)":   "%s (из вашей игры на %s, позиция: %s)",
 	"%s (from your %s game)":         "%s (из вашей игры на %s)",
+	// the line after a drilled match
+	"Drill: %s %d times this game":              "Тренировка «%s»: за игру — %d",
+	"Drill: %s %d times, under your usual %.1f": "Тренировка «%s»: за игру — %d, меньше обычного (%.1f)",
+	"Drill: %s %d times, above your usual %.1f": "Тренировка «%s»: за игру — %d, больше обычного (%.1f)",
 }
 
 var lanesRU = map[string]string{coach.LaneSafe: "на лёгкой линии", coach.LaneMid: "на миде", coach.LaneOff: "на сложной линии"}

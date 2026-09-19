@@ -53,8 +53,7 @@ func (s *Server) applyDetectedRole(res coach.Result, matchID string, set config.
 	if lang != "en" {
 		_, tip.SpeechEN = say("en")
 	}
-	s.engine.AddTips([]coach.Tip{tip})
-	s.deliver(matchID, []coach.Tip{tip}, set)
+	s.emitTips(matchID, []coach.Tip{tip}, set)
 	return set
 }
 
@@ -89,8 +88,7 @@ func (s *Server) handleRole(w http.ResponseWriter, r *http.Request) {
 			if set.Language != "en" {
 				tip.SpeechEN = roleSay("en", "Coaching you as %s.", coach.RoleName(set.Role, "en"))
 			}
-			s.engine.AddTips([]coach.Tip{tip})
-			s.deliver(snap.MatchID, []coach.Tip{tip}, set)
+			s.emitTips(snap.MatchID, []coach.Tip{tip}, set)
 		}
 	}
 	resp := s.settingsResponse()

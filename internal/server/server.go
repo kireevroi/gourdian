@@ -498,6 +498,13 @@ func speakable(tip coach.Tip, level string) bool {
 	}
 }
 
+// emitTips puts tips made outside the rules (AI, briefing, drill, goals…) in the feed and
+// delivers them like the rules' own.
+func (s *Server) emitTips(matchID string, tips []coach.Tip, set config.Settings) {
+	s.engine.AddTips(tips)
+	s.deliver(matchID, tips, set)
+}
+
 // deliver sends tips to the dashboard, the voice and tips.csv.
 func (s *Server) deliver(matchID string, tips []coach.Tip, set config.Settings) {
 	records := make([]stats.TipRecord, 0, len(tips))

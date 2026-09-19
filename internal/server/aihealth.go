@@ -159,8 +159,7 @@ func (s *Server) noticeAIProblem() {
 	}
 	tip := coach.Tip{Rule: "ai_problem", Category: "system", Severity: coach.Warn, Text: h.Message, Clock: snap.Clock, At: time.Now(),
 		Speech: "The AI coach is paused. Check the dashboard."}
-	s.engine.AddTips([]coach.Tip{tip})
-	s.deliver(snap.MatchID, []coach.Tip{tip}, set)
+	s.emitTips(snap.MatchID, []coach.Tip{tip}, set)
 }
 
 func (s *Server) clearAIProblem(id string) {

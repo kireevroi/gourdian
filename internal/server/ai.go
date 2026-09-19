@@ -107,8 +107,7 @@ func (s *Server) askAI(reason, matchID string, set config.Settings, live bool) b
 			tips = append(tips, coach.Tip{Rule: "ai", Category: "ai", Severity: coach.Info,
 				Text: text, Speech: text, Clock: snap.Clock, At: time.Now()})
 		}
-		s.engine.AddTips(tips)
-		s.deliver(matchID, tips, s.cfg.Settings())
+		s.emitTips(matchID, tips, s.cfg.Settings())
 		s.log.Info("AI coach answered", "provider", provider.Info().ID, "took", time.Since(started).Round(100*time.Millisecond))
 	})
 	return true

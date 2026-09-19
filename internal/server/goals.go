@@ -76,8 +76,7 @@ func (s *Server) goalFeedback(m stats.MatchSummary, set config.Settings) {
 	if len(tips) == 0 {
 		return
 	}
-	s.engine.AddTips(tips)
-	s.deliver(m.MatchID, tips, set)
+	s.emitTips(m.MatchID, tips, set)
 	s.hub.publish("goals", s.weekProgress(time.Now()))
 }
 
