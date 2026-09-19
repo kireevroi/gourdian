@@ -60,7 +60,7 @@ func (c *Client) AbilityName(name string) string {
 
 func (c *Client) fetchSkillBuild(key positionKey) {
 	<-c.ready
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(c.life(), time.Minute)
 	defer cancel()
 	// Won games in the position, then all games there, then the same in every position.
 	tries := []positionKey{key, {key.hero, key.pos, false}}

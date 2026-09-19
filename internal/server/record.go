@@ -179,8 +179,25 @@ func (r *recorder) close() error {
 	return err
 }
 
+// closeWait is how long Close waits for background work to stop once it's told to.
+const closeWait = 3 * time.Second
+
+// Close stops background work and waits for it (up to closeWait), then stops recording.
 func (s *Server) Close() error {
+	s.tasksMu.Lock()
+	s.closing = true
+	s.tasksMu.Unlock()
 	s.cancel()
+	done := make(chan struct{})
+	go func() {
+		s.tasks.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(closeWait):
+		s.log.Warn("background work still running at exit")
+	}
 	return s.StopRecording()
 }
 

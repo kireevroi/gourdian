@@ -24,7 +24,9 @@ type mmrPrompt struct {
 }
 
 type mmrState struct {
-	mu     sync.Mutex
+	mu sync.Mutex
+	// prompt is never changed in place: a change stores a new one, so a prompt that was handed
+	// out (to be encoded for the dashboard, say) stays as it was.
 	prompt *mmrPrompt
 }
 
@@ -72,9 +74,11 @@ func (s *Server) confirmRanked(matchID string, ranked bool) {
 		return
 	}
 	if ranked {
-		p.Ranked = true
+		next := *p
+		next.Ranked = true
+		s.mmr.prompt = &next
 		s.mmr.mu.Unlock()
-		s.hub.publish("mmr_prompt", p)
+		s.hub.publish("mmr_prompt", &next)
 		return
 	}
 	s.mmr.prompt = nil

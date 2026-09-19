@@ -65,6 +65,11 @@ func (s *Server) forgetModels(id string) {
 	c.mu.Unlock()
 }
 
+// aiJobs lists the jobs' provider choices, in the same order for any AI settings.
+func aiJobs(a *config.AISettings) [3]*config.AIChoice {
+	return [3]*config.AIChoice{&a.Live, &a.Reviews, &a.Fallback}
+}
+
 // fillModels picks a model for jobs with none, or with one their provider no longer lists.
 // A model the provider didn't list itself stays: it may be a full name the provider accepts.
 func (s *Server) fillModels(ctx context.Context, set *config.AISettings) bool {
@@ -115,10 +120,21 @@ func (s *Server) refreshModels(ctx context.Context, id string) {
 	if set.AI.Live.Provider != id && set.AI.Reviews.Provider != id && set.AI.Fallback.Provider != id {
 		return
 	}
-	if !s.fillModels(ctx, &set.AI) {
+	// Asking the provider takes a while, so the models are picked on a copy, and only jobs
+	// still on the same provider and model take the pick.
+	picked := set.AI
+	if !s.fillModels(ctx, &picked) {
 		return
 	}
-	if err := s.cfg.UpdateSettings(set); err != nil {
+	if _, err := s.cfg.Update(func(cur *config.Settings) error {
+		was, now := aiJobs(&set.AI), aiJobs(&picked)
+		for i, c := range aiJobs(&cur.AI) {
+			if c.Provider == now[i].Provider && c.Model == was[i].Model {
+				c.Model, c.Typed = now[i].Model, now[i].Typed
+			}
+		}
+		return nil
+	}); err != nil {
 		s.log.Warn("save the picked AI models", "err", err)
 		return
 	}

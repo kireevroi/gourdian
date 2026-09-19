@@ -103,7 +103,7 @@ func (s *Server) aiFailed(p ai.Provider, err error) {
 		}
 		_, canLogin := p.(ai.Loginer)
 		if s.setAIProblem(aiHealth{Problem: aiLoggedOut, Provider: info.ID, Message: s.withFallback(msg, info.ID), CanLogin: canLogin && runtime.GOOS == "windows"}) {
-			go s.watchLogin(info.ID, authRecheck, 0)
+			s.spawn(func(context.Context) { s.watchLogin(info.ID, authRecheck, 0) })
 		}
 	case ai.ErrLimit:
 		s.setAIProblem(aiHealth{Problem: aiLimited, Provider: info.ID, Until: time.Now().Add(limitBackoff),
@@ -159,8 +159,7 @@ func (s *Server) noticeAIProblem() {
 	}
 	tip := coach.Tip{Rule: "ai_problem", Category: "system", Severity: coach.Warn, Text: h.Message, Clock: snap.Clock, At: time.Now(),
 		Speech: "The AI coach is paused. Check the dashboard."}
-	s.engine.AddTips([]coach.Tip{tip})
-	s.deliver(snap.MatchID, []coach.Tip{tip}, set)
+	s.emitTips(snap.MatchID, []coach.Tip{tip}, set)
 }
 
 func (s *Server) clearAIProblem(id string) {
@@ -174,7 +173,7 @@ func (s *Server) clearAIProblem(id string) {
 	}
 	s.log.Info("AI provider resumed", "provider", id, "was", had)
 	s.hub.publish("ai_health", s.aiBanner())
-	go s.resumePending()
+	s.spawn(func(context.Context) { s.resumePending() })
 }
 
 // aiBanner is the problem the dashboard shows: the first one among the providers in use.
@@ -216,7 +215,7 @@ func (s *Server) checkProvider(ctx context.Context, id string) ai.Status {
 		}
 		if was != ai.StateReady {
 			// Newly connected: read its real models and pick from them.
-			go s.refreshModels(s.baseCtx, id)
+			s.spawn(func(ctx context.Context) { s.refreshModels(ctx, id) })
 		}
 	case ai.StateLogin, ai.StateKey, ai.StateMissing:
 		if s.providerInUse(id) {
@@ -244,20 +243,24 @@ func (s *Server) forgetStatus(id string) {
 }
 
 // watchLogin re-checks a provider every interval until it works, or until `until` passes when set.
+// A provider has at most one open-ended watch (until 0), marked in watching; the short watch
+// after the player starts a login runs beside it and leaves the mark alone.
 func (s *Server) watchLogin(id string, interval, until time.Duration) {
-	p := s.ai.providers
-	p.mu.Lock()
-	if p.watching[id] && until == 0 {
-		p.mu.Unlock()
-		return
-	}
-	p.watching[id] = true
-	p.mu.Unlock()
-	defer func() {
+	if until == 0 {
+		p := s.ai.providers
 		p.mu.Lock()
-		delete(p.watching, id)
+		if p.watching[id] {
+			p.mu.Unlock()
+			return
+		}
+		p.watching[id] = true
 		p.mu.Unlock()
-	}()
+		defer func() {
+			p.mu.Lock()
+			delete(p.watching, id)
+			p.mu.Unlock()
+		}()
+	}
 	deadline := time.Now().Add(until)
 	t := time.NewTicker(interval)
 	defer t.Stop()

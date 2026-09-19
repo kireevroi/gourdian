@@ -93,6 +93,10 @@ type Server struct {
 	// baseCtx bounds background work (OpenDota waits, imports) to the server's lifetime.
 	baseCtx context.Context
 	cancel  context.CancelFunc
+	// tasks counts the background work Close waits for; closing stops new work starting.
+	tasksMu sync.Mutex
+	closing bool
+	tasks   sync.WaitGroup
 }
 
 func New(cfg *config.Store, engine *coach.Engine, st *stats.Store, data *dotadata.Client, speaker *speech.Speaker, workDir, cacheDir string, log *slog.Logger) *Server {
@@ -218,12 +222,41 @@ func sameOrigin(next http.Handler) http.Handler {
 	})
 }
 
+// spawn runs work in the background for the server's lifetime: its ctx ends when the server
+// closes, and Close waits for it, so nothing writes to the data file after main closes it.
+// Once the server is closing, spawn does nothing.
+func (s *Server) spawn(work func(ctx context.Context)) {
+	if !s.track() {
+		return
+	}
+	go func() {
+		defer s.tasks.Done()
+		work(s.baseCtx)
+	}()
+}
+
+// track counts work that Close waits for, and reports false once the server is closing.
+func (s *Server) track() bool {
+	s.tasksMu.Lock()
+	defer s.tasksMu.Unlock()
+	if s.closing {
+		return false
+	}
+	s.tasks.Add(1)
+	return true
+}
+
 // Run pushes dashboard snapshots until ctx ends: on change, and every few seconds so
 // the connection indicator notices when Dota stops posting.
 func (s *Server) Run(ctx context.Context) {
-	go s.resumePending()
-	go s.startupAICheck()
-	go s.ensurePiper()
+	// Finishing a match writes to the data file, so Close waits for this loop too.
+	if !s.track() {
+		return
+	}
+	defer s.tasks.Done()
+	s.spawn(func(context.Context) { s.resumePending() })
+	s.spawn(func(context.Context) { s.startupAICheck() })
+	s.spawn(func(context.Context) { s.ensurePiper() })
 	tick := time.NewTicker(400 * time.Millisecond)
 	defer tick.Stop()
 	var n int
@@ -356,16 +389,17 @@ func (s *Server) recordMatch(m *stats.MatchSummary, set config.Settings) {
 }
 
 func (s *Server) rememberHeroRole(heroID int, role string) {
-	cur := s.cfg.Settings()
 	key := strconv.Itoa(heroID)
-	if heroID == 0 || cur.HeroRoles[key] == role {
+	if heroID == 0 || s.cfg.Settings().HeroRoles[key] == role {
 		return
 	}
-	if cur.HeroRoles == nil {
-		cur.HeroRoles = map[string]string{}
-	}
-	cur.HeroRoles[key] = role
-	if err := s.cfg.UpdateSettings(cur); err != nil {
+	if _, err := s.cfg.Update(func(set *config.Settings) error {
+		if set.HeroRoles == nil {
+			set.HeroRoles = map[string]string{}
+		}
+		set.HeroRoles[key] = role
+		return nil
+	}); err != nil {
 		s.log.Error("remember hero role", "err", err)
 	}
 }
@@ -385,10 +419,13 @@ func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings 
 	if role == "" || role == set.Role {
 		return set
 	}
-	set.Role = role
-	if err := s.cfg.UpdateSettings(set); err != nil {
+	set, err := s.cfg.Update(func(cur *config.Settings) error {
+		cur.Role = role
+		return nil
+	})
+	if err != nil {
 		s.log.Error("apply hero role", "err", err)
-		return s.cfg.Settings()
+		return set
 	}
 	s.hub.publish("settings", s.settingsResponse())
 	s.log.Info("role set for hero", "role", role, "why", note)
@@ -459,6 +496,13 @@ func speakable(tip coach.Tip, level string) bool {
 	default:
 		return true
 	}
+}
+
+// emitTips puts tips made outside the rules (AI, briefing, drill, goals…) in the feed and
+// delivers them like the rules' own.
+func (s *Server) emitTips(matchID string, tips []coach.Tip, set config.Settings) {
+	s.engine.AddTips(tips)
+	s.deliver(matchID, tips, set)
 }
 
 // deliver sends tips to the dashboard, the voice and tips.csv.
@@ -564,35 +608,59 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.settingsResponse())
 }
 
+// errNoSystemVoice refuses system speech on a machine that has none.
+var errNoSystemVoice = errors.New("Windows speech isn't available on this machine; use browser voice")
+
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
-	prev := s.cfg.Settings()
-	next := prev.Clone()
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	var keys map[string]json.RawMessage
 	if err == nil {
 		err = json.Unmarshal(body, &keys)
 	}
-	if _, ok := keys["hero_roles"]; ok {
-		next.HeroRoles = nil // decoding merges into a map, so a sent map must replace it to drop heroes
-	}
-	if err == nil {
-		err = json.Unmarshal(body, &next)
-	}
 	if err != nil {
 		http.Error(w, "bad settings: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if next.Voice == config.VoiceSystem && s.speaker == nil {
-		http.Error(w, "Windows speech isn't available on this machine; use browser voice", http.StatusBadRequest)
+	// apply decodes the request onto settings: only the fields it sends change.
+	apply := func(set *config.Settings) error {
+		if _, ok := keys["hero_roles"]; ok {
+			set.HeroRoles = nil // decoding merges into a map, so a sent map must replace it to drop heroes
+		}
+		return json.Unmarshal(body, set)
+	}
+	check := func(set config.Settings) error {
+		if set.Voice == config.VoiceSystem && s.speaker == nil {
+			return errNoSystemVoice
+		}
+		return s.validAIChoices(set.AI)
+	}
+	// Model checks ask the providers, which takes a while, so they run on a copy first and the
+	// settings are only locked to apply the request.
+	prev := s.cfg.Settings()
+	picked := prev.Clone()
+	if err := apply(&picked); err != nil {
+		http.Error(w, "bad settings: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := s.validAIChoices(next.AI); err != nil {
+	if err := check(picked); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.markTyped(r.Context(), &prev.AI, &next.AI)
-	s.fillModels(r.Context(), &next.AI)
-	if err := s.cfg.UpdateSettings(next); err != nil {
+	s.markTyped(r.Context(), &prev.AI, &picked.AI)
+	s.fillModels(r.Context(), &picked.AI)
+	next, err := s.cfg.Update(func(cur *config.Settings) error {
+		if err := apply(cur); err != nil {
+			return err
+		}
+		now := aiJobs(&picked.AI)
+		for i, c := range aiJobs(&cur.AI) {
+			if c.Provider == now[i].Provider {
+				c.Model, c.Typed = now[i].Model, now[i].Typed
+			}
+		}
+		return check(*cur)
+	})
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -667,8 +735,13 @@ func (s *Server) handleVoiceTest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"voice": set.Voice})
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
+func writeJSON(w http.ResponseWriter, v any) { writeJSONStatus(w, http.StatusOK, v) }
+
+// writeJSONStatus answers with v and a status other than 200. Headers must be set before the
+// status is written, or they're dropped.
+func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
 }
 

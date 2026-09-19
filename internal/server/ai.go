@@ -82,10 +82,10 @@ func (s *Server) askAI(reason, matchID string, set config.Settings, live bool) b
 	}
 	prompt := aicoach.Prompt(s.aiInput(reason, matchID, set))
 	s.hub.publish("ai_status", "thinking")
-	go func() {
+	s.spawn(func(ctx context.Context) {
 		defer s.ai.busy.Store(false)
 		defer s.hub.publish("ai_status", "idle")
-		ctx, cancel := context.WithTimeout(context.Background(), aiTimeout)
+		ctx, cancel := context.WithTimeout(ctx, aiTimeout)
 		defer cancel()
 		started := time.Now()
 		suggestions, err := aicoach.Suggest(ctx, provider, choice, set.AI, set.Language, prompt)
@@ -107,10 +107,9 @@ func (s *Server) askAI(reason, matchID string, set config.Settings, live bool) b
 			tips = append(tips, coach.Tip{Rule: "ai", Category: "ai", Severity: coach.Info,
 				Text: text, Speech: text, Clock: snap.Clock, At: time.Now()})
 		}
-		s.engine.AddTips(tips)
-		s.deliver(matchID, tips, s.cfg.Settings())
+		s.emitTips(matchID, tips, s.cfg.Settings())
 		s.log.Info("AI coach answered", "provider", provider.Info().ID, "took", time.Since(started).Round(100*time.Millisecond))
-	}()
+	})
 	return true
 }
 
@@ -217,8 +216,8 @@ func (s *Server) reviewMatch(m stats.MatchSummary, set config.Settings, force bo
 		LastFocus: s.lastFocusFor(reviewRole(m, set), m.HeroID),
 	})
 	s.hub.publish("review_status", reviewStatus{Text: provider.Info().Name + " is writing your match review…", MatchID: m.MatchID})
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), reviewTimeout)
+	s.spawn(func(ctx context.Context) {
+		ctx, cancel := context.WithTimeout(ctx, reviewTimeout)
 		defer cancel()
 		r, err := aicoach.RequestReview(ctx, provider, choice, set.AI, set.Language, prompt, slices.Sorted(maps.Keys(metrics)))
 		if err != nil {
@@ -243,7 +242,7 @@ func (s *Server) reviewMatch(m stats.MatchSummary, set config.Settings, force bo
 			s.speaker.Say("Match review ready. Next game focus: "+r.NextGameFocus, false)
 		}
 		s.log.Info("match review saved", "match", m.MatchID, "focus", r.NextGameFocus)
-	}()
+	})
 	return true
 }
 
@@ -289,15 +288,15 @@ func (s *Server) handleReviewMatch(w http.ResponseWriter, r *http.Request) {
 	}
 	m := matches[i]
 	s.hub.publish("review_status", reviewStatus{Text: "Preparing the match review…", MatchID: id})
-	go func() {
+	s.spawn(func(ctx context.Context) {
 		var detail *matchdata.Detail
 		if isOpenDotaMatch(m) {
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 			detail, _ = s.matches.Enrich(ctx, m, s.cfg.Settings().AccountID, nil)
 			cancel()
 		}
 		s.reviewMatch(m, s.cfg.Settings(), true, detail)
-	}()
+	})
 	writeJSON(w, map[string]string{"status": "writing"})
 }
 

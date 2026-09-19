@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
@@ -535,10 +536,40 @@ func mntPath(win string) string {
 	return "/mnt/" + strings.ToLower(win[:1]) + "/" + strings.ReplaceAll(win[3:], `\`, "/")
 }
 
+// repairSettings rebuilds settings that don't validate: each top-level setting from the file
+// is kept if the settings stay valid with it, and the others keep their defaults, which it
+// returns the names of.
+func repairSettings(file []byte) (Settings, []string) {
+	var raw struct {
+		Settings map[string]json.RawMessage `json:"settings"`
+	}
+	_ = json.Unmarshal(file, &raw) // it parsed before, as the whole config
+	set := Default().Settings
+	var reset []string
+	for _, key := range slices.Sorted(maps.Keys(raw.Settings)) {
+		one, _ := json.Marshal(map[string]json.RawMessage{key: raw.Settings[key]})
+		try := set.Clone()
+		err := json.Unmarshal(one, &try)
+		try.HUDWidgets = normalizeWidgets(try.HUDWidgets)
+		try.AI.migrate()
+		if err != nil || try.Validate() != nil {
+			reset = append(reset, key)
+			continue
+		}
+		set = try
+	}
+	return set, reset
+}
+
+// Repaired lists the settings Open put back to their defaults because config.json had them
+// wrong; the file as it was is kept as config.json.bad.
+func (s *Store) Repaired() []string { return s.repaired }
+
 type Store struct {
-	path string
-	mu   sync.RWMutex
-	cfg  Config
+	path     string
+	mu       sync.RWMutex
+	cfg      Config
+	repaired []string
 }
 
 func Open(dir string) (*Store, error) {
@@ -556,6 +587,17 @@ func Open(dir string) (*Store, error) {
 	}
 	s.cfg.Settings.HUDWidgets = normalizeWidgets(s.cfg.Settings.HUDWidgets)
 	s.cfg.Settings.AI.migrate()
+	if s.cfg.Settings.Validate() != nil {
+		// A hand edit broke something: every later save would fail, so put back what's broken
+		// and keep the original next to it.
+		s.cfg.Settings, s.repaired = repairSettings(data)
+		if err := os.WriteFile(s.path+".bad", data, 0o600); err != nil {
+			return nil, err
+		}
+		if err := s.save(); err != nil {
+			return nil, err
+		}
+	}
 	if s.cfg.Token == "" {
 		b := make([]byte, 16)
 		if _, err := rand.Read(b); err != nil {
@@ -581,16 +623,41 @@ func (s *Store) Get() Config {
 
 func (s *Store) Settings() Settings { return s.Get().Settings }
 
+// UpdateSettings replaces all the settings. To change some of them, use Update, which can't
+// undo a change made meanwhile.
 func (s *Store) UpdateSettings(next Settings) error {
-	if err := next.Validate(); err != nil {
-		return err
-	}
+	_, err := s.Update(func(cur *Settings) error {
+		*cur = next.Clone()
+		return nil
+	})
+	return err
+}
+
+// Update changes the settings in place: change edits the current settings under the store's
+// lock, so changes made at the same time from different places all land. If change fails or
+// leaves the settings invalid, nothing changes. It returns the settings after the change.
+func (s *Store) Update(change func(*Settings) error) (Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cfg.Settings = next.Clone()
-	s.cfg.Settings.Timings = DefaultTimings()
-	s.cfg.Settings.HUDWidgets = normalizeWidgets(s.cfg.Settings.HUDWidgets)
-	return s.save()
+	next := s.cfg.Settings.Clone()
+	if err := change(&next); err != nil {
+		return s.cfg.Settings.Clone(), err
+	}
+	if err := next.Validate(); err != nil {
+		return s.cfg.Settings.Clone(), err
+	}
+	next.Timings = DefaultTimings()
+	next.HUDWidgets = normalizeWidgets(next.HUDWidgets)
+	if reflect.DeepEqual(next, s.cfg.Settings) {
+		return next.Clone(), nil
+	}
+	prev := s.cfg.Settings
+	s.cfg.Settings = next
+	if err := s.save(); err != nil {
+		s.cfg.Settings = prev
+		return prev.Clone(), err
+	}
+	return next.Clone(), nil
 }
 
 func (s *Store) save() error {

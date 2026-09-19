@@ -2,9 +2,13 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -139,5 +143,83 @@ func TestAppIDMatchesTheInstaller(t *testing.T) {
 	want := `#define AppGuid "` + strings.Trim(AppID, "{}") + `"`
 	if !strings.Contains(string(iss), want) {
 		t.Fatalf("installer/Gourdian.iss should have %s", want)
+	}
+}
+
+// Changes made at the same time from different places must all land; reading the settings
+// and writing them back whole lost all but the last.
+func TestUpdateKeepsConcurrentChanges(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := range 40 {
+		wg.Go(func() {
+			if _, err := store.Update(func(s *Settings) error {
+				if s.HeroRoles == nil {
+					s.HeroRoles = map[string]string{}
+				}
+				s.HeroRoles[strconv.Itoa(i+1)] = RoleCarry
+				return nil
+			}); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	if n := len(store.Settings().HeroRoles); n != 40 {
+		t.Fatalf("%d of 40 changes kept", n)
+	}
+	reopened, err := Open(filepath.Dir(store.Path()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(reopened.Settings().HeroRoles); n != 40 {
+		t.Fatalf("%d of 40 changes saved", n)
+	}
+}
+
+func TestUpdateLeavesSettingsAloneWhenTheChangeIsBad(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := store.Settings()
+	if _, err := store.Update(func(s *Settings) error { s.Role = "jungler"; return nil }); err == nil {
+		t.Fatal("an invalid role was accepted")
+	}
+	if _, err := store.Update(func(s *Settings) error { s.Role = RoleMid; return errors.New("changed my mind") }); err == nil {
+		t.Fatal("the change's error was lost")
+	}
+	if got := store.Settings(); got.Role != before.Role {
+		t.Fatalf("role = %q, want %q", got.Role, before.Role)
+	}
+}
+
+// A hand edit that breaks one setting must not make every later save fail: the broken
+// setting goes back to its default, the others stay, and the original file is kept.
+func TestOpenRepairsASettingItCantUse(t *testing.T) {
+	dir := t.TempDir()
+	file := `{"settings":{"role":"jungler","voice_rate":3,"language":"ru"}}`
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := store.Settings()
+	if got.Role != Default().Settings.Role || got.VoiceRate != 3 || got.Language != "ru" {
+		t.Fatalf("role %q, voice_rate %d, language %q: want the default role and the rest kept", got.Role, got.VoiceRate, got.Language)
+	}
+	if r := store.Repaired(); !slices.Equal(r, []string{"role"}) {
+		t.Fatalf("repaired %v, want [role]", r)
+	}
+	if kept, err := os.ReadFile(filepath.Join(dir, "config.json.bad")); err != nil || string(kept) != file {
+		t.Fatalf("the original file wasn't kept: %q, %v", kept, err)
+	}
+	if _, err := store.Update(func(s *Settings) error { s.VoiceRate = 4; return nil }); err != nil {
+		t.Fatalf("saving after the repair: %v", err)
 	}
 }

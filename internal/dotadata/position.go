@@ -98,7 +98,7 @@ func (c *Client) proBuild(heroID, pos int, won bool, fallback *Build) *Build {
 
 func (c *Client) fetchPositionBuild(key positionKey) {
 	<-c.ready
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(c.life(), time.Minute)
 	defer cancel()
 	data, err := c.loadPositionData(ctx, key)
 	c.mu.Lock()

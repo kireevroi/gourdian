@@ -22,6 +22,7 @@ const (
 )
 
 type Client struct {
+	ctx      context.Context // from Start: background fetches end with it
 	base     string
 	http     *http.Client
 	cacheDir string
@@ -83,6 +84,9 @@ func New(cacheDir string, log *slog.Logger) *Client {
 }
 
 func (c *Client) Start(ctx context.Context) {
+	c.mu.Lock()
+	c.ctx = ctx
+	c.mu.Unlock()
 	go func() {
 		defer close(c.ready)
 		var items map[string]ItemInfo
@@ -102,6 +106,17 @@ func (c *Client) Start(ctx context.Context) {
 		c.mu.Unlock()
 		c.log.Info("dota data loaded", "items", len(items), "heroes", len(byID))
 	}()
+}
+
+// life is the context passed to Start, which background fetches stop with, or Background
+// before Start.
+func (c *Client) life() context.Context {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.ctx == nil {
+		return context.Background()
+	}
+	return c.ctx
 }
 
 // Items returns the shared item table (nil until loaded); callers must not modify it.
@@ -154,7 +169,7 @@ func (c *Client) heroBuild(heroID int) *Build {
 
 func (c *Client) fetchBuild(heroID int) {
 	<-c.ready
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(c.life(), time.Minute)
 	defer cancel()
 	var pop Popularity
 	path := fmt.Sprintf("/heroes/%d/itemPopularity", heroID)
@@ -181,7 +196,7 @@ func (c *Client) RankTier(accountID string) int {
 	}
 	c.rankPending[accountID] = true
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(c.life(), 30*time.Second)
 		defer cancel()
 		var player struct {
 			RankTier int `json:"rank_tier"`

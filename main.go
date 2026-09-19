@@ -133,6 +133,9 @@ func run(args []string) error {
 	}
 	log, closeLog := newLogger(dir)
 	defer closeLog()
+	if reset := store.Repaired(); len(reset) > 0 {
+		log.Warn("config.json had settings the trainer can't use; they're back to their defaults, and the file as it was is config.json.bad", "settings", reset)
+	}
 	cfg := store.Get()
 	addr := cmp.Or(*listen, cfg.Listen)
 
@@ -153,9 +156,10 @@ func run(args []string) error {
 		defer speaker.Close()
 		log.Info("speaking through " + speaker.Name())
 	} else if cfg.Settings.Voice == config.VoiceSystem {
-		set := cfg.Settings
-		set.Voice = config.VoiceBrowser
-		if err := store.UpdateSettings(set); err != nil {
+		if _, err := store.Update(func(set *config.Settings) error {
+			set.Voice = config.VoiceBrowser
+			return nil
+		}); err != nil {
 			return err
 		}
 		log.Warn("no speech on this machine (install PipeWire or alsa-utils for the natural voice); switched voice to the browser")

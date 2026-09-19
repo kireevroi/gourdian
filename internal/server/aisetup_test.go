@@ -95,3 +95,27 @@ func TestOnlyOneSetupAtATime(t *testing.T) {
 	}
 	srv.ai.setup.state = setupState{}
 }
+
+// A short watch after a login must not clear the mark of the open-ended watch still running
+// for the same provider, or the next logout starts a second one.
+func TestLoginWatchLeavesTheOpenEndedWatchMarked(t *testing.T) {
+	srv, _, _ := newTestServer(t, nil)
+	defer srv.Close()
+	srv.setAIProblem(aiHealth{Problem: aiLoggedOut, Provider: "claude"})
+	watching := func() bool {
+		p := srv.ai.providers
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.watching["claude"]
+	}
+	go srv.watchLogin("claude", time.Hour, 0) // waits for a logout to clear, for as long as it takes
+	for deadline := time.Now().Add(5 * time.Second); !watching(); time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the open-ended watch never started")
+		}
+	}
+	srv.watchLogin("claude", time.Millisecond, 5*time.Millisecond) // the short watch after a login
+	if !watching() {
+		t.Fatal("the short watch cleared the open-ended watch's mark")
+	}
+}

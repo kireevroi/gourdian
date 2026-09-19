@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"gourdian/internal/config"
+	"gourdian/internal/gsi"
 	"gourdian/internal/stats"
 )
 
@@ -38,5 +39,24 @@ func TestPickHelpUsesYourOwnRecord(t *testing.T) {
 	}
 	if other := srv.pickHelp(config.RoleCarry); other != nil {
 		t.Fatalf("no carry games, so no help: %+v", other)
+	}
+}
+
+// Pick help is for the draft: it used to wait for a match in progress without a hero, which
+// Dota never sends, so it never showed.
+func TestPickHelpShowsDuringTheDraft(t *testing.T) {
+	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = config.RoleHardSupport })
+	seed(t, srv, 10)
+	draft := payload(-60, func(s *gsi.State) {
+		s.Hero = &gsi.Hero{} // Dota's hero block before the pick: id 0
+		s.Map.GameState = gsi.StateHeroSelection
+	})
+	postState(t, h, draft)
+	if snap := srv.snapshot(srv.cfg.Settings()); snap.Picks == nil || len(snap.Picks.Best)+len(snap.Picks.Avoid) == 0 {
+		t.Fatalf("no pick help during the draft: %+v", snap.Picks)
+	}
+	postState(t, h, payload(10, func(s *gsi.State) { s.Hero.ID = 26 })) // picked and playing
+	if snap := srv.snapshot(srv.cfg.Settings()); snap.Picks != nil {
+		t.Fatal("pick help still shown once the hero is picked")
 	}
 }

@@ -163,3 +163,33 @@ func TestCheckAndTestSpec(t *testing.T) {
 		t.Fatalf("test run = %+v", tips)
 	}
 }
+
+// The rule editor's live check must show the values the rule really gets: it used to leave
+// out the player's targets and the previous update, so lh_target read 0 and
+// gold_before_death read the gold after the death.
+func TestCheckSpecSeesWhatTheEngineSees(t *testing.T) {
+	e := newEngine(nil)
+	e.SetTargetSource(fixedTargets{LastHits: []int{40, 80, 120, 160, 200}})
+	set := settings(config.RoleCarry)
+	before := state(599)
+	before.Player.Gold, before.Player.GoldReliable = 900, 100
+	e.Update(before, set)
+	now := state(600)
+	now.Player.Gold, now.Player.GoldReliable = 450, 100 // died and lost unreliable gold
+	e.Update(now, set)
+
+	spec := RuleSpec{ID: "check", Name: "check", If: []Cond{
+		{Field: "lh_target", Op: ">", Num: 0},
+		{Field: "gold_before_death", Op: ">", Num: 0},
+	}}
+	got, _, err := e.CheckSpec(spec, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].Value != "80" {
+		t.Errorf("lh_target = %s, want 80 from the player's targets", got[0].Value)
+	}
+	if got[1].Value != "800" {
+		t.Errorf("gold_before_death = %s, want 800 from the update before the death", got[1].Value)
+	}
+}

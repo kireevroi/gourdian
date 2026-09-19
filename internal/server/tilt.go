@@ -86,8 +86,7 @@ func (s *Server) tiltCheck(m stats.MatchSummary, set config.Settings) {
 	s.brief.tiltAt = time.Now()
 	s.brief.mu.Unlock()
 	tip := coach.Tip{Rule: "tilt", Category: "focus", Severity: coach.Warn, Text: reason, Speech: reason + ".", Clock: m.DurationSec, At: time.Now()}
-	s.engine.AddTips([]coach.Tip{tip})
-	s.deliver(m.MatchID, []coach.Tip{tip}, set)
+	s.emitTips(m.MatchID, []coach.Tip{tip}, set)
 }
 
 // tiltReminder gives one calm-down reminder when a match starts soon after a break warning.
@@ -102,6 +101,5 @@ func (s *Server) tiltReminder(matchID string, set config.Settings) {
 	tip := coach.Tip{Rule: "tilt", Category: "focus", Severity: coach.Info, At: time.Now(),
 		Text:   "Straight back in after a losing run: play this one calm, mute anyone tilting you, and focus on your own farm",
 		Speech: "Play this one calm. Mute anyone tilting you."}
-	s.engine.AddTips([]coach.Tip{tip})
-	s.deliver(matchID, []coach.Tip{tip}, set)
+	s.emitTips(matchID, []coach.Tip{tip}, set)
 }

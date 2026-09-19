@@ -1,9 +1,11 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -86,5 +88,29 @@ func TestAMatchMarkedRankedStaysRanked(t *testing.T) {
 	}
 	if p := srv.pendingMMR(); p == nil || !p.Ranked {
 		t.Fatalf("the prompt for a match marked ranked went away: %+v", p)
+	}
+}
+
+// The prompt is encoded for the dashboard while OpenDota's answer marks it ranked; that must
+// not race (run with -race).
+func TestConfirmingRankedDoesNotRaceWithReaders(t *testing.T) {
+	srv, _, _ := newTestServer(t, nil)
+	srv.mmr.prompt = &mmrPrompt{MatchID: "m1"}
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range 200 {
+			srv.confirmRanked("m1", true)
+		}
+	})
+	wg.Go(func() {
+		for range 200 {
+			if _, err := json.Marshal(srv.pendingMMR()); err != nil {
+				t.Error(err)
+			}
+		}
+	})
+	wg.Wait()
+	if p := srv.pendingMMR(); p == nil || !p.Ranked {
+		t.Fatalf("prompt = %+v, want it marked ranked", p)
 	}
 }

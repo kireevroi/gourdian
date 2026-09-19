@@ -7,11 +7,12 @@ import (
 )
 
 const (
-	StateHeroSelection = "DOTA_GAMERULES_STATE_HERO_SELECTION"
-	StateStrategyTime  = "DOTA_GAMERULES_STATE_STRATEGY_TIME"
-	StatePreGame       = "DOTA_GAMERULES_STATE_PRE_GAME"
-	StateInProgress    = "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"
-	StatePostGame      = "DOTA_GAMERULES_STATE_POST_GAME"
+	StateWaitForPlayers = "DOTA_GAMERULES_STATE_WAIT_FOR_PLAYERS_TO_LOAD"
+	StateHeroSelection  = "DOTA_GAMERULES_STATE_HERO_SELECTION"
+	StateStrategyTime   = "DOTA_GAMERULES_STATE_STRATEGY_TIME"
+	StatePreGame        = "DOTA_GAMERULES_STATE_PRE_GAME"
+	StateInProgress     = "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"
+	StatePostGame       = "DOTA_GAMERULES_STATE_POST_GAME"
 )
 
 type State struct {

@@ -3,10 +3,12 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"gourdian/internal/config"
 	"gourdian/internal/stats"
 )
 
@@ -62,4 +64,23 @@ func putJSON(t *testing.T, h http.Handler, path, body string) int {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, path, strings.NewReader(body)))
 	return rec.Code
+}
+
+// The line after a drilled match was only added to the feed: it wasn't spoken or saved, and
+// it was English whatever the language.
+func TestDrillResultIsDeliveredInThePlayersLanguage(t *testing.T) {
+	srv, _, _ := newTestServer(t, func(s *config.Settings) { s.Drill, s.Language = "no_tp", "ru" })
+	m := stats.MatchSummary{MatchID: "m1", Source: stats.SourceLive, DurationSec: 1800, TipCounts: map[string]int{"no_tp": 2}}
+	srv.drillResult(m, srv.cfg.Settings())
+	saved, err := srv.stats.Tips()
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(saved, func(r stats.TipRecord) bool { return r.Rule == "drill" })
+	if i < 0 {
+		t.Fatal("the drill line wasn't saved with the match's tips")
+	}
+	if !strings.HasPrefix(saved[i].Text, "Тренировка") {
+		t.Fatalf("drill line %q isn't in Russian", saved[i].Text)
+	}
 }

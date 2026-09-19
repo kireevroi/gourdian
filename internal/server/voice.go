@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os/exec"
@@ -41,7 +42,7 @@ func (s *Server) handleVoiceInstall(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the voice is already being installed", http.StatusConflict)
 		return
 	}
-	go s.installVoice(ps, lang, locale)
+	s.spawn(func(context.Context) { s.installVoice(ps, lang, locale) })
 	writeJSON(w, voiceStatus{State: "running", Text: "Windows is asking for permission to add the voice."})
 }
 

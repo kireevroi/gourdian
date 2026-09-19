@@ -390,7 +390,7 @@ func (e *Engine) CheckSpec(spec RuleSpec, set config.Settings) ([]CondResult, bo
 	if !s.InMatch() || e.match == nil {
 		return nil, false, errors.New("no match running: start a match or Demo Hero to check the conditions live")
 	}
-	c := &Ctx{S: s, Clock: s.Map.ClockTime, Settings: set, T: set.Timings, data: e.data, m: e.match, now: e.now()}
+	c := e.newCtx(s, e.prev, set, e.now())
 	out := make([]CondResult, len(spec.If))
 	for i, cond := range spec.If {
 		if f, ok := fieldIndex[cond.Field]; ok {
@@ -404,7 +404,6 @@ func (e *Engine) CheckSpec(spec RuleSpec, set config.Settings) ([]CondResult, bo
 func TestSpec(data Data, spec RuleSpec, set config.Settings, states func(yield func(*gsi.State) bool)) []Tip {
 	e := New(data, discardLogger())
 	e.rules = []Rule{compileSpec(spec)}
-	spec.Enabled = true
 	var tips []Tip
 	for s := range states {
 		tips = append(tips, e.Update(s, set).Tips...)

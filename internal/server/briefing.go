@@ -112,8 +112,7 @@ func (s *Server) briefMatch(matchID string, set config.Settings) {
 	}
 	tip := coach.Tip{Rule: "briefing", Category: "focus", Severity: coach.Info, Clock: snap.Clock, At: time.Now(),
 		Text: b.Hero + ": " + strings.Join(text, " · "), Speech: strings.Join(speech, " ")}
-	s.engine.AddTips([]coach.Tip{tip})
-	s.deliver(matchID, []coach.Tip{tip}, set)
+	s.emitTips(matchID, []coach.Tip{tip}, set)
 }
 
 func clockText(sec int) string { return fmt.Sprintf("%d:%02d", sec/60, sec%60) }

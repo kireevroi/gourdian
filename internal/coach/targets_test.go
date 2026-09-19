@@ -82,3 +82,16 @@ func TestSnapshotShowsPersonalPaceAndItemGoals(t *testing.T) {
 		t.Fatalf("pace %+v goals %+v", snap.Pace, snap.ItemGoals)
 	}
 }
+
+// The item timing goals used their own median, which took the upper middle value; every
+// target now uses the same one.
+func TestMedian(t *testing.T) {
+	for _, c := range []struct {
+		in   []int
+		want int
+	}{{nil, 0}, {[]int{7}, 7}, {[]int{3, 1, 2}, 2}, {[]int{600, 900}, 750}, {[]int{4, 1, 3, 2}, 2}} {
+		if got := Median(c.in); got != c.want {
+			t.Errorf("Median(%v) = %d, want %d", c.in, got, c.want)
+		}
+	}
+}

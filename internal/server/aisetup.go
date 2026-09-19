@@ -101,8 +101,7 @@ func (s *Server) handleAISetupStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
-	w.WriteHeader(http.StatusAccepted)
-	writeJSON(w, st)
+	writeJSONStatus(w, http.StatusAccepted, st)
 }
 
 func (s *Server) handleAISetupStop(w http.ResponseWriter, r *http.Request) {
@@ -137,10 +136,10 @@ func (s *Server) startSetup(ids []string) (setupState, error) {
 	st := set.state
 	set.mu.Unlock()
 	s.hub.publish("ai_setup", st)
-	go func() {
+	s.spawn(func(context.Context) {
 		defer cancel()
 		s.runSetup(ctx, ids)
-	}()
+	})
 	return st, nil
 }
 
@@ -209,7 +208,7 @@ func (s *Server) waitReady(ctx context.Context, id string) ai.Status {
 	for {
 		select {
 		case <-ctx.Done():
-			return s.checkProvider(context.Background(), id)
+			return s.checkProvider(s.baseCtx, id)
 		case <-t.C:
 		}
 		if st := s.checkProvider(ctx, id); st.State == ai.StateReady || time.Now().After(deadline) {

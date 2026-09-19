@@ -42,7 +42,7 @@ func (c *Client) ItemTimings(heroID int, item string) ([]ItemTiming, bool) {
 }
 
 func (c *Client) fetchTimings(key timingsKey) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(c.life(), time.Minute)
 	defer cancel()
 	var raw []struct {
 		Time  int         `json:"time"`

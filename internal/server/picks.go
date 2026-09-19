@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"gourdian/internal/coach"
+	"gourdian/internal/gsi"
 )
 
 const (
@@ -95,7 +96,16 @@ func (s *Server) pickHelp(role string) *coach.PickHelp {
 	}
 }
 
-// pickMatters reports whether the player is still choosing a hero.
+// pickMatters reports whether the player is still choosing a hero: Dota says it's the draft
+// and has no hero for them yet. (It used to ask for a match in progress without a hero, which
+// never happens, so pick help never showed.)
 func pickMatters(snap coach.Snapshot) bool {
-	return snap.InMatch && (snap.Hero == nil || snap.Hero.ID == 0)
+	if !snap.Connected || snap.Hero != nil {
+		return false
+	}
+	switch snap.GameState {
+	case gsi.StateWaitForPlayers, gsi.StateHeroSelection, gsi.StateStrategyTime:
+		return true
+	}
+	return false
 }

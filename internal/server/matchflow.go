@@ -89,9 +89,9 @@ func (s *Server) afterMatch(m stats.MatchSummary, set config.Settings) {
 		s.hub.publish("review_status", reviewStatus{Text: text, MatchID: m.MatchID, Waiting: true})
 	}
 	status(0)
-	go s.checkRanked(m.MatchID)
-	go func() {
-		ctx, cancel := context.WithTimeout(s.baseCtx, parseWait)
+	s.spawn(func(context.Context) { s.checkRanked(m.MatchID) })
+	s.spawn(func(ctx context.Context) {
+		ctx, cancel := context.WithTimeout(ctx, parseWait)
 		defer cancel()
 		detail, err := s.matches.Enrich(ctx, m, s.cfg.Settings().AccountID, status)
 		switch {
@@ -107,7 +107,7 @@ func (s *Server) afterMatch(m stats.MatchSummary, set config.Settings) {
 			s.log.Warn("OpenDota didn't parse the replay in time; reviewing with live data", "match", m.MatchID)
 		}
 		s.reviewMatch(m, s.cfg.Settings(), false, detail)
-	}()
+	})
 }
 
 // resumePending picks up matches from the last day whose parse or review was cut short by
@@ -136,16 +136,22 @@ func (s *Server) rememberAccount(accountID string) {
 	if accountID == "" || accountID == "0" {
 		return
 	}
-	cur := s.cfg.Settings()
-	if cur.AccountID != "" {
-		return
+	if s.cfg.Settings().AccountID != "" {
+		return // known already; every game-state post asks
 	}
-	cur.AccountID = accountID
-	if err := s.cfg.UpdateSettings(cur); err != nil {
+	learned := false
+	if _, err := s.cfg.Update(func(set *config.Settings) error {
+		if set.AccountID == "" {
+			set.AccountID, learned = accountID, true
+		}
+		return nil
+	}); err != nil {
 		s.log.Error("save account id", "err", err)
 		return
 	}
-	s.log.Info("learned Steam account id", "account", accountID)
+	if learned {
+		s.log.Info("learned Steam account id", "account", accountID)
+	}
 }
 
 type importStatus struct {
@@ -174,9 +180,9 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "an import is already running", http.StatusConflict)
 		return
 	}
-	go func() {
+	s.spawn(func(ctx context.Context) {
 		defer s.importing.Store(false)
-		ctx, cancel := context.WithTimeout(s.baseCtx, importTimeout)
+		ctx, cancel := context.WithTimeout(ctx, importTimeout)
 		defer cancel()
 		s.hub.publish("import_status", importStatus{Running: true})
 		added, err := s.matches.Import(ctx, account, count, func(p matchdata.ImportProgress) {
@@ -190,6 +196,6 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		s.hub.publish("import_status", final)
 		s.hub.publish("match", nil)
 		s.log.Info("import finished", "added", added, "err", err)
-	}()
+	})
 	writeJSON(w, importStatus{Running: true})
 }
