@@ -19,9 +19,7 @@ func Say(lang, format string, args ...any) string { return fmt.Sprintf(Word(lang
 // phrases are Russian for English phrases; a Russian phrase takes the same values in the same
 // order as its English.
 var phrases = map[string]string{
-	// The HUD's own lines; alerts arrive already worded by the coach.
-	"carry": "керри", "mid": "мид", "offlane": "оффлейн", "soft support": "саппорт 4", "hard support": "хардсаппорт",
-
+	// The HUD's own lines; alerts arrive already worded by the coach, and roles by dota.
 	"Position %d · %s":            "Позиция %d · %s",
 	" · Ctrl+Shift+1–5 to change": " · Ctrl+Shift+1–5 чтобы сменить",
 	"Drill: %s · %d this game":    "Тренировка: %s · %d за игру",

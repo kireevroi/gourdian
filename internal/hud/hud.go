@@ -91,7 +91,7 @@ func BuildHeld(snap coach.Snapshot, tips []coach.Tip, widgets []config.HUDWidget
 			v.Alert, v.More = alert(tips, w, now, queue, l)
 		case config.WidgetPosition:
 			if snap.Clock < PositionUntil && snap.Role != "" {
-				line := l.f("Position %d · %s", dota.Position(snap.Role), l.s(dota.RoleName(snap.Role, "en")))
+				line := l.f("Position %d · %s", dota.Position(snap.Role), l.role(snap.Role))
 				if snap.RoleNote != "" {
 					line += " (" + snap.RoleNote + ")"
 				}
@@ -247,7 +247,7 @@ func pickLines(p *coach.PickHelp, l words) []Line {
 	if p == nil {
 		return nil
 	}
-	lines := []Line{{l.f("Your best %s heroes:", l.s(dota.RoleName(p.Role, "en"))), KindCoach}}
+	lines := []Line{{l.f("Your best %s heroes:", l.role(p.Role)), KindCoach}}
 	for _, h := range p.Best {
 		lines = append(lines, Line{l.f("%s · %d%% of %d", h.Hero, h.WinPct, h.Games), KindText})
 	}
@@ -394,7 +394,7 @@ func SampleIn(widgets []config.HUDWidget, lang string) View {
 		case config.WidgetAlerts:
 			v.Alert = &Line{l.s("Stack the ancient camp at 0:53"), KindInfo}
 		case config.WidgetPosition:
-			line := l.f("Position %d · %s", 2, l.s("mid")) + " (" + l.s("your pick") + ")" + l.s(" · Ctrl+Shift+1–5 to change")
+			line := l.f("Position %d · %s", dota.Position(dota.Mid), l.role(dota.Mid)) + " (" + l.s("your pick") + ")" + l.s(" · Ctrl+Shift+1–5 to change")
 			v.Rows = append(v.Rows, Line{line, KindCoach})
 		case config.WidgetDrill:
 			v.Rows = append(v.Rows, Line{l.f("Drill: %s · %d this game", l.s("No TP scroll"), 1), KindText})
@@ -417,10 +417,10 @@ func SampleIn(widgets []config.HUDWidget, lang string) View {
 			v.Rows = append(v.Rows, line)
 		case config.WidgetNextItem:
 			line := itemLine("Battle Fury", 1450, 800, l)
-			line.Text += " · " + l.f("%s, %d won pro games", l.s("carry"), 180)
+			line.Text += " · " + l.f("%s, %d won pro games", l.role(dota.Carry), 180)
 			v.Rows = append(v.Rows, line)
 		case config.WidgetSkill:
-			v.Rows = append(v.Rows, skillLine("Ball Lightning", l.f("%s, %d won pro games", l.s("mid"), 235), l))
+			v.Rows = append(v.Rows, skillLine("Ball Lightning", l.f("%s, %d won pro games", l.role(dota.Mid), 235), l))
 		case config.WidgetItemGoal:
 			v.Rows = append(v.Rows, Line{l.f("%s by %s · %dg to go", "Battle Fury", "15:00", 650), KindText})
 		case config.WidgetStats:
