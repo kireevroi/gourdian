@@ -3,6 +3,7 @@
 package secrets
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,16 @@ import (
 )
 
 const fileName = "secrets.json"
+
+// ErrWindowsOnly is a key the Windows app encrypted, read by a build that isn't on Windows
+// (under WSL the data folder is shared): only Windows can decrypt it.
+var ErrWindowsOnly = errors.New("this key was saved by the Windows app and only Windows can read it; enter it again here")
+
+// dpapiHeader starts every blob Windows' CryptProtectData makes: version 1, then the id of its
+// default provider.
+var dpapiHeader = []byte{0x01, 0x00, 0x00, 0x00, 0xd0, 0x8c, 0x9d, 0xdf, 0x01, 0x15, 0xd1, 0x11, 0x8c, 0x7a, 0x00, 0xc0, 0x4f, 0xc2, 0x97, 0xeb}
+
+func isDPAPI(sealed []byte) bool { return bytes.HasPrefix(sealed, dpapiHeader) }
 
 type Store struct {
 	path string
