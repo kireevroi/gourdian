@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/hud"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/hud"
 )
 
 type Options struct {
@@ -115,11 +115,11 @@ func (m *model) view(now time.Time, editing bool) View {
 	defer m.mu.Unlock()
 	var v View
 	if now.Sub(m.started) < bannerFor {
-		v.Banner = "Dota Trainer · " + m.hotkeys.HUDEdit + " move HUD · " + m.hotkeys.Dashboard + " dashboard"
+		v.Banner = "Gourdian · " + m.hotkeys.HUDEdit + " move HUD · " + m.hotkeys.Dashboard + " dashboard"
 	}
 	switch {
 	case !m.online && v.Banner != "":
-		v.Rows = []hud.Line{{Text: "Trainer not reachable. Start Dota Trainer from the Start menu", Kind: hud.KindMuted}}
+		v.Rows = []hud.Line{{Text: "Trainer not reachable. Start Gourdian from the Start menu", Kind: hud.KindMuted}}
 	case !m.online:
 	case editing && m.hud.Live.Empty():
 		v.View = m.hud.Sample

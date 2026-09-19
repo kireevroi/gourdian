@@ -4,7 +4,7 @@ import (
 	"math"
 	"strings"
 
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/gsi"
 )
 
 // Field is a game value a custom rule can test or put in its text.

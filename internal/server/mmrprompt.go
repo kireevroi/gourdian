@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"dotatrainer/internal/stats"
+	"gourdian/internal/stats"
 )
 
 // rankedLobby is OpenDota's lobby type for ranked matchmaking.

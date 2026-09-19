@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
 )
 
 // RuleSpec is a rule the player builds on the dashboard: when something happens, if the

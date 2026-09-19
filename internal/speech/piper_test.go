@@ -53,7 +53,7 @@ func TestPiperSpeaksInTheRightVoice(t *testing.T) {
 	defer s.Close()
 	s.UsePiper(exe, map[string]string{"en": "en.onnx", "ru": "ru.onnx"}, player, t.TempDir())
 	s.SayIn("ru", "Руна силы через 15 секунд", "Power rune in 15 seconds", false)
-	s.SayIn("ru", "Dota trainer voice check", "", false)
+	s.SayIn("ru", "Gourdian voice check", "", false)
 	var got string
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
 		b, _ := os.ReadFile(log)
@@ -62,7 +62,7 @@ func TestPiperSpeaksInTheRightVoice(t *testing.T) {
 		}
 	}
 	if !strings.Contains(got, `ru.onnx {"output_file"`) || !strings.Contains(got, "Руна силы через 15 секунд") ||
-		!strings.Contains(got, `en.onnx {"output_file"`) || !strings.Contains(got, "Dota trainer voice check") || strings.Count(got, "played") != 2 {
+		!strings.Contains(got, `en.onnx {"output_file"`) || !strings.Contains(got, "Gourdian voice check") || strings.Count(got, "played") != 2 {
 		t.Fatalf("log:\n%s", got)
 	}
 	if s.Name() != "Piper natural voices" {

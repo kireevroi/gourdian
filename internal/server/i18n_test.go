@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"dotatrainer/internal/coach"
+	"gourdian/internal/coach"
 )
 
 func TestRuleBuilderIsInRussian(t *testing.T) {

@@ -1,8 +1,8 @@
 package coach
 
 import (
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/gsi"
 )
 
 // SkillView is the ability pros level next, and where that order comes from.

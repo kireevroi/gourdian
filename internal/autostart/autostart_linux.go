@@ -9,9 +9,14 @@ import (
 
 // Linux desktops start what is listed in ~/.config/autostart (the XDG autostart spec, which
 // KDE, GNOME, Xfce and the other desktops Arch users run all follow).
-const desktopName = "dotatrainer.desktop"
+const desktopName = "gourdian.desktop"
 
-func entryPath() (string, error) {
+// legacyDesktopName is the entry the app wrote when it was called Gourdian.
+const legacyDesktopName = "dotatrainer.desktop"
+
+func entryPath() (string, error) { return autostartPath(desktopName) }
+
+func autostartPath(name string) (string, error) {
 	dir := os.Getenv("XDG_CONFIG_HOME")
 	if dir == "" {
 		home, err := os.UserHomeDir()
@@ -20,7 +25,7 @@ func entryPath() (string, error) {
 		}
 		dir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(dir, "autostart", desktopName), nil
+	return filepath.Join(dir, "autostart", name), nil
 }
 
 // Exe is the trainer to start at login; under WSL there is none, since Windows runs it.
@@ -36,18 +41,26 @@ func Exe() string {
 }
 
 func Enabled() bool {
-	path, err := entryPath()
-	if err != nil {
-		return false
+	for _, name := range []string{desktopName, legacyDesktopName} {
+		if path, err := autostartPath(name); err == nil {
+			if _, err := os.Stat(path); err == nil {
+				return true
+			}
+		}
 	}
-	_, err = os.Stat(path)
-	return err == nil
+	return false
 }
 
 func Set(enable bool) error {
 	path, err := entryPath()
 	if err != nil {
 		return err
+	}
+	// The entry written under the old name goes either way; it starts a binary that's gone.
+	if legacy, err := autostartPath(legacyDesktopName); err == nil {
+		if err := os.Remove(legacy); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 	}
 	if !enable {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -75,10 +88,10 @@ func Entry(exe, args string) string {
 	return strings.Join([]string{
 		"[Desktop Entry]",
 		"Type=Application",
-		"Name=Dota Trainer",
+		"Name=Gourdian",
 		"Comment=Live coaching for Dota 2",
 		"Exec=" + quoted + " " + args,
-		"Icon=dotatrainer",
+		"Icon=gourdian",
 		"Terminal=false",
 		"Categories=Game;",
 		"X-GNOME-Autostart-enabled=true",

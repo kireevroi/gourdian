@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/stats"
 )
 
 // Line kinds, which pick the colour.

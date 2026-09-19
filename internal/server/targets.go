@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/stats"
 )
 
 const (

@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/matchdata"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/config"
+	"gourdian/internal/matchdata"
+	"gourdian/internal/stats"
 )
 
 const (

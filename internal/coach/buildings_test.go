@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
 )
 
 // push drops the mid tier 1 tower from full to 30% over 20 seconds, starting at 10:00.

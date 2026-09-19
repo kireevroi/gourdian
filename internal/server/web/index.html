@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dota Trainer · Live</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
+<title>Gourdian · Live</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/app.css">
 <style>
   .matchbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -75,7 +75,7 @@
   .bi { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 4px 8px; border-radius: 6px; background: var(--panel-2); }
   .bi img { width: 40px; height: 29px; border-radius: 4px; }
   .bi.owned, .bi.skipped { opacity: .45; }
-  .bi.next { outline: 1px solid var(--accent); background: #26191a; }
+  .bi.next { outline: 1px solid var(--accent); background: #2a1d10; }
   .bi .cost { font-size: 12px; color: var(--muted); text-align: right; }
   .bi .cost.ok { color: var(--good); font-weight: 600; }
 
@@ -103,7 +103,7 @@
   .skills div { display: grid; grid-template-columns: 22px 1fr; gap: 6px; padding: 4px 8px; border-radius: 6px; background: var(--panel-2); font-size: 13px; }
   .skills div .n { color: var(--muted); text-align: right; }
   .skills div.done { opacity: .45; }
-  .skills div.next { outline: 1px solid var(--accent); background: #26191a; }
+  .skills div.next { outline: 1px solid var(--accent); background: #2a1d10; }
   .feed a.chip { text-decoration: none; }
   .feed a.chip::after { content: ' ›'; }
   .feed a.chip:hover { color: var(--text); text-decoration: underline; }
@@ -291,7 +291,7 @@ async function loadSetup(checks) {
   const ready = checks.every((c) => c.ok);
   $('setup-body').innerHTML = `
     <p style="margin:0 0 8px">${ready
-      ? 'Waiting for Dota 2. Start Dota (restart it if it was open when you installed Dota Trainer), then play a match or try Demo Hero.'
+      ? 'Waiting for Dota 2. Start Dota (restart it if it was open when you installed Gourdian), then play a match or try Demo Hero.'
       : 'Waiting for Dota 2. Fix the items below, then start Dota.'}</p>
     <ul class="checks">${checks.map((c) => `<li class="${c.ok ? 'ok' : 'bad'}"><b>${c.ok ? '✓' : '!'}</b><span>${esc(c.label)}${c.detail ? `<small>${esc(c.detail)}</small>` : ''}</span>${c.fix === 'install_gsi' ? '<button class="btn small" data-fix="install_gsi">Fix it</button>' : ''}${c.fix === 'install_voice' ? `<button class="btn small" data-fix="install_voice">${t('Install voice')}</button>` : ''}</li>`).join('')}</ul>`;
 }

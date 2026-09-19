@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"dotatrainer/internal/coach"
+	"gourdian/internal/coach"
 )
 
 // recorder appends raw GSI payloads to a gzipped JSONL file for later replay.

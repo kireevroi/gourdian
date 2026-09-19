@@ -11,9 +11,9 @@ import (
 	"runtime"
 	"time"
 
-	"dotatrainer/internal/buildinfo"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/overlay"
+	"gourdian/internal/buildinfo"
+	"gourdian/internal/config"
+	"gourdian/internal/overlay"
 )
 
 // setupCmd prepares the installed app folder: config with its auth token, data folders and
@@ -92,7 +92,7 @@ func runApp(background bool) {
 		if resp, err := client.Get(base + "/api/state"); err == nil {
 			resp.Body.Close()
 			if !background {
-				overlay.ShowMessage(config.AppName, "Dota Trainer is already running.\n\nUse its tray icon, or press Ctrl+Shift+F10 in game.", false)
+				overlay.ShowMessage(config.AppName, "Gourdian is already running.\n\nUse its tray icon, or press Ctrl+Shift+F10 in game.", false)
 			}
 			return
 		}
@@ -102,7 +102,7 @@ func runApp(background bool) {
 		args = []string{"-overlay", "-tray", "-background"}
 	}
 	if err := run(args); err != nil {
-		overlay.ShowMessage(config.AppName, "Dota Trainer stopped:\n\n"+err.Error(), true)
+		overlay.ShowMessage(config.AppName, "Gourdian stopped:\n\n"+err.Error(), true)
 		os.Exit(1)
 	}
 }

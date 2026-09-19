@@ -3,8 +3,8 @@ package coach
 import (
 	"testing"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
 )
 
 func TestTowerDefenceAndWards(t *testing.T) {

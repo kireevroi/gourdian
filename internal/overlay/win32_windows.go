@@ -6,7 +6,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"dotatrainer/internal/hud"
+	"gourdian/internal/hud"
 )
 
 var (

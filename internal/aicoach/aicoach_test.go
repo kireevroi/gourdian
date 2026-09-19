@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"dotatrainer/internal/ai"
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/gsi"
-	"dotatrainer/internal/matchdata"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/ai"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/gsi"
+	"gourdian/internal/matchdata"
+	"gourdian/internal/stats"
 )
 
 func TestPromptIncludesLiveStateAndHistory(t *testing.T) {

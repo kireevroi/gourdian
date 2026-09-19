@@ -1,4 +1,4 @@
-module dotatrainer
+module gourdian
 
 go 1.26.0
 

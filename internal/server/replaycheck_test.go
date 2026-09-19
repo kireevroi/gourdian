@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"dotatrainer/internal/ai"
-	"dotatrainer/internal/aicoach"
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/gsi"
-	"dotatrainer/internal/sim"
+	"gourdian/internal/ai"
+	"gourdian/internal/aicoach"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/gsi"
+	"gourdian/internal/sim"
 )
 
 func TestReplayRecording(t *testing.T) {

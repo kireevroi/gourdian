@@ -7,8 +7,8 @@
   "RT_MANIFEST": {
     "#1": {
       "0409": {
-        "identity": {"name": "DotaTrainer", "version": "1.0.0.0"},
-        "description": "Dota Trainer",
+        "identity": {"name": "Gourdian", "version": "1.0.0.0"},
+        "description": "Gourdian",
         "minimum-os": "win10",
         "execution-level": "as invoker",
         "ui-access": false,
@@ -32,11 +32,11 @@
         "fixed": {"file_version": "1.0.0.0", "product_version": "1.0.0.0"},
         "info": {
           "0409": {
-            "FileDescription": "Dota Trainer",
+            "FileDescription": "Gourdian",
             "FileVersion": "1.0.0",
-            "InternalName": "Dota Trainer",
-            "OriginalFilename": "Dota Trainer.exe",
-            "ProductName": "Dota Trainer",
+            "InternalName": "Gourdian",
+            "OriginalFilename": "Gourdian.exe",
+            "ProductName": "Gourdian",
             "ProductVersion": "1.0.0"
           }
         }

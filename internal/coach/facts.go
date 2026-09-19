@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/gsi"
 )
 
 // MatchFacts is what the trainer has seen of this match beyond the snapshot, so the AI coach

@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"time"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/stats"
 )
 
 type Service struct {

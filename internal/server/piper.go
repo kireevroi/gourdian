@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/speech"
+	"gourdian/internal/config"
+	"gourdian/internal/speech"
 )
 
 // naturalVoice is the state of Piper's voices on a Linux desktop, for the dashboard.
@@ -82,7 +82,7 @@ func (s *Server) usePiper() {
 	if same {
 		return
 	}
-	tmp := filepath.Join(os.TempDir(), "dotatrainer-voice")
+	tmp := filepath.Join(os.TempDir(), "gourdian-voice")
 	os.MkdirAll(tmp, 0o755)
 	s.speaker.UsePiper(bin, models, player, tmp)
 	s.log.Info("speaking with Piper", "voices", models, "player", player[0])

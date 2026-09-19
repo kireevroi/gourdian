@@ -9,8 +9,8 @@ import (
 	"slices"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/coach"
+	"gourdian/internal/stats"
 )
 
 type Habit struct {

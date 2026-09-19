@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"dotatrainer/internal/ai"
-	"dotatrainer/internal/aicoach"
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/secrets"
+	"gourdian/internal/ai"
+	"gourdian/internal/aicoach"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/secrets"
 )
 
 // aiEnv connects providers to the trainer's settings and stored keys.

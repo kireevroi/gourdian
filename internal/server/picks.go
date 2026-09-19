@@ -4,7 +4,7 @@ import (
 	"slices"
 	"time"
 
-	"dotatrainer/internal/coach"
+	"gourdian/internal/coach"
 )
 
 const (

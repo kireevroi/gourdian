@@ -45,7 +45,7 @@ func CompatiblePresets(key func(id string) string, customURL func() string) []*C
 			KeyURL: "https://platform.openai.com/api-keys"},
 		{ID_: "openrouter", Name: "OpenRouter", Base: fixed("https://openrouter.ai/api/v1"), Key: keyFor("openrouter"),
 			KeyURL:  "https://openrouter.ai/keys",
-			Headers: map[string]string{"HTTP-Referer": "https://github.com/kireevroi/gourdian", "X-Title": "Dota Trainer"}},
+			Headers: map[string]string{"HTTP-Referer": "https://github.com/kireevroi/gourdian", "X-Title": "Gourdian"}},
 		{ID_: "gemini-api", Name: "Google Gemini API", Base: fixed("https://generativelanguage.googleapis.com/v1beta/openai"), Key: keyFor("gemini-api"),
 			KeyURL: "https://aistudio.google.com/apikey"},
 		{ID_: "groq", Name: "Groq", Base: fixed("https://api.groq.com/openai/v1"), Key: keyFor("groq"),

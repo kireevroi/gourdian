@@ -13,8 +13,8 @@ import (
 	"slices"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/coach"
+	"gourdian/internal/gsi"
 )
 
 type Options struct {

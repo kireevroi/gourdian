@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/gsi"
-	"dotatrainer/internal/rules"
-	"dotatrainer/internal/sim"
+	"gourdian/internal/coach"
+	"gourdian/internal/gsi"
+	"gourdian/internal/rules"
+	"gourdian/internal/sim"
 )
 
 // applyRules hands the stored rules to the engine.

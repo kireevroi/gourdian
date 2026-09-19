@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"dotatrainer/internal/ai"
-	"dotatrainer/internal/config"
+	"gourdian/internal/ai"
+	"gourdian/internal/config"
 )
 
 // modelsFresh is how long a provider's own model list is trusted before asking again. The

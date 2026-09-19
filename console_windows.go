@@ -5,7 +5,7 @@ import (
 	"syscall"
 )
 
-// attachConsole lets the windowless app print when it's run from a terminal, e.g. `"Dota Trainer.exe" doctor`.
+// attachConsole lets the windowless app print when it's run from a terminal, e.g. `"Gourdian.exe" doctor`.
 func attachConsole() {
 	if _, err := os.Stdout.Stat(); err == nil {
 		return

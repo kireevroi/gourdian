@@ -1,11 +1,11 @@
 package server
 
 import (
-	"dotatrainer/internal/coach"
+	"gourdian/internal/coach"
 	"strings"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/config"
+	"gourdian/internal/stats"
 )
 
 // applyFocus picks the focus for the match about to start: this hero and position first,

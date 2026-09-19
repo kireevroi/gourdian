@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dota Trainer · Settings</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>">
+<title>Gourdian · Settings</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/app.css">
 <style>
   .hotkeys { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 10px; align-items: center; }
@@ -167,7 +167,7 @@ onSettings((c) => {
   }
   $('autostart-row').hidden = !c.can_autostart;
   $('autostart').checked = c.autostart;
-  $('version').textContent = `Dota Trainer ${c.version}. Rune, Roshan and neutral item timings are built into this version; updates bring new patch timings.`;
+  $('version').textContent = `Gourdian ${c.version}. Rune, Roshan and neutral item timings are built into this version; updates bring new patch timings.`;
 });
 
 $('hero-roles').addEventListener('change', (e) => {
@@ -191,7 +191,7 @@ $('test-voice').addEventListener('click', async () => {
   try { await api('/api/voice/test', { method: 'POST' }); } catch (e) { toast(e.message, true); }
   if (cfg && cfg.settings.voice === 'browser') {
     const ru = cfg.settings.language === 'ru';
-    sayInBrowser(ru ? 'Проверка голоса. Руна силы через 15 секунд.' : 'Dota trainer voice check. Power rune in 15 seconds.', cfg.settings.language, cfg.settings.voice_rate, false);
+    sayInBrowser(ru ? 'Проверка голоса. Руна силы через 15 секунд.' : 'Gourdian voice check. Power rune in 15 seconds.', cfg.settings.language, cfg.settings.voice_rate, false);
   }
 });
 // renderNaturalVoice shows Piper's voices on a Linux desktop: which is used, and whether it's here.

@@ -7,9 +7,9 @@ import (
 	"slices"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/stats"
 )
 
 // drillMatches is how many recent matches the drill is scored over.

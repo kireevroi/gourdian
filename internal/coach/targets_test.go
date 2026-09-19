@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/gsi"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/gsi"
+	"gourdian/internal/stats"
 )
 
 func TestPersonalLastHits(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"slices"
 	"time"
 
-	"dotatrainer/internal/hidewin"
-	"dotatrainer/internal/speech"
+	"gourdian/internal/hidewin"
+	"gourdian/internal/speech"
 )
 
 // voiceLocales are the Windows speech packs for the languages the trainer speaks besides English.

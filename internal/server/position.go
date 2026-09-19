@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
 )
 
 // lockRole records that the player picked the role for this match, so lane detection leaves it alone.

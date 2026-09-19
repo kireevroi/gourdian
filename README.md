@@ -1,6 +1,8 @@
-# Dota Trainer
+# Gourdian
 
-A live coach for Dota 2. While you play it:
+<img src="winres/icon.svg" alt="" width="96" align="right">
+
+A live coach for Dota 2, called Dota Trainer before 1.5. While you play it:
 
 - **Speaks tips** over the game: rune timings, a missing TP scroll, low HP, unspent gold, items stuck in the stash or backpack, unspent skill points, farm pace, core item timing goals, Roshan and Aegis timers, and more.
 - **Draws a transparent HUD** over the game. You choose where it sits, how big and see-through it is, and which lines it shows.
@@ -16,9 +18,9 @@ It reads Valve's official Game State Integration feed, which only describes your
 
 ## Install
 
-Run **DotaTrainer-Setup-<version>.exe**. The setup wizard installs to `%LOCALAPPDATA%\Programs\Dota Trainer` without admin rights, adds Start menu and (optionally) desktop shortcuts, can start the app when you sign in to Windows, and connects Dota 2. Setup quits a running copy before upgrading and keeps your settings and statistics. Uninstall from Windows Settings › Apps; you're asked whether to keep your statistics.
+Run **Gourdian-Setup-<version>.exe**. The setup wizard installs to `%LOCALAPPDATA%\Programs\Gourdian` without admin rights, adds Start menu and (optionally) desktop shortcuts, can start the app when you sign in to Windows, and connects Dota 2. Setup quits a running copy before upgrading and keeps your settings and statistics. Upgrading from Dota Trainer works the same way: setup installs Gourdian into the old app's folder, keeps everything, and replaces the old shortcuts and startup entry. Uninstall from Windows Settings › Apps; you're asked whether to keep your statistics.
 
-Downloads are on the [Releases page](https://github.com/kireevroi/gourdian/releases): the Windows installer, the Linux tarball and `SHA256SUMS`. Release builds aren't code-signed yet (signing through the SignPath Foundation is being set up), so Windows SmartScreen says "Unknown publisher": choose **More info › Run anyway**. Installers built locally with `make installer` are signed with a self-signed **Dota Trainer** certificate that is only trusted on a PC where `make cert` has been run.
+Downloads are on the [Releases page](https://github.com/kireevroi/gourdian/releases): the Windows installer, the Linux tarball and `SHA256SUMS`. Release builds aren't code-signed yet (signing through the SignPath Foundation is being set up), so Windows SmartScreen says "Unknown publisher": choose **More info › Run anyway**. Installers built locally with `make installer` are signed with a self-signed **Gourdian** certificate that is only trusted on a PC where `make cert` has been run.
 
 Requirements:
 
@@ -30,19 +32,19 @@ Requirements:
 
 Dota 2's native Linux client works with the trainer the same way: it reads the game over GSI, coaches, speaks, reviews and keeps statistics. Two ways to install:
 
-- **Package** (Arch and derivatives): `cd packaging/arch && makepkg -si` builds from this source tree and installs `/usr/bin/dotatrainer`, a menu entry and the icon.
-- **Release folder** (any distribution): `make linux-dist` produces `dist/dotatrainer-<version>-linux-x86_64.tar.gz`. Unpack it and run `./install.sh`, which installs into your home folder only (`~/.local/bin`, the menu entry, the icon). `./install.sh --remove` takes it out again.
+- **Package** (Arch and derivatives): `cd packaging/arch && makepkg -si` builds from this source tree and installs `/usr/bin/gourdian`, a menu entry and the icon.
+- **Release folder** (any distribution): `make linux-dist` produces `dist/gourdian-<version>-linux-x86_64.tar.gz`. Unpack it and run `./install.sh`, which installs into your home folder only (`~/.local/bin`, the menu entry, the icon). `./install.sh --remove` takes it out again.
 
-Start it from the application menu. It finds Steam in `~/.local/share/Steam`, `~/.steam`, the Flatpak (`~/.var/app/com.valvesoftware.Steam`) and the Snap, writes the game-state config into Dota's folder, and keeps its data in `~/.config/dotatrainer`. Add `-gamestateintegration` to Dota's launch options as on Windows.
+Start it from the application menu. It finds Steam in `~/.local/share/Steam`, `~/.steam`, the Flatpak (`~/.var/app/com.valvesoftware.Steam`) and the Snap, writes the game-state config into Dota's folder, and keeps its data in `~/.config/dotatrainer` (the app's name before 1.5). Add `-gamestateintegration` to Dota's launch options as on Windows.
 
 What's different from Windows:
 
 - **In-game view.** The Windows HUD can't draw over games on Linux (Wayland doesn't allow it). Instead, in game press **Shift+Tab**, open Steam's web browser at `http://127.0.0.1:4570/overlay.html` and **pin** it: it stays over the game, shows the same rows as the HUD, and A−/A/A+ change the text size. The same page works on a second monitor on any system.
 - **Voice** goes through speech-dispatcher (`spd-say`) or eSpeak NG, in English or Russian. Without either, tips are read by the dashboard tab. `sudo pacman -S espeak-ng` is enough.
-- **Start when you log in** writes an XDG autostart entry (`~/.config/autostart/dotatrainer.desktop`), which KDE, GNOME, Xfce and the other desktops follow.
+- **Start when you log in** writes an XDG autostart entry (`~/.config/autostart/gourdian.desktop`), which KDE, GNOME, Xfce and the other desktops follow.
 - **AI setup** installs the Linux builds of Claude Code and the Codex CLI the same way.
 - API keys are kept in the data folder readable only by you; Windows encrypts them with your account instead.
-- There's no tray icon: the menu entry starts the trainer and opens the dashboard, and choosing it again while it runs just opens the dashboard. `dotatrainer quit` stops it.
+- There's no tray icon: the menu entry starts the trainer and opens the dashboard, and choosing it again while it runs just opens the dashboard. `gourdian quit` stops it.
 
 ## Using it
 
@@ -184,7 +186,7 @@ The AI coach is given the item build professional players use on your hero (Open
 - **Dashboard says "Waiting for Dota 2"**: the Setup card lists what's missing, with a Fix button for Dota's game-state config. Restart Dota after fixing it.
 - **No HUD over the game**: Dota must be in borderless window mode. If a hotkey is taken by another program, Settings says so; pick another one.
 - **AI coach paused**: follow the banner, or open the AI coach page and click Check.
-- **Something went wrong**: read `logs\trainer.log` in the app folder, or run `"Dota Trainer.exe" doctor` from a terminal there.
+- **Something went wrong**: read `logs\trainer.log` in the app folder, or run `"Gourdian.exe" doctor` from a terminal there.
 - **Coaching in another language**: add "Answer in Russian" (or any language) under "How the coach should talk to you". The AI's tips and reviews follow it; built-in tips stay in English, and Windows only speaks languages with an installed voice.
 - **Left a game early?** Matches that stop sending updates for 3 minutes are still recorded, with the result marked unknown.
 
@@ -203,7 +205,7 @@ make app         # build the installer and install it silently over the current 
 
 To sign with a purchased certificate instead, change `$signArgs` in `installer/sign.ps1`. Bump `VERSION` for each release. The Makefile builds with `-buildvcs=false`, so a build doesn't depend on the state of git.
 
-For experiments, start a trainer with `DOTATRAINER_HOME=/some/folder` and its own `listen` port in that folder's `config.json`. Such a profile never touches Dota's game-state config. WSL can't reach an app listening on Windows' localhost, so run Windows-side commands with `"Dota Trainer.exe"`.
+For experiments, start a trainer with `GOURDIAN_HOME=/some/folder` and its own `listen` port in that folder's `config.json`. Such a profile never touches Dota's game-state config. WSL can't reach an app listening on Windows' localhost, so run Windows-side commands with `"Gourdian.exe"`.
 
 ### Releases
 
@@ -213,18 +215,18 @@ Bump `VERSION` (and `pkgver` in `packaging/arch/PKGBUILD`), commit, then `make r
 
 | Command | What it does |
 |---|---|
-| `dotatrainer setup` | Prepare the app folder and connect Dota 2 (the installer runs this) |
-| `dotatrainer quit` | Ask a running trainer to quit |
-| `dotatrainer version` | Print the version |
-| `dotatrainer run [-open] [-overlay] [-record]` | Run the trainer from a terminal instead of the app |
-| `dotatrainer install [-dota DIR]` / `uninstall` | Add or remove only the GSI config in Dota 2 |
-| `dotatrainer doctor` | Check the setup end to end |
-| `dotatrainer overlay [-snapshot FILE] [-editing]` | Show the HUD, or render one frame with real transparency to a PNG |
-| `dotatrainer stats` | Summarize trends and show where the CSVs are |
-| `dotatrainer mmr 2450 [note]` | Log your MMR |
-| `dotatrainer import [-n 50] [-account ID]` | Add recent matches from OpenDota |
-| `dotatrainer simulate [-from -60] [-to 1590] [-speed N] [-random]` | Play a fake match into a running trainer |
-| `dotatrainer replay FILE [-speed N]` | Replay a recording into a running trainer |
+| `gourdian setup` | Prepare the app folder and connect Dota 2 (the installer runs this) |
+| `gourdian quit` | Ask a running trainer to quit |
+| `gourdian version` | Print the version |
+| `gourdian run [-open] [-overlay] [-record]` | Run the trainer from a terminal instead of the app |
+| `gourdian install [-dota DIR]` / `uninstall` | Add or remove only the GSI config in Dota 2 |
+| `gourdian doctor` | Check the setup end to end |
+| `gourdian overlay [-snapshot FILE] [-editing]` | Show the HUD, or render one frame with real transparency to a PNG |
+| `gourdian stats` | Summarize trends and show where the CSVs are |
+| `gourdian mmr 2450 [note]` | Log your MMR |
+| `gourdian import [-n 50] [-account ID]` | Add recent matches from OpenDota |
+| `gourdian simulate [-from -60] [-to 1590] [-speed N] [-random]` | Play a fake match into a running trainer |
+| `gourdian replay FILE [-speed N]` | Replay a recording into a running trainer |
 
 ### Code map
 

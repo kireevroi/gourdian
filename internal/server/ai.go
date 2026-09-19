@@ -11,13 +11,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"dotatrainer/internal/ai"
-	"dotatrainer/internal/aicoach"
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
-	"dotatrainer/internal/matchdata"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/ai"
+	"gourdian/internal/aicoach"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
+	"gourdian/internal/matchdata"
+	"gourdian/internal/stats"
 )
 
 const (

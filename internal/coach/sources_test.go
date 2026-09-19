@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
 )
 
 func TestSourcesSayWhereAdviceComesFrom(t *testing.T) {

@@ -1,0 +1,20 @@
+<!-- The installer's side panel (328x628, shown at half size at 100% scaling).
+     winres/render-icons.sh renders it to wizard.bmp and wizard-200.bmp. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 328 628">
+  <rect width="328" height="628" fill="#FF8A24"/>
+  <g transform="translate(164 250) scale(1.25) translate(-128 -134)">
+    <path d="M122 78 C121 62 126 50 142 44 L148 54 C138 58 134 66 134 78 Z" fill="#17122A"/>
+    <g fill="#17122A">
+      <ellipse cx="84" cy="150" rx="48" ry="66"/>
+      <ellipse cx="172" cy="150" rx="48" ry="66"/>
+      <ellipse cx="128" cy="148" rx="60" ry="76"/>
+    </g>
+    <path d="M78 150 Q128 106 178 150 Q128 194 78 150 Z" fill="#FF8A24"/>
+    <ellipse cx="128" cy="150" rx="7" ry="19" fill="#17122A"/>
+  </g>
+  <!-- the wordmark is Russo One (internal/server/web/fonts, OFL) -->
+  <text x="164" y="478" text-anchor="middle" font-family="Gourdian Display" font-size="46" letter-spacing="1"
+        textLength="276" lengthAdjust="spacingAndGlyphs" fill="#17122A">GOURDIAN</text>
+  <text x="164" y="514" text-anchor="middle" font-family="Gourdian Display" font-size="17" letter-spacing="5"
+        fill="#17122A" fill-opacity="0.72">DOTA 2 COACH</text>
+</svg>

@@ -5,9 +5,9 @@ import (
 	"slices"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/stats"
 )
 
 const (

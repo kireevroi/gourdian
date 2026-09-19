@@ -4,8 +4,8 @@ import (
 	"math"
 	"strings"
 
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/gsi"
 )
 
 const (

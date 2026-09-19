@@ -3,8 +3,8 @@ package coach
 import (
 	"slices"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
 )
 
 // Lanes as the player's team sees them.

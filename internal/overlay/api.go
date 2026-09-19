@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"dotatrainer/internal/config"
+	"gourdian/internal/config"
 )
 
 // settingsView is the part of GET /api/settings the overlay needs.

@@ -13,9 +13,9 @@ import (
 	"time"
 	"unsafe"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/hotkey"
-	"dotatrainer/internal/hud"
+	"gourdian/internal/config"
+	"gourdian/internal/hotkey"
+	"gourdian/internal/hud"
 )
 
 const (
@@ -82,7 +82,7 @@ func Run(ctx context.Context, o Options) error {
 		return u.snapshot(ctx)
 	}
 
-	className, hinst, err := registerClass("DotaTrainerOverlay", wndProc)
+	className, hinst, err := registerClass("GourdianOverlay", wndProc)
 	if err != nil {
 		return fmt.Errorf("register window class: %w", err)
 	}
@@ -90,7 +90,7 @@ func Run(ctx context.Context, o Options) error {
 	active = u
 	hwnd, _, err := pCreateWindowEx.Call(
 		wsExLayered|wsExTransparent|wsExTopmost|wsExToolWindow|wsExNoActivate,
-		uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr("Dota Trainer HUD"))),
+		uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr("Gourdian HUD"))),
 		wsPopup, uintptr(x), uintptr(y), uintptr(u.w), uintptr(u.h), 0, 0, hinst, 0)
 	if hwnd == 0 {
 		return fmt.Errorf("create overlay window: %w", err)

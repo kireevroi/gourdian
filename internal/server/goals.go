@@ -7,10 +7,10 @@ import (
 	"slices"
 	"time"
 
-	"dotatrainer/internal/aicoach"
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/aicoach"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/stats"
 )
 
 // goalMetrics lists what review goals may measure: fixed stats plus each habit's warnings.

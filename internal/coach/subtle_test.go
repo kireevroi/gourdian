@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
 )
 
 // Top tier 1 is already low from earlier; the mid tier 1 at full health is now being hit.

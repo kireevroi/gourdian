@@ -1,0 +1,16 @@
+<!-- Gourdian's icon: a dark pumpkin with a watchful eye on an orange tile.
+     The source of every icon size; winres/render-icons.sh renders them. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#FF8A24"/>
+  <!-- the pumpkin spans 36..220 x 44..224; centred on the tile and scaled up to fill it -->
+  <g transform="translate(128 128) scale(1.24) translate(-128 -134)">
+    <path d="M122 78 C121 62 126 50 142 44 L148 54 C138 58 134 66 134 78 Z" fill="#17122A"/>
+    <g fill="#17122A">
+      <ellipse cx="84" cy="150" rx="48" ry="66"/>
+      <ellipse cx="172" cy="150" rx="48" ry="66"/>
+      <ellipse cx="128" cy="148" rx="60" ry="76"/>
+    </g>
+    <path d="M78 150 Q128 106 178 150 Q128 194 78 150 Z" fill="#FF8A24"/>
+    <ellipse cx="128" cy="150" rx="7" ry="19" fill="#17122A"/>
+  </g>
+</svg>

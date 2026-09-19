@@ -1,7 +1,7 @@
-Dota Trainer
+Gourdian
 ============
 
-Start:   the "Dota Trainer" shortcut on the desktop or in the Start menu.
+Start:   the "Gourdian" shortcut on the desktop or in the Start menu.
          It runs in the system tray (bottom-right corner, near the clock).
 Tray:    left-click opens the dashboard; right-click for stats, the HUD, recording and Quit.
 
@@ -15,7 +15,7 @@ All settings are on the dashboard: http://127.0.0.1:4570
 Dota 2 must run in borderless window mode for the HUD to show over the game.
 
 What's in this folder
-  Dota Trainer.exe   the app
+  Gourdian.exe   the app
   trainer.data       your matches, tips, reviews, goals and rules
   config.json        settings (change them on the dashboard)
   secrets.json       AI API keys, encrypted for your Windows account
@@ -25,7 +25,7 @@ What's in this folder
   cache\             hero, item, build and timing data from OpenDota
 
 Commands (run from a terminal in this folder)
-  "Dota Trainer.exe" doctor    check the setup
-  "Dota Trainer.exe" stats     trend summary
+  "Gourdian.exe" doctor    check the setup
+  "Gourdian.exe" stats     trend summary
 
 Uninstall from Windows Settings > Apps. You'll be asked whether to keep your statistics.

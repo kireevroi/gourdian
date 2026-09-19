@@ -3,7 +3,7 @@ package server
 import (
 	"fmt"
 
-	"dotatrainer/internal/coach"
+	"gourdian/internal/coach"
 )
 
 // roleWordsRU words the position messages in Russian, keyed by the English.

@@ -8,7 +8,7 @@ import (
 )
 
 func Run(ctx context.Context, o Options) error {
-	return errors.New("the overlay is a Windows program: run dotatrainer.exe overlay")
+	return errors.New("the overlay is a Windows program: run gourdian.exe overlay")
 }
 
 func ShellOpen(target string) {}

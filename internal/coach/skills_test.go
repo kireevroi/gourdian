@@ -3,8 +3,8 @@ package coach
 import (
 	"testing"
 
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/gsi"
 )
 
 func stormState(level int, levels map[string]int) *gsi.State {

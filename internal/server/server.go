@@ -23,19 +23,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	"dotatrainer/internal/ai"
-	"dotatrainer/internal/autostart"
-	"dotatrainer/internal/buildinfo"
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/gsi"
-	"dotatrainer/internal/hud"
-	"dotatrainer/internal/matchdata"
-	"dotatrainer/internal/rules"
-	"dotatrainer/internal/secrets"
-	"dotatrainer/internal/speech"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/ai"
+	"gourdian/internal/autostart"
+	"gourdian/internal/buildinfo"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/gsi"
+	"gourdian/internal/hud"
+	"gourdian/internal/matchdata"
+	"gourdian/internal/rules"
+	"gourdian/internal/secrets"
+	"gourdian/internal/speech"
+	"gourdian/internal/stats"
 )
 
 //go:embed web
@@ -277,7 +277,7 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Get()
 	if st.Auth == nil || subtle.ConstantTimeCompare([]byte(st.Auth.Token), []byte(cfg.Token)) != 1 {
 		if s.authWarns.Add(1) <= 3 {
-			s.log.Warn("GSI post with wrong token; re-run `dotatrainer install` and restart Dota")
+			s.log.Warn("GSI post with wrong token; re-run `gourdian install` and restart Dota")
 		}
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -657,7 +657,7 @@ func (s *Server) handleQuit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleVoiceTest(w http.ResponseWriter, r *http.Request) {
 	set := s.cfg.Settings()
 	if set.Voice == config.VoiceSystem && s.speaker != nil {
-		english := "Dota trainer voice check. Power rune in 15 seconds."
+		english := "Gourdian voice check. Power rune in 15 seconds."
 		if set.Language == "ru" {
 			s.speaker.SayIn("ru", "Проверка голоса. Руна силы через 15 секунд.", english, true)
 		} else {

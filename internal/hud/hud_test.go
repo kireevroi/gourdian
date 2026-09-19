@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
 )
 
 func widgets(mutate func([]config.HUDWidget)) []config.HUDWidget {

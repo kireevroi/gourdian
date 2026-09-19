@@ -1,7 +1,7 @@
-# Creates the self-signed "Dota Trainer" code-signing certificate and trusts it for the
+# Creates the self-signed "Gourdian" code-signing certificate and trusts it for the
 # current Windows user. Safe to run again: an existing certificate is reused.
 $ErrorActionPreference = 'Stop'
-$subject = 'CN=Dota Trainer'
+$subject = 'CN=Gourdian'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $cerPath = Join-Path $here 'dota-trainer.cer'
 

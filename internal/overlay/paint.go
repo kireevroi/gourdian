@@ -16,8 +16,8 @@ import (
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/hud"
+	"gourdian/internal/config"
+	"gourdian/internal/hud"
 )
 
 // painter draws the HUD in pure Go with the same layout as the Windows GDI one. Linux uses it,

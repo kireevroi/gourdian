@@ -10,7 +10,7 @@ import (
 	"time"
 	"unsafe"
 
-	"dotatrainer/internal/buildinfo"
+	"gourdian/internal/buildinfo"
 )
 
 const (
@@ -33,12 +33,12 @@ type tray struct {
 func newTray(u *ui) *tray { return &tray{u: u} }
 
 func (t *tray) add() error {
-	className, hinst, err := registerClass("DotaTrainerTray", trayWndProc)
+	className, hinst, err := registerClass("GourdianTray", trayWndProc)
 	if err != nil {
 		return fmt.Errorf("register tray window class: %w", err)
 	}
 	hwnd, _, err := pCreateWindowEx.Call(wsExToolWindow, uintptr(unsafe.Pointer(className)),
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr("Dota Trainer"))), wsPopup, 0, 0, 0, 0, 0, 0, hinst, 0)
+		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr("Gourdian"))), wsPopup, 0, 0, 0, 0, 0, 0, hinst, 0)
 	if hwnd == 0 {
 		return fmt.Errorf("create tray window: %w", err)
 	}
@@ -57,10 +57,10 @@ func (t *tray) add() error {
 	d.uFlags = nifMessage | nifIcon | nifTip
 	d.uCallbackMessage = wmTray
 	d.hIcon = icon
-	copyUTF16(d.szTip[:], "Dota Trainer "+buildinfo.Version)
+	copyUTF16(d.szTip[:], "Gourdian "+buildinfo.Version)
 	if !t.u.opts.Quiet {
 		d.uFlags |= nifInfo
-		copyUTF16(d.szInfoTitle[:], "Dota Trainer is running")
+		copyUTF16(d.szInfoTitle[:], "Gourdian is running")
 		copyUTF16(d.szInfo[:], "Click this icon for the dashboard. In game: "+t.u.hotkeys.HUDEdit+" moves the HUD, "+t.u.hotkeys.Dashboard+" opens the dashboard.")
 		d.dwInfoFlags = niifInfo
 	}
@@ -111,7 +111,7 @@ func (t *tray) popup() {
 	if u.opts.AppDir != "" {
 		item(trayFolder, "Open app folder", false)
 	}
-	item(trayQuit, "Quit Dota Trainer", false)
+	item(trayQuit, "Quit Gourdian", false)
 
 	var pt point
 	pGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))

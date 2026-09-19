@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"dotatrainer/internal/ai"
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
+	"gourdian/internal/ai"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
 )
 
 const (

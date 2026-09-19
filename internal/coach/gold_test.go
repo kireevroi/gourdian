@@ -3,9 +3,9 @@ package coach
 import (
 	"testing"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/gsi"
 )
 
 func TestNoSpendGoldAlertWhileSavingForTheNextItem(t *testing.T) {

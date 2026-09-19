@@ -20,7 +20,7 @@ import (
 	"unicode"
 	"unicode/utf16"
 
-	"dotatrainer/internal/hidewin"
+	"gourdian/internal/hidewin"
 )
 
 // The script answers every line at once with one line: "ok", or for !voices the languages

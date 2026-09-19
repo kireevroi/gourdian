@@ -3,8 +3,8 @@ package coach
 import (
 	"testing"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
 )
 
 // A rule that fires every few seconds, to see what a fight does to it.

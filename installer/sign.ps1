@@ -1,4 +1,4 @@
-# Signs files with the "Dota Trainer" certificate. This is the only place that knows how to
+# Signs files with the "Gourdian" certificate. This is the only place that knows how to
 # sign: to use a purchased certificate, change $signArgs (e.g. /n "Your Name" for a
 # certificate in the store, or /dlib for Azure Artifact Signing).
 param([Parameter(Mandatory = $true, ValueFromRemainingArguments = $true)][string[]]$Files)
@@ -8,10 +8,11 @@ $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\sign
     Sort-Object FullName -Descending | Select-Object -First 1
 if (-not $signtool) { throw 'signtool.exe not found: install the Windows SDK' }
 
+# "Dota Trainer" is the certificate's name from before 1.5; it still signs until `make cert` is run again.
 $cert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert |
-    Where-Object { $_.Subject -eq 'CN=Dota Trainer' } |
+    Where-Object { $_.Subject -eq 'CN=Gourdian' -or $_.Subject -eq 'CN=Dota Trainer' } |
     Sort-Object NotAfter -Descending | Select-Object -First 1
-if (-not $cert) { throw 'No "Dota Trainer" certificate: run `make cert` first' }
+if (-not $cert) { throw 'No "Gourdian" certificate: run `make cert` first' }
 
 $signArgs = @('sign', '/fd', 'SHA256', '/sha1', $cert.Thumbprint, '/tr', 'http://timestamp.digicert.com', '/td', 'SHA256')
 

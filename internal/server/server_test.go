@@ -17,12 +17,12 @@ import (
 	"testing"
 	"time"
 
-	"dotatrainer/internal/ai"
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/gsi"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/ai"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/gsi"
+	"gourdian/internal/stats"
 )
 
 const token = "test-token"

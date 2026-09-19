@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
 )
 
 func TestPowerRunesOnScheduleOnlyWhileLaning(t *testing.T) {

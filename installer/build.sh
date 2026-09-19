@@ -15,22 +15,22 @@ if [ ! -f "$iscc" ]; then
 	exit 1
 fi
 
-stage_win="$(win cmd.exe /c 'echo %TEMP%')\\dotatrainer-build"
+stage_win="$(win cmd.exe /c 'echo %TEMP%')\\gourdian-build"
 stage=$(wslpath "$stage_win")
 rm -rf "$stage"
 mkdir -p "$stage"
-cp bin/dotatrainer.exe "$stage/Dota Trainer.exe"
-cp installer/DotaTrainer.iss installer/sign.ps1 installer/README.txt installer/icon.ico installer/wizard*.bmp "$stage/"
+cp bin/gourdian.exe "$stage/Gourdian.exe"
+cp installer/Gourdian.iss installer/sign.ps1 installer/README.txt installer/icon.ico installer/wizard*.bmp "$stage/"
 
 echo "signing the app"
-ps -File "$stage_win\\sign.ps1" "$stage_win\\Dota Trainer.exe"
+ps -File "$stage_win\\sign.ps1" "$stage_win\\Gourdian.exe"
 
 echo "building the installer"
 (cd "$stage" && "$iscc" /Q "/DAppVersion=$version" \
-	"/Sdotatrainer=powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$q$stage_win\\sign.ps1\$q \$f" \
-	DotaTrainer.iss)
+	"/Sgourdian=powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$q$stage_win\\sign.ps1\$q \$f" \
+	Gourdian.iss)
 
-setup="DotaTrainer-Setup-$version.exe"
+setup="Gourdian-Setup-$version.exe"
 status=$(ps -Command "(Get-AuthenticodeSignature '$stage_win\\$setup').Status")
 if [ "$status" != "Valid" ]; then
 	echo "installer signature is $status, expected Valid (run: make cert)" >&2

@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"dotatrainer/internal/ai"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/hidewin"
-	"dotatrainer/internal/install"
-	"dotatrainer/internal/secrets"
-	"dotatrainer/internal/speech"
+	"gourdian/internal/ai"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/hidewin"
+	"gourdian/internal/install"
+	"gourdian/internal/secrets"
+	"gourdian/internal/speech"
 )
 
 type checker struct{ problems int }
@@ -47,16 +47,16 @@ func doctor() error {
 
 	dirs := install.FindDota()
 	if len(dirs) == 0 {
-		c.fail("Dota 2 not found. Run `dotatrainer install -dota \"<library>/steamapps/common/dota 2 beta\"`")
+		c.fail("Dota 2 not found. Run `gourdian install -dota \"<library>/steamapps/common/dota 2 beta\"`")
 	}
 	want := install.Render(config.GSIURI(cfg.Listen), cfg.Token)
 	for _, d := range dirs {
 		got, err := os.ReadFile(install.CfgPath(d))
 		switch {
 		case err != nil:
-			c.fail("GSI config missing in %s. Run `dotatrainer install`, then restart Dota", d)
+			c.fail("GSI config missing in %s. Run `gourdian install`, then restart Dota", d)
 		case string(got) != want:
-			c.fail("GSI config in %s is out of date. Run `dotatrainer install`, then restart Dota", d)
+			c.fail("GSI config in %s is out of date. Run `gourdian install`, then restart Dota", d)
 		default:
 			c.ok("GSI config installed: %s", install.CfgPath(d))
 		}
@@ -96,9 +96,9 @@ func doctor() error {
 			}
 		}
 	case trainerCall("GET", base+"/api/state"):
-		c.ok("Dota Trainer app is running on Windows at %s", base)
+		c.ok("Gourdian app is running on Windows at %s", base)
 	default:
-		c.warn("trainer isn't running. Start it from the Dota Trainer shortcut")
+		c.warn("trainer isn't running. Start it from the Gourdian shortcut")
 	}
 
 	fmt.Println("Voice and overlay")
@@ -112,10 +112,10 @@ func doctor() error {
 	if runtime.GOOS == "windows" {
 		c.ok("overlay runs in-process on Windows")
 	} else if self, err := os.Executable(); err == nil {
-		if _, err := os.Stat(filepath.Join(filepath.Dir(self), "dotatrainer.exe")); err == nil {
-			c.ok("overlay binary dotatrainer.exe found next to this one")
+		if _, err := os.Stat(filepath.Join(filepath.Dir(self), "gourdian.exe")); err == nil {
+			c.ok("overlay binary gourdian.exe found next to this one")
 		} else {
-			c.warn("dotatrainer.exe not next to this binary, so -overlay won't start. Run `make` and use bin/dotatrainer")
+			c.warn("gourdian.exe not next to this binary, so -overlay won't start. Run `make` and use bin/gourdian")
 		}
 	}
 

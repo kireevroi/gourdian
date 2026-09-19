@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/install"
+	"gourdian/internal/config"
+	"gourdian/internal/install"
 )
 
 // setupCheck is one line of the dashboard's setup card, shown until Dota sends data.
@@ -24,7 +24,7 @@ func (s *Server) setupChecks() []setupCheck {
 	cfg := s.cfg.Get()
 	dirs := install.FindDota()
 	if len(dirs) == 0 {
-		return []setupCheck{{Label: "Dota 2 not found", Detail: "Dota 2 wasn't found in your Steam libraries. Install it through Steam, then restart Dota Trainer."}}
+		return []setupCheck{{Label: "Dota 2 not found", Detail: "Dota 2 wasn't found in your Steam libraries. Install it through Steam, then restart Gourdian."}}
 	}
 	var checks []setupCheck
 	want := install.Render(config.GSIURI(cfg.Listen), cfg.Token)
@@ -33,7 +33,7 @@ func (s *Server) setupChecks() []setupCheck {
 			checks = append(checks, setupCheck{Label: "Dota is set up to send game data", OK: true})
 		} else {
 			checks = append(checks, setupCheck{Label: "Dota isn't set up to send game data yet",
-				Detail: "Dota Trainer normally does this when it starts.", Fix: "install_gsi"})
+				Detail: "Gourdian normally does this when it starts.", Fix: "install_gsi"})
 		}
 		switch mode, err := install.VideoMode(d); {
 		case err != nil:

@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/config"
+	"gourdian/internal/stats"
 )
 
 func TestPickHelpUsesYourOwnRecord(t *testing.T) {

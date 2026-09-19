@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"dotatrainer/internal/buildinfo"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
+	"gourdian/internal/buildinfo"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
 )
 
 // Source says where a piece of advice comes from, so the player can judge how far to trust it.
@@ -140,8 +140,8 @@ func itemGoalSource(t Targets, hero string, w sourceWords) Source {
 
 func timerSource(t config.Timings, w sourceWords) Source {
 	return Source{ID: "timers", What: w.f("Timers", "Таймеры"),
-		From: w.f("Built into Dota Trainer %s: bounty runes every %s, power runes from %s every %s, Shrines of Wisdom every %s. An app update brings new patch timings; the rules that use them show them.",
-			"Встроены в Dota Trainer %s: руны богатства каждые %s, руны силы с %s каждые %s, святыни мудрости каждые %s. Новые тайминги патча приходят с обновлением приложения; правила, которые их используют, их показывают.",
+		From: w.f("Built into Gourdian %s: bounty runes every %s, power runes from %s every %s, Shrines of Wisdom every %s. An app update brings new patch timings; the rules that use them show them.",
+			"Встроены в Gourdian %s: руны богатства каждые %s, руны силы с %s каждые %s, святыни мудрости каждые %s. Новые тайминги патча приходят с обновлением приложения; правила, которые их используют, их показывают.",
 			buildinfo.Version, clockStr(t.BountyRuneEvery), clockStr(t.PowerRuneFirst), clockStr(t.PowerRuneEvery), clockStr(t.WisdomRuneEvery))}
 }
 

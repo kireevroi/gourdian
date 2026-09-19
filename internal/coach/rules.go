@@ -4,8 +4,8 @@ import (
 	"math"
 	"strings"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
 )
 
 var (

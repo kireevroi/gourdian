@@ -29,7 +29,7 @@ func ShowMessage(title, text string, isError bool) {
 	if err != nil {
 		return
 	}
-	args := []string{"--app-name=Dota Trainer"}
+	args := []string{"--app-name=Gourdian"}
 	if isError {
 		args = append(args, "--urgency=critical")
 	}

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"dotatrainer/internal/ai"
+	"gourdian/internal/ai"
 )
 
 // listingProvider is an API provider whose models come from its own list.

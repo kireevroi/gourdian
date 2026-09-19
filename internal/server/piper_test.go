@@ -8,8 +8,8 @@ import (
 	"runtime"
 	"testing"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/speech"
+	"gourdian/internal/config"
+	"gourdian/internal/speech"
 )
 
 // linuxDesktop makes the trainer think it runs on a Linux desktop whose only sound player is a

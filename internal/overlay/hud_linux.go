@@ -19,8 +19,8 @@ import (
 	"github.com/jezek/xgb/shape"
 	"github.com/jezek/xgb/xproto"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/hotkey"
+	"gourdian/internal/config"
+	"gourdian/internal/hotkey"
 )
 
 // X modifier masks.
@@ -252,11 +252,11 @@ func (u *xui) atom(name string) xproto.Atom {
 // setProperties names the window, and asks compositors to keep compositing it and to treat it
 // like a notification, which they don't decorate or shadow.
 func (u *xui) setProperties() {
-	title := "Dota Trainer HUD"
+	title := "Gourdian HUD"
 	utf8 := u.atom("UTF8_STRING")
 	xproto.ChangeProperty(u.conn, xproto.PropModeReplace, u.win, xproto.AtomWmName, xproto.AtomString, 8, uint32(len(title)), []byte(title))
 	xproto.ChangeProperty(u.conn, xproto.PropModeReplace, u.win, u.atom("_NET_WM_NAME"), utf8, 8, uint32(len(title)), []byte(title))
-	class := "dotatrainer\x00Dota Trainer\x00"
+	class := "gourdian\x00Gourdian\x00"
 	xproto.ChangeProperty(u.conn, xproto.PropModeReplace, u.win, xproto.AtomWmClass, xproto.AtomString, 8, uint32(len(class)), []byte(class))
 	kind := u.atom("_NET_WM_WINDOW_TYPE_NOTIFICATION")
 	xproto.ChangeProperty(u.conn, xproto.PropModeReplace, u.win, u.atom("_NET_WM_WINDOW_TYPE"), xproto.AtomAtom, 32, 1, u32(uint32(kind)))

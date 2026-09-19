@@ -21,8 +21,8 @@ import (
 	"github.com/jezek/xgb/shape"
 	"github.com/jezek/xgb/xproto"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/hud"
+	"gourdian/internal/config"
+	"gourdian/internal/hud"
 )
 
 // TestX11HUD shows the HUD on the real X display for a few seconds and reads it back.
@@ -124,7 +124,7 @@ func findHUD(t *testing.T, conn *xgb.Conn) xproto.Window {
 		}
 		for _, c := range tree.Children {
 			name, err := xproto.GetProperty(conn, false, c, xproto.AtomWmName, xproto.AtomString, 0, 64).Reply()
-			if err != nil || string(name.Value) != "Dota Trainer HUD" {
+			if err != nil || string(name.Value) != "Gourdian HUD" {
 				continue
 			}
 			if a, err := xproto.GetWindowAttributes(conn, c).Reply(); err == nil && a.MapState == xproto.MapStateViewable {

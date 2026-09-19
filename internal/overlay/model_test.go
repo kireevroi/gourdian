@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/hud"
+	"gourdian/internal/coach"
+	"gourdian/internal/hud"
 )
 
 func apply(t *testing.T, m *model, event string, v any, now time.Time) {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"dotatrainer/internal/ai"
+	"gourdian/internal/ai"
 )
 
 // fakeCLI is a provider that needs installing and logging in, like the real CLIs.

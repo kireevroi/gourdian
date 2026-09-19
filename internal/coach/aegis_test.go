@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
 )
 
 // withAegis plays a match where player holder picks up the Aegis at 16:20 (Roshan died at 16:18).

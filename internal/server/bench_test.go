@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/gsi"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/config"
+	"gourdian/internal/gsi"
+	"gourdian/internal/stats"
 )
 
 // seed fills a store with matches, tips and samples, to measure the pages against a season

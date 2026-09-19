@@ -1,7 +1,7 @@
 package coach
 
 import (
-	"dotatrainer/internal/config"
+	"gourdian/internal/config"
 )
 
 // laningEnds is 10:00, when lanes break up and timed reminders give way to ones about where you are.

@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/hud"
+	"gourdian/internal/config"
+	"gourdian/internal/hud"
 )
 
 func TestPaintLaysTheHUDOut(t *testing.T) {

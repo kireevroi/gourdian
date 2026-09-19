@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"dotatrainer/internal/autostart"
-	"dotatrainer/internal/hud"
+	"gourdian/internal/autostart"
+	"gourdian/internal/hud"
 )
 
 // heroNames names the heroes the player has a remembered role for.

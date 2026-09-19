@@ -1,6 +1,6 @@
 package rules
 
-import "dotatrainer/internal/coach"
+import "gourdian/internal/coach"
 
 // Templates are starting points in the rule editor.
 var Templates = []coach.RuleSpec{

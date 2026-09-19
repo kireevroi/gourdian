@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"dotatrainer/internal/hidewin"
+	"gourdian/internal/hidewin"
 )
 
 // findCLI looks for a command-line tool: the configured path, then PATH, then npm's global
@@ -146,7 +146,7 @@ func envWithTools() []string {
 
 // tempDir is an empty folder for a CLI to run in, so it can't read anything unrelated.
 func tempDir() (string, func(), error) {
-	dir, err := os.MkdirTemp("", "dotatrainer-ai-")
+	dir, err := os.MkdirTemp("", "gourdian-ai-")
 	if err != nil {
 		return "", nil, err
 	}

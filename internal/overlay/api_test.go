@@ -3,7 +3,7 @@ package overlay
 import (
 	"testing"
 
-	"dotatrainer/internal/config"
+	"gourdian/internal/config"
 )
 
 func TestWheelLayoutStepsWithinLimits(t *testing.T) {

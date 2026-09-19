@@ -2,6 +2,7 @@
 package config
 
 import (
+	"cmp"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -19,7 +20,7 @@ import (
 	"strings"
 	"sync"
 
-	"dotatrainer/internal/hotkey"
+	"gourdian/internal/hotkey"
 )
 
 const (
@@ -434,16 +435,36 @@ func DashboardHost(addr string) string {
 func GSIURI(addr string) string { return "http://" + DashboardHost(addr) + "/gsi" }
 
 const (
-	AppName = "Dota Trainer"
-	AppExe  = "Dota Trainer.exe"
+	AppName = "Gourdian"
+	AppExe  = "Gourdian.exe"
+	// The app was called Dota Trainer before 1.5. An upgrade keeps the old install folder,
+	// where the data lives, and the old name's exe may still be running there.
+	LegacyAppName = "Dota Trainer"
+	LegacyAppExe  = "Dota Trainer.exe"
+	// dataName is the data folder's name outside the installed app; it keeps the old name so
+	// existing settings and statistics stay where they are.
+	dataName = "dotatrainer"
 )
+
+// IsAppExe reports whether an exe file name is the installed app's, under either name.
+func IsAppExe(name string) bool { return name == AppExe || name == LegacyAppExe }
+
+// InstallDirs are where the installer puts the app: its own folder for new installs, then the
+// folder that installs upgraded from Dota Trainer keep.
+func InstallDirs(localAppData string) []string {
+	return []string{filepath.Join(localAppData, "Programs", AppName), filepath.Join(localAppData, "Programs", LegacyAppName)}
+}
+
+// HomeOverride is the data folder a test profile sets with GOURDIAN_HOME (or DOTATRAINER_HOME,
+// its name before 1.5), or "".
+func HomeOverride() string { return cmp.Or(os.Getenv("GOURDIAN_HOME"), os.Getenv("DOTATRAINER_HOME")) }
 
 // Dir prefers the installed app's folder, even from other builds, so every entry point shares one set of data.
 func Dir() (string, error) {
-	if d := os.Getenv("DOTATRAINER_HOME"); d != "" {
+	if d := HomeOverride(); d != "" {
 		return d, nil
 	}
-	if exe, err := os.Executable(); err == nil && filepath.Base(exe) == AppExe {
+	if exe, err := os.Executable(); err == nil && IsAppExe(filepath.Base(exe)) {
 		return filepath.Dir(exe), nil
 	}
 	localAppData, appData := os.Getenv("LOCALAPPDATA"), os.Getenv("APPDATA")
@@ -451,23 +472,29 @@ func Dir() (string, error) {
 		localAppData, appData = wslFolders()
 	}
 	if localAppData != "" {
-		if app := filepath.Join(localAppData, "Programs", AppName); isAppDir(app) {
-			return app, nil
+		for _, app := range InstallDirs(localAppData) {
+			if isAppDir(app) {
+				return app, nil
+			}
 		}
 	}
 	if appData != "" {
-		return filepath.Join(appData, "dotatrainer"), nil
+		return filepath.Join(appData, dataName), nil
 	}
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "dotatrainer"), nil
+	return filepath.Join(base, dataName), nil
 }
 
 func isAppDir(dir string) bool {
-	_, err := os.Stat(filepath.Join(dir, AppExe))
-	return err == nil
+	for _, exe := range []string{AppExe, LegacyAppExe} {
+		if _, err := os.Stat(filepath.Join(dir, exe)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // wslFolders returns %LOCALAPPDATA% and %APPDATA% as /mnt/... paths when running under WSL.

@@ -5,9 +5,9 @@ import (
 	"math"
 	"slices"
 
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/stats"
 )
 
 var paceCheckpoints = []int{300, 600, 900, 1200, 1800}

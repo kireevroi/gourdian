@@ -15,8 +15,8 @@ import (
 
 func TestRussianLettersAreRecognised(t *testing.T) {
 	for text, want := range map[string]bool{
-		"Водяные руны через 15 секунд":                        true,
-		"Dota trainer voice check. Power rune in 15 seconds.": false,
+		"Водяные руны через 15 секунд":                    true,
+		"Gourdian voice check. Power rune in 15 seconds.": false,
 		"15": false,
 	} {
 		if got := hasLetters(text, "ru"); got != want {

@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"dotatrainer/internal/config"
+	"gourdian/internal/config"
 )
 
 var (
@@ -35,11 +35,17 @@ func Exe() string {
 	if self, err := os.Executable(); err == nil && filepath.Base(self) == config.AppExe {
 		return self
 	}
-	installed := filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", config.AppName, config.AppExe)
-	if _, err := os.Stat(installed); err == nil {
-		return installed
+	for _, dir := range config.InstallDirs(os.Getenv("LOCALAPPDATA")) {
+		if installed := filepath.Join(dir, config.AppExe); fileExists(installed) {
+			return installed
+		}
 	}
 	return ""
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func openRun(access uintptr) (syscall.Handle, error) {
@@ -57,8 +63,12 @@ func Enabled() bool {
 		return false
 	}
 	defer pRegCloseKey.Call(uintptr(key))
-	r, _, _ := pRegQueryValue.Call(uintptr(key), uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(config.AppName))), 0, 0, 0, 0)
-	return r == 0
+	for _, name := range []string{config.AppName, config.LegacyAppName} {
+		if r, _, _ := pRegQueryValue.Call(uintptr(key), uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(name))), 0, 0, 0, 0); r == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func Set(enable bool) error {
@@ -67,6 +77,11 @@ func Set(enable bool) error {
 		return err
 	}
 	defer pRegCloseKey.Call(uintptr(key))
+	// The value the app had under its old name goes either way.
+	legacy := uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(config.LegacyAppName)))
+	if r, _, _ := pRegDeleteValue.Call(uintptr(key), legacy); r != 0 && r != errFileNotFound {
+		return syscall.Errno(r)
+	}
 	name := uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(config.AppName)))
 	if !enable {
 		if r, _, _ := pRegDeleteValue.Call(uintptr(key), name); r != 0 && r != errFileNotFound {
@@ -76,7 +91,7 @@ func Set(enable bool) error {
 	}
 	exe := Exe()
 	if exe == "" {
-		return errors.New("install Dota Trainer to start it with Windows")
+		return errors.New("install Gourdian to start it with Windows")
 	}
 	data, err := syscall.UTF16FromString(`"` + exe + `" --background`)
 	if err != nil {

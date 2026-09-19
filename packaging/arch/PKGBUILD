@@ -1,13 +1,13 @@
-# Builds Dota Trainer from this source tree for Arch Linux and its derivatives
+# Builds Gourdian from this source tree for Arch Linux and its derivatives
 # (EndeavourOS, CachyOS, Manjaro, Garuda). From the repository root:
 #   cd packaging/arch && makepkg -si
-pkgname=dotatrainer
-pkgver=1.4.0
+pkgname=gourdian
+pkgver=1.5.0
 pkgrel=1
 pkgdesc='Live coaching for Dota 2: rules, voice, AI reviews and statistics'
 arch=('x86_64' 'aarch64')
 url='https://github.com/kireevroi/gourdian'
-license=('custom')
+license=('MIT')
 depends=('xdg-utils')
 optdepends=('pipewire: plays the natural voice the trainer downloads (pw-play)'
             'alsa-utils: plays the natural voice without PipeWire (aplay)'
@@ -20,12 +20,12 @@ options=('!debug')
 build() {
 	cd "$startdir/../.."
 	export CGO_ENABLED=0 GOFLAGS='-buildvcs=false -trimpath'
-	go build -ldflags "-s -w -X dotatrainer/internal/buildinfo.Version=$pkgver" -o "$srcdir/dotatrainer" .
+	go build -ldflags "-s -w -X gourdian/internal/buildinfo.Version=$pkgver" -o "$srcdir/gourdian" .
 }
 
 package() {
 	cd "$startdir/../.."
-	install -Dm755 "$srcdir/dotatrainer" "$pkgdir/usr/bin/dotatrainer"
-	install -Dm644 packaging/linux/dotatrainer.desktop "$pkgdir/usr/share/applications/dotatrainer.desktop"
-	install -Dm644 winres/icon.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/dotatrainer.png"
+	install -Dm755 "$srcdir/gourdian" "$pkgdir/usr/bin/gourdian"
+	install -Dm644 packaging/linux/gourdian.desktop "$pkgdir/usr/share/applications/gourdian.desktop"
+	install -Dm644 winres/icon.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/gourdian.png"
 }

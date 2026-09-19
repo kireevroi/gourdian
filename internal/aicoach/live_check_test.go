@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"dotatrainer/internal/ai"
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
+	"gourdian/internal/ai"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
 )
 
 // TestLiveCoachOnStormSpirit asks the real coach one question; it only runs when asked to.

@@ -10,11 +10,11 @@ import (
 	"slices"
 	"strings"
 
-	"dotatrainer/internal/ai"
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/matchdata"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/ai"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/matchdata"
+	"gourdian/internal/stats"
 )
 
 const liveSystemPrompt = `You are a Dota 2 coach speaking to one player during their match. Their goal is to climb in MMR. Your words appear on their screen and are read aloud, so each suggestion is one short, concrete instruction.

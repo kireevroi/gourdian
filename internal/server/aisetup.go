@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"dotatrainer/internal/ai"
+	"gourdian/internal/ai"
 )
 
 const (

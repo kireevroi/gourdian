@@ -7,7 +7,7 @@
   --text: #e6e9ef;
   --text-2: #c3c8d2;
   --muted: #8b95a7;
-  --accent: #e0533d;
+  --accent: #ff8a24;
   --good: #3fb97a;
   --warn: #e5a93b;
   --urgent: #ef4a4a;
@@ -30,8 +30,9 @@ code { background: #0b0e13; padding: 1px 6px; border-radius: 4px; font-size: 12p
 /* Shell */
 header.shell { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
   padding: 8px 20px; background: rgba(14,17,22,.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
-.brand { font-weight: 700; letter-spacing: .3px; color: var(--text); text-decoration: none; }
-.brand span { color: var(--accent); }
+@font-face { font-family: 'Russo One'; src: url('/fonts/RussoOne-Regular.ttf') format('truetype'); font-display: swap; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font: 18px 'Russo One', system-ui, sans-serif; letter-spacing: .5px; color: var(--text); text-decoration: none; }
+.brand img { width: 24px; height: 24px; }
 nav.pages { display: flex; gap: 2px; flex-wrap: wrap; }
 nav.pages a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 8px; }
 nav.pages a:hover { color: var(--text); background: var(--panel-2); }

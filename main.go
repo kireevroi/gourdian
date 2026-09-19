@@ -21,34 +21,34 @@ import (
 	"syscall"
 	"time"
 
-	"dotatrainer/internal/coach"
-	"dotatrainer/internal/config"
-	"dotatrainer/internal/dotadata"
-	"dotatrainer/internal/install"
-	"dotatrainer/internal/matchdata"
-	"dotatrainer/internal/overlay"
-	"dotatrainer/internal/server"
-	"dotatrainer/internal/sim"
-	"dotatrainer/internal/speech"
-	"dotatrainer/internal/stats"
+	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/dotadata"
+	"gourdian/internal/install"
+	"gourdian/internal/matchdata"
+	"gourdian/internal/overlay"
+	"gourdian/internal/server"
+	"gourdian/internal/sim"
+	"gourdian/internal/speech"
+	"gourdian/internal/stats"
 )
 
-const usage = `dotatrainer: live Dota 2 coaching from Game State Integration
+const usage = `gourdian: live Dota 2 coaching from Game State Integration
 
 Usage:
-  dotatrainer [run] [-open] [-overlay]      start the trainer and dashboard (-record saves the raw game data)
-  dotatrainer setup                         prepare the installed app folder and Dota config (the installer runs this)
-  dotatrainer quit                          ask a running trainer to quit
-  dotatrainer version                       print the version
-  dotatrainer doctor                        check the whole setup and say what to fix
-  dotatrainer install [-dota DIR]           write the GSI config into Dota 2
-  dotatrainer uninstall [-dota DIR]         remove the GSI config
-  dotatrainer overlay [-corner top-right]   show the in-game overlay (Windows)
-  dotatrainer simulate [-speed N]           play a scripted fake match into a running trainer
-  dotatrainer replay FILE [-speed N]        play a recording made with "run -record" into a running trainer
-  dotatrainer stats                         summarize your recorded matches and show where the CSVs are
-  dotatrainer mmr 2450 [note]               log your current MMR for the trend charts
-  dotatrainer import [-n 50] [-account ID]  add your recent matches from OpenDota to the statistics
+  gourdian [run] [-open] [-overlay]      start the trainer and dashboard (-record saves the raw game data)
+  gourdian setup                         prepare the installed app folder and Dota config (the installer runs this)
+  gourdian quit                          ask a running trainer to quit
+  gourdian version                       print the version
+  gourdian doctor                        check the whole setup and say what to fix
+  gourdian install [-dota DIR]           write the GSI config into Dota 2
+  gourdian uninstall [-dota DIR]         remove the GSI config
+  gourdian overlay [-corner top-right]   show the in-game overlay (Windows)
+  gourdian simulate [-speed N]           play a scripted fake match into a running trainer
+  gourdian replay FILE [-speed N]        play a recording made with "run -record" into a running trainer
+  gourdian stats                         summarize your recorded matches and show where the CSVs are
+  gourdian mmr 2450 [note]               log your current MMR for the trend charts
+  gourdian import [-n 50] [-account ID]  add your recent matches from OpenDota to the statistics
 `
 
 func main() {
@@ -224,13 +224,13 @@ func run(args []string) error {
 
 // ensureInstalled writes or repairs the GSI config so a fresh install works without extra steps.
 func ensureInstalled(cfg config.Config, log *slog.Logger) {
-	if os.Getenv("DOTATRAINER_HOME") != "" {
-		// Test profiles must not point Dota at themselves; `dotatrainer install` still can.
+	if config.HomeOverride() != "" {
+		// Test profiles must not point Dota at themselves; `gourdian install` still can.
 		return
 	}
 	dirs := install.FindDota()
 	if len(dirs) == 0 {
-		log.Warn("Dota 2 install not found; if it's in a custom location run `dotatrainer install -dota DIR`")
+		log.Warn("Dota 2 install not found; if it's in a custom location run `gourdian install -dota DIR`")
 		return
 	}
 	want := install.Render(config.GSIURI(cfg.Listen), cfg.Token)
@@ -239,7 +239,7 @@ func ensureInstalled(cfg config.Config, log *slog.Logger) {
 			continue
 		}
 		if _, err := install.Write(d, config.GSIURI(cfg.Listen), cfg.Token); err != nil {
-			log.Error("couldn't install the GSI config; run `dotatrainer install`", "dota", d, "err", err)
+			log.Error("couldn't install the GSI config; run `gourdian install`", "dota", d, "err", err)
 			continue
 		}
 		log.Warn("installed the Dota 2 game-state config; restart Dota 2 if it's already running", "dota", d)
@@ -450,7 +450,7 @@ func importCmd(args []string) error {
 
 func mmrCmd(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: dotatrainer mmr 2450 [note]")
+		return errors.New("usage: gourdian mmr 2450 [note]")
 	}
 	mmr, err := strconv.Atoi(args[0])
 	if err != nil || mmr <= 0 || mmr > 20000 {
@@ -527,7 +527,7 @@ func startOverlay(ctx context.Context, o overlay.Options, stop func(), log *slog
 		log.Error("overlay: locate executable", "err", err)
 		return
 	}
-	exe := filepath.Join(filepath.Dir(self), "dotatrainer.exe")
+	exe := filepath.Join(filepath.Dir(self), "gourdian.exe")
 	if _, err := os.Stat(exe); err != nil {
 		log.Warn("overlay needs the Windows build next to this binary; run `make`", "missing", exe)
 		return
@@ -548,7 +548,7 @@ func replay(args []string) error {
 	url := fs.String("url", "", "trainer GSI endpoint (default from config.json)")
 	fs.Parse(reorderFlags(args))
 	if fs.NArg() != 1 || *speed <= 0 {
-		return errors.New("usage: dotatrainer replay [-speed N] FILE")
+		return errors.New("usage: gourdian replay [-speed N] FILE")
 	}
 	store, _, err := openStore()
 	if err != nil {

@@ -30,12 +30,12 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: exe
-          path: bin/dotatrainer.exe
+          path: bin/gourdian.exe
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
           name: release-linux
-          path: dist/dotatrainer-*-linux-x86_64.tar.gz
+          path: dist/gourdian-*-linux-x86_64.tar.gz
           if-no-files-found: error
 
   installer:
@@ -47,7 +47,7 @@ jobs:
         with:
           name: exe
           path: bin
-      # Code signing (SignPath) goes here once approved: sign bin/dotatrainer.exe before
+      # Code signing (SignPath) goes here once approved: sign bin/gourdian.exe before
       # packaging, then the finished installer.
       - name: Find or install Inno Setup
         shell: pwsh
@@ -63,16 +63,16 @@ jobs:
           $version = (Get-Content VERSION -Raw).Trim()
           $stage = Join-Path $env:RUNNER_TEMP 'stage'
           New-Item -ItemType Directory -Force $stage | Out-Null
-          Copy-Item bin\dotatrainer.exe (Join-Path $stage 'Dota Trainer.exe')
-          Copy-Item installer\DotaTrainer.iss, installer\README.txt, installer\icon.ico, installer\wizard*.bmp $stage
-          & $env:ISCC /Q "/DAppVersion=$version" /DUnsigned (Join-Path $stage 'DotaTrainer.iss')
+          Copy-Item bin\gourdian.exe (Join-Path $stage 'Gourdian.exe')
+          Copy-Item installer\Gourdian.iss, installer\README.txt, installer\icon.ico, installer\wizard*.bmp $stage
+          & $env:ISCC /Q "/DAppVersion=$version" /DUnsigned (Join-Path $stage 'Gourdian.iss')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item (Join-Path $stage "DotaTrainer-Setup-$version.exe") dist\
+          Copy-Item (Join-Path $stage "Gourdian-Setup-$version.exe") dist\
       - uses: actions/upload-artifact@v7
         with:
           name: release-windows
-          path: dist/DotaTrainer-Setup-*.exe
+          path: dist/Gourdian-Setup-*.exe
           if-no-files-found: error
 
   publish:
@@ -94,5 +94,5 @@ jobs:
         run: >
           gh release create "$GITHUB_REF_NAME" out/*
           --repo "$GITHUB_REPOSITORY"
-          --title "Dota Trainer ${GITHUB_REF_NAME#v}"
+          --title "Gourdian ${GITHUB_REF_NAME#v}"
           --generate-notes

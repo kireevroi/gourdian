@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"dotatrainer/internal/stats"
+	"gourdian/internal/stats"
 )
 
 func TestDrillScoresRecentMatches(t *testing.T) {
