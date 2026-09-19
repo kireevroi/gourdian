@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
 	"gourdian/internal/stats"
@@ -223,7 +224,7 @@ func (e *Engine) Snapshot(set config.Settings) Snapshot {
 			snap.Pace = &Pace{LastHits: s.Player.LastHits, Expected: exp}
 			for i, cp := range paceCheckpoints {
 				if cp > s.Map.ClockTime {
-					snap.Pace.Checkpoint, snap.Pace.Target = clockStr(cp), targets.LastHits[i]
+					snap.Pace.Checkpoint, snap.Pace.Target = dota.Clock(cp), targets.LastHits[i]
 					if i < len(targets.Usual) {
 						snap.Pace.Usual = targets.Usual[i]
 					}

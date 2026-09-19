@@ -9,6 +9,7 @@ import (
 
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/stats"
 )
 
@@ -98,7 +99,7 @@ func (s *Server) briefMatch(matchID string, set config.Settings) {
 		speech = append(speech, fmt.Sprintf("Aim for %d last hits at ten minutes.", b.Target10))
 	}
 	for _, it := range b.Items[:min(len(b.Items), 1)] {
-		text = append(text, fmt.Sprintf("%s by %s", it.Name, clockText(it.By)))
+		text = append(text, fmt.Sprintf("%s by %s", it.Name, dota.Clock(it.By)))
 		speech = append(speech, fmt.Sprintf("%s by %d minutes.", it.Name, (it.By+30)/60))
 	}
 	for _, g := range b.Goals[:min(len(b.Goals), 1)] {
@@ -112,5 +113,3 @@ func (s *Server) briefMatch(matchID string, set config.Settings) {
 		Text: b.Hero + ": " + strings.Join(text, " · "), Speech: strings.Join(speech, " ")}
 	s.emitTips(matchID, []coach.Tip{tip}, set)
 }
-
-func clockText(sec int) string { return fmt.Sprintf("%d:%02d", sec/60, sec%60) }

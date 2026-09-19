@@ -21,18 +21,9 @@ import (
 	"strings"
 	"sync"
 
+	"gourdian/internal/dota"
 	"gourdian/internal/hotkey"
 )
-
-const (
-	RoleCarry       = "carry"
-	RoleMid         = "mid"
-	RoleOfflane     = "offlane"
-	RoleSoftSupport = "soft_support"
-	RoleHardSupport = "hard_support"
-)
-
-var Roles = []string{RoleCarry, RoleMid, RoleOfflane, RoleSoftSupport, RoleHardSupport}
 
 const (
 	VoiceSystem  = "system"
@@ -49,23 +40,6 @@ const (
 	SpeakImportant = "important"
 	SpeakUrgent    = "urgent"
 )
-
-// Timings are in-game clock seconds. They ship with each app version instead of being
-// user settings, so updating the app is how they follow a patch.
-type Timings struct {
-	BountyRuneEvery  int   `json:"bounty_rune_every"`
-	WaterRunes       []int `json:"water_runes"`
-	PowerRuneFirst   int   `json:"power_rune_first"`
-	PowerRuneEvery   int   `json:"power_rune_every"`
-	WisdomRuneEvery  int   `json:"wisdom_rune_every"`
-	LotusEvery       int   `json:"lotus_every"`
-	TormentorSpawn   int   `json:"tormentor_spawn"`
-	NeutralTiers     []int `json:"neutral_tiers"`
-	RoshanRespawnMin int   `json:"roshan_respawn_min"`
-	RoshanRespawnMax int   `json:"roshan_respawn_max"`
-	AegisDuration    int   `json:"aegis_duration"`
-	BuybackFrom      int   `json:"buyback_from"`
-}
 
 // AIChoice is which provider and model answer one kind of request.
 type AIChoice struct {
@@ -254,7 +228,7 @@ type Settings struct {
 	VoiceRate     int               `json:"voice_rate"` // -10 (slow) .. 10 (fast)
 	VoiceLevel    string            `json:"voice_level"`
 	DisabledRules []string          `json:"disabled_rules"`
-	Timings       Timings           `json:"-"` // always DefaultTimings()
+	Timings       dota.Timings      `json:"-"` // always dota.DefaultTimings()
 	AI            AISettings        `json:"ai"`
 	Overlay       OverlaySettings   `json:"overlay"`
 	Recording     RecordingSettings `json:"recording"`
@@ -290,7 +264,7 @@ func (s Settings) Clone() Settings {
 }
 
 func (s Settings) Validate() error {
-	if !slices.Contains(Roles, s.Role) {
+	if !slices.Contains(dota.Roles, s.Role) {
 		return fmt.Errorf("unknown role %q", s.Role)
 	}
 	if !slices.Contains(Languages, s.Language) {
@@ -303,7 +277,7 @@ func (s Settings) Validate() error {
 		return fmt.Errorf("unknown voice level %q", s.VoiceLevel)
 	}
 	for hero, role := range s.HeroRoles {
-		if !slices.Contains(Roles, role) {
+		if !slices.Contains(dota.Roles, role) {
 			return fmt.Errorf("unknown role %q for hero %s", role, hero)
 		}
 	}
@@ -382,14 +356,14 @@ func Default() Config {
 	return Config{
 		Listen: "127.0.0.1:4570",
 		Settings: Settings{
-			Role:          RoleCarry,
+			Role:          dota.Carry,
 			Voice:         VoiceSystem,
 			Language:      "en",
 			MMRPrompt:     true,
 			QuietInFights: true,
 			VoiceRate:     1,
 			VoiceLevel:    SpeakAll,
-			Timings:       DefaultTimings(),
+			Timings:       dota.DefaultTimings(),
 			AI: AISettings{Enabled: true, Review: true, Interval: 180,
 				// Claude Code's aliases follow Anthropic's newest models, so the defaults never go stale.
 				Live:    AIChoice{Provider: "claude", Model: "sonnet", Effort: "low"},
@@ -401,25 +375,6 @@ func Default() Config {
 			DashboardWindow: true,
 			TiltCheck:       true,
 		},
-	}
-}
-
-// DefaultTimings are the map timings of patch 7.41f, checked against Valve's patch notes
-// (dota2.com/datafeed/patchnotes) and Liquipedia on 2026-09-18.
-func DefaultTimings() Timings {
-	return Timings{
-		BountyRuneEvery:  240,                               // 0:00, then every 4:00 since 7.38
-		WaterRunes:       []int{120, 240},                   // 2:00 and 4:00
-		PowerRuneFirst:   360,                               // 6:00
-		PowerRuneEvery:   120,                               // then every 2:00
-		WisdomRuneEvery:  420,                               // Shrines of Wisdom every 7:00 since 7.38
-		LotusEvery:       180,                               // a lotus every 3:00, six at most
-		TormentorSpawn:   1200,                              // 20:00 since 7.39, then 10:00 after it dies
-		NeutralTiers:     []int{300, 900, 1500, 2100, 3600}, // Madstone cap rises at 5/15/25/35/60 min
-		RoshanRespawnMin: 480,                               // 8 to 11 minutes after he dies
-		RoshanRespawnMax: 660,
-		AegisDuration:    300,
-		BuybackFrom:      1800, // coaching choice, not a game rule: keep buyback gold from 30:00
 	}
 }
 
@@ -646,7 +601,7 @@ func (s *Store) Update(change func(*Settings) error) (Settings, error) {
 	if err := next.Validate(); err != nil {
 		return s.cfg.Settings.Clone(), err
 	}
-	next.Timings = DefaultTimings()
+	next.Timings = dota.DefaultTimings()
 	next.HUDWidgets = normalizeWidgets(next.HUDWidgets)
 	if reflect.DeepEqual(next, s.cfg.Settings) {
 		return next.Clone(), nil

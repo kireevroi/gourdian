@@ -2,7 +2,6 @@
 package coach
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 	"slices"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
 	"gourdian/internal/stats"
@@ -447,7 +447,7 @@ func (e *Engine) matchItems(m *match, h *gsi.Hero) []stats.ItemTiming {
 		}
 	}
 	var out []stats.ItemTiming
-	for name, at := range dotadata.CoreItemTimes(times, e.data.Items(), 1500) {
+	for name, at := range dotadata.CoreItemTimes(times, e.data.Items(), dota.CoreItemCost) {
 		out = append(out, stats.ItemTiming{MatchID: m.id, Hero: e.heroName(h), Item: name, Time: at, Source: stats.SourceGSI})
 	}
 	slices.SortFunc(out, func(a, b stats.ItemTiming) int { return a.Time - b.Time })
@@ -603,12 +603,12 @@ func (m *match) skillSpare() int {
 	return max(m.skillSeen-m.skillGap, 0)
 }
 
-func (m *match) observe(s, prev *gsi.State, t config.Timings) {
+func (m *match) observe(s, prev *gsi.State, t dota.Timings) {
 	clock := s.Map.ClockTime
 	m.last = s
 	m.team = s.Player.TeamName
 	for _, cp := range paceCheckpoints {
-		key := clockStr(cp)
+		key := dota.Clock(cp)
 		if _, ok := m.lhAt[key]; !ok && clock >= cp && clock < cp+60 {
 			m.lhAt[key] = s.Player.LastHits
 		}
@@ -659,7 +659,7 @@ type Ctx struct {
 	Prev     *gsi.State
 	Clock    int
 	Settings config.Settings
-	T        config.Timings
+	T        dota.Timings
 	Focus    string
 	RoleNote string
 	Targets  Targets
@@ -733,12 +733,4 @@ func (c *Ctx) itemName(short string) string {
 		return info.DName
 	}
 	return strings.ReplaceAll(short, "_", " ")
-}
-
-func clockStr(sec int) string {
-	sign := ""
-	if sec < 0 {
-		sign, sec = "-", -sec
-	}
-	return fmt.Sprintf("%s%d:%02d", sign, sec/60, sec%60)
 }

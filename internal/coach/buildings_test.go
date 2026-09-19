@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
 
@@ -23,7 +23,7 @@ func push(s *gsi.State) {
 }
 
 func TestGlyphWhenATowerIsPushedHard(t *testing.T) {
-	got := byRule(play(newEngine(nil), settings(config.RoleMid), 590, 640, push), "glyph")
+	got := byRule(play(newEngine(nil), settings(dota.Mid), 590, 640, push), "glyph")
 	if len(got) != 1 || !strings.Contains(got[0].Text, "mid tier 1 tower is dropping fast") || got[0].Severity != Urgent {
 		t.Fatalf("glyph tips = %+v", got)
 	}
@@ -32,7 +32,7 @@ func TestGlyphWhenATowerIsPushedHard(t *testing.T) {
 		hp := 1800 - max(0, s.Map.ClockTime-600)*5
 		s.Buildings = map[string]map[string]gsi.Building{"radiant": {"dota_goodguys_tower1_mid": {Health: hp, MaxHealth: 1800}}}
 	}
-	if got := byRule(play(newEngine(nil), settings(config.RoleMid), 590, 700, slow), "glyph"); len(got) != 0 {
+	if got := byRule(play(newEngine(nil), settings(dota.Mid), 590, 700, slow), "glyph"); len(got) != 0 {
 		t.Fatalf("a slow chip triggered the glyph: %+v", got)
 	}
 }
@@ -40,7 +40,7 @@ func TestGlyphWhenATowerIsPushedHard(t *testing.T) {
 func TestGlyphInRussianNamesTheBuilding(t *testing.T) {
 	e := newEngine(nil)
 	e.SetLanguage("ru")
-	set := settings(config.RoleMid)
+	set := settings(dota.Mid)
 	set.Language = "ru"
 	got := byRule(play(e, set, 590, 640, push), "glyph")
 	if len(got) != 1 || !strings.Contains(got[0].Text, "башня 1-го тира на миде") {
@@ -59,7 +59,7 @@ func TestGlyphRefreshedAndBuybackToDefend(t *testing.T) {
 			s.Buildings["radiant"]["good_rax_melee_mid"] = gsi.Building{Health: 0, MaxHealth: 2200}
 		}
 	}
-	if got := byRule(play(newEngine(nil), settings(config.RoleCarry), 1800, 1830, raxDown), "glyph_refreshed"); len(got) != 1 {
+	if got := byRule(play(newEngine(nil), settings(dota.Carry), 1800, 1830, raxDown), "glyph_refreshed"); len(got) != 1 {
 		t.Fatalf("glyph refresh tips = %+v", got)
 	}
 	dead := func(s *gsi.State) {
@@ -68,7 +68,7 @@ func TestGlyphRefreshedAndBuybackToDefend(t *testing.T) {
 		hp := 2500 - max(0, s.Map.ClockTime-1800)*40
 		s.Buildings = map[string]map[string]gsi.Building{"radiant": {"dota_goodguys_tower3_mid": {Health: hp, MaxHealth: 2500}}}
 	}
-	got := byRule(play(newEngine(nil), settings(config.RoleCarry), 1800, 1830, dead), "buyback_defend")
+	got := byRule(play(newEngine(nil), settings(dota.Carry), 1800, 1830, dead), "buyback_defend")
 	if len(got) != 1 || !strings.Contains(got[0].Text, "mid tier 3 tower is under attack") {
 		t.Fatalf("buyback tips = %+v", got)
 	}

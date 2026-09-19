@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gourdian/internal/dota"
 	"io"
 	"log/slog"
 	"net/http"
@@ -152,7 +153,7 @@ func (c *Client) Hero(id int) (HeroInfo, bool) {
 // recent pro games. It's nil while nothing has loaded.
 func (c *Client) BuildFor(heroID int, role string) *Build {
 	b := c.proBuild(heroID, 0, true, c.heroBuild(heroID))
-	if pos := Positions[role]; pos != 0 {
+	if pos := dota.Position(role); pos != 0 {
 		b = c.proBuild(heroID, pos, true, c.proBuild(heroID, pos, false, b))
 	}
 	return b

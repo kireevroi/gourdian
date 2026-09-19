@@ -9,6 +9,7 @@ import (
 
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
 
@@ -31,7 +32,7 @@ func find(w []config.HUDWidget, id string) *config.HUDWidget {
 
 func matchSnap() coach.Snapshot {
 	return coach.Snapshot{
-		InMatch: true, Clock: 300, Role: config.RoleMid,
+		InMatch: true, Clock: 300, Role: dota.Mid,
 		Hero:   &coach.HeroView{ID: 1, Alive: true},
 		Player: &gsi.Player{Gold: 900, Kills: 2, Deaths: 1, Assists: 3, GPM: 450, LastHits: 40, Denies: 6},
 		Pace:   &coach.Pace{LastHits: 40, Expected: 45},

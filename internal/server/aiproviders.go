@@ -11,6 +11,7 @@ import (
 	"gourdian/internal/aicoach"
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/secrets"
 )
 
@@ -234,9 +235,9 @@ func (s *Server) handleProviderTest(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&choice)
 	choice.Provider = p.Info().ID
 	set := s.cfg.Settings()
-	snap := coach.Snapshot{InMatch: true, Clock: 610, Team: "radiant", Role: config.RoleMid,
+	snap := coach.Snapshot{InMatch: true, Clock: 610, Team: "radiant", Role: dota.Mid,
 		Hero: &coach.HeroView{Name: "Shadow Fiend", Level: 9, Alive: true, HealthPercent: 70, ManaPercent: 40}}
-	prompt := aicoach.Prompt(aicoach.Input{Reason: "a connection test from the dashboard; answer as you would in a match", Role: config.RoleMid, Snapshot: snap})
+	prompt := aicoach.Prompt(aicoach.Input{Reason: "a connection test from the dashboard; answer as you would in a match", Role: dota.Mid, Snapshot: snap})
 	ctx, cancel := context.WithTimeout(r.Context(), aiTimeout)
 	defer cancel()
 	started := time.Now()

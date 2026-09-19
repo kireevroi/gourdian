@@ -1,6 +1,7 @@
 package coach
 
 import (
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
 )
@@ -108,18 +109,10 @@ func skillSource(b *dotadata.SkillBuild, lang string) string {
 	w := sourceWords{lang}
 	where := w.f("all positions", "все позиции")
 	if b.Position > 0 {
-		where = RoleName(positionRoles[b.Position], lang)
+		where = dota.RoleName(dota.RoleAt(b.Position), lang)
 	}
 	if b.Won {
 		return w.f("%s, %d won pro games", "%s, побед про: %d", where, b.Games)
 	}
 	return w.f("%s, %d pro games", "%s, про-матчей: %d", where, b.Games)
 }
-
-var positionRoles = func() map[int]string {
-	out := map[int]string{}
-	for role, pos := range dotadata.Positions {
-		out[pos] = role
-	}
-	return out
-}()

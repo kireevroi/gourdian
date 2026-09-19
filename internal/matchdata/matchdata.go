@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/stats"
 )
@@ -37,10 +37,6 @@ type ItemTime struct {
 	Time int
 }
 
-var laneNames = map[int]string{dotadata.LaneSafe: "safe lane", dotadata.LaneMid: "mid lane", dotadata.LaneOff: "offlane", dotadata.LaneJungle: "jungle"}
-
-const coreItemCost = 1500
-
 func (s Service) names(ids []int) []string {
 	out := make([]string, 0, len(ids))
 	for _, id := range ids {
@@ -50,14 +46,14 @@ func (s Service) names(ids []int) []string {
 }
 
 func (s Service) detail(d dotadata.PlayerDetail) *Detail {
-	out := &Detail{PlayerDetail: d, LaneRoleName: laneNames[d.LaneRole], Enemies: s.names(d.Enemies),
+	out := &Detail{PlayerDetail: d, LaneRoleName: dota.LaneNumbered(d.LaneRole), Enemies: s.names(d.Enemies),
 		Allies: s.names(d.Allies), LaneOpponents: s.names(d.LaneOpponents)}
 	if d.Roaming {
 		out.LaneRoleName = "roaming"
 	}
 	items := s.Data.Items()
 	for name, t := range d.ItemTimes {
-		if info, ok := items[name]; ok && info.Cost >= coreItemCost && info.Tier == 0 {
+		if info, ok := items[name]; ok && info.Cost >= dota.CoreItemCost && info.Tier == 0 {
 			out.CoreItems = append(out.CoreItems, ItemTime{Name: info.DName, Time: t})
 		}
 	}
@@ -114,7 +110,7 @@ func applyDetail(row *stats.MatchSummary, d dotadata.PlayerDetail, enemies []str
 
 func itemTimings(matchID, hero string, d dotadata.PlayerDetail, items map[string]dotadata.ItemInfo) []stats.ItemTiming {
 	var out []stats.ItemTiming
-	for name, t := range dotadata.CoreItemTimes(d.ItemTimes, items, coreItemCost) {
+	for name, t := range dotadata.CoreItemTimes(d.ItemTimes, items, dota.CoreItemCost) {
 		out = append(out, stats.ItemTiming{MatchID: matchID, Hero: hero, Item: name, Time: t, Source: stats.SourceOpenDota})
 	}
 	slices.SortFunc(out, func(a, b stats.ItemTiming) int { return a.Time - b.Time })
@@ -126,17 +122,17 @@ func itemTimings(matchID, hero string, d dotadata.PlayerDetail, items map[string
 func roleFor(d dotadata.PlayerDetail) string {
 	switch {
 	case d.LaneRole == dotadata.LaneMid:
-		return config.RoleMid
+		return dota.Mid
 	case d.LaneRole == dotadata.LaneSafe && d.NetWorthRank <= 2:
-		return config.RoleCarry
+		return dota.Carry
 	case d.LaneRole == dotadata.LaneOff && d.NetWorthRank <= 3:
-		return config.RoleOfflane
+		return dota.Offlane
 	case d.LaneRole == dotadata.LaneOff || d.Roaming:
-		return config.RoleSoftSupport
+		return dota.SoftSupport
 	case d.LaneRole == 0 && d.NetWorthRank <= 2:
-		return config.RoleCarry
+		return dota.Carry
 	default:
-		return config.RoleHardSupport
+		return dota.HardSupport
 	}
 }
 

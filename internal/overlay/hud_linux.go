@@ -20,6 +20,7 @@ import (
 	"github.com/jezek/xgb/xproto"
 
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/hotkey"
 )
 
@@ -544,7 +545,7 @@ func (u *xui) do(a action) {
 	case actDashboard:
 		u.openDashboard()
 	default:
-		if i := int(a - actPosition); i >= 0 && i < len(config.Roles) {
+		if i := int(a - actPosition); i >= 0 && i < len(dota.Roles) {
 			u.pickPosition(i)
 		}
 	}
@@ -562,7 +563,7 @@ func (u *xui) setEditing(on bool) {
 }
 
 func (u *xui) pickPosition(i int) {
-	role := config.Roles[i]
+	role := dota.Roles[i]
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -671,7 +672,7 @@ func (u *xui) setPositionKeys(on bool) {
 		return
 	}
 	u.positionKeys = on
-	for i := range config.Roles {
+	for i := range dota.Roles {
 		h := hotkey.Hotkey{Ctrl: true, Shift: true, Key: strconv.Itoa(i + 1)}
 		if on {
 			if err := u.grabKey(h, actPosition+action(i)); err != nil {

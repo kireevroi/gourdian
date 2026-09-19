@@ -10,7 +10,7 @@ import (
 	"slices"
 	"testing"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/stats"
 )
@@ -94,7 +94,7 @@ func TestImportAddsMissingMatchesOnce(t *testing.T) {
 	}
 	rows, _ := s.Stats.Matches()
 	m := rows[0]
-	if m.Source != stats.SourceOpenDota || m.Result != "loss" || m.Role != config.RoleHardSupport || m.LastHitsAt["5:00"] != 11 || !m.Parsed {
+	if m.Source != stats.SourceOpenDota || m.Result != "loss" || m.Role != dota.HardSupport || m.LastHitsAt["5:00"] != 11 || !m.Parsed {
 		t.Fatalf("imported match = %+v", m)
 	}
 	if added, err := s.Import(t.Context(), accountID, 5, nil); err != nil || added != 0 {
@@ -110,12 +110,12 @@ func TestRoleFor(t *testing.T) {
 		d    dotadata.PlayerDetail
 		want string
 	}{
-		{dotadata.PlayerDetail{LaneRole: dotadata.LaneMid, NetWorthRank: 4}, config.RoleMid},
-		{dotadata.PlayerDetail{LaneRole: dotadata.LaneSafe, NetWorthRank: 1}, config.RoleCarry},
-		{dotadata.PlayerDetail{LaneRole: dotadata.LaneSafe, NetWorthRank: 5}, config.RoleHardSupport},
-		{dotadata.PlayerDetail{LaneRole: dotadata.LaneOff, NetWorthRank: 2}, config.RoleOfflane},
-		{dotadata.PlayerDetail{LaneRole: dotadata.LaneOff, NetWorthRank: 4}, config.RoleSoftSupport},
-		{dotadata.PlayerDetail{LaneRole: dotadata.LaneJungle, Roaming: true, NetWorthRank: 5}, config.RoleSoftSupport},
+		{dotadata.PlayerDetail{LaneRole: dotadata.LaneMid, NetWorthRank: 4}, dota.Mid},
+		{dotadata.PlayerDetail{LaneRole: dotadata.LaneSafe, NetWorthRank: 1}, dota.Carry},
+		{dotadata.PlayerDetail{LaneRole: dotadata.LaneSafe, NetWorthRank: 5}, dota.HardSupport},
+		{dotadata.PlayerDetail{LaneRole: dotadata.LaneOff, NetWorthRank: 2}, dota.Offlane},
+		{dotadata.PlayerDetail{LaneRole: dotadata.LaneOff, NetWorthRank: 4}, dota.SoftSupport},
+		{dotadata.PlayerDetail{LaneRole: dotadata.LaneJungle, Roaming: true, NetWorthRank: 5}, dota.SoftSupport},
 	}
 	for _, c := range cases {
 		if got := roleFor(c.d); got != c.want {

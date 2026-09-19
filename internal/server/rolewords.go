@@ -2,8 +2,7 @@ package server
 
 import (
 	"fmt"
-
-	"gourdian/internal/coach"
+	"gourdian/internal/dota"
 )
 
 // roleWordsRU words the position messages in Russian, keyed by the English.
@@ -25,7 +24,7 @@ var roleWordsRU = map[string]string{
 	"Drill: %s %d times, above your usual %.1f": "Тренировка «%s»: за игру — %d, больше обычного (%.1f)",
 }
 
-var lanesRU = map[string]string{coach.LaneSafe: "на лёгкой линии", coach.LaneMid: "на миде", coach.LaneOff: "на сложной линии"}
+var lanesRU = map[string]string{dota.LaneSafe: "на лёгкой линии", dota.LaneMid: "на миде", dota.LaneOff: "на сложной линии"}
 
 func roleSay(lang, format string, args ...any) string {
 	if t, ok := roleWordsRU[format]; ok && lang == "ru" {

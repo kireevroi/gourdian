@@ -9,6 +9,7 @@ import (
 
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 )
 
 // lockRole records that the player picked the role for this match, so lane detection leaves it alone.
@@ -44,7 +45,7 @@ func (s *Server) applyDetectedRole(res coach.Result, matchID string, set config.
 	s.log.Info("role detected from laning", "lane", res.DetectedLane, "role", set.Role)
 	snap := s.engine.Snapshot(set)
 	say := func(lang string) (string, string) {
-		lane, name := laneIn(lang, res.DetectedLane), coach.RoleName(set.Role, lang)
+		lane, name := laneIn(lang, res.DetectedLane), dota.RoleName(set.Role, lang)
 		return roleSay(lang, "You're laning %s, so the coach switched you to %s. Another position? Press Ctrl+Shift+1 to 5", lane, name),
 			roleSay(lang, "You're %s. Coaching you as %s.", lane, name)
 	}
@@ -62,7 +63,7 @@ func (s *Server) handleRole(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Role string `json:"role"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body); err != nil || !slices.Contains(config.Roles, body.Role) {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body); err != nil || !slices.Contains(dota.Roles, body.Role) {
 		http.Error(w, `send {"role": "carry"}, or mid, offlane, soft_support, hard_support`, http.StatusBadRequest)
 		return
 	}
@@ -82,11 +83,11 @@ func (s *Server) handleRole(w http.ResponseWriter, r *http.Request) {
 		s.engine.SetRoleNote(roleSay(set.Language, "your pick"))
 		s.applyFocus(set.Role, snap.Hero.ID)
 		if changed {
-			name := coach.RoleName(set.Role, set.Language)
+			name := dota.RoleName(set.Role, set.Language)
 			tip := coach.Tip{Rule: "role_pick", Category: "focus", Severity: coach.Info, Clock: snap.Clock, At: time.Now(),
 				Text: roleSay(set.Language, "Coaching you as %s", name), Speech: roleSay(set.Language, "Coaching you as %s.", name)}
 			if set.Language != "en" {
-				tip.SpeechEN = roleSay("en", "Coaching you as %s.", coach.RoleName(set.Role, "en"))
+				tip.SpeechEN = roleSay("en", "Coaching you as %s.", dota.RoleName(set.Role, "en"))
 			}
 			s.emitTips(snap.MatchID, []coach.Tip{tip}, set)
 		}
