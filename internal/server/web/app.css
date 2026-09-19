@@ -71,6 +71,8 @@ input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
 @media (max-width: 900px) { .cards { grid-template-columns: minmax(0, 1fr); } }
 .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; flex-wrap: wrap; }
 .field > label, .field > .label { font-weight: 500; }
+/* A select is as wide as its longest option unless told otherwise, and long Russian options overflow cards. */
+select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
 .hint { color: var(--muted); font-size: 12px; margin: 2px 0 6px; }
 label.block { display: block; margin-top: 10px; font-weight: 500; }
 .toggle { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; padding: 6px 8px; border-radius: 6px; background: var(--panel-2); cursor: pointer; margin: 4px 0; }
