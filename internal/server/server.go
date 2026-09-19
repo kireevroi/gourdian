@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"gourdian/internal/ai"
+	"gourdian/internal/aisvc"
 	"gourdian/internal/autostart"
 	"gourdian/internal/buildinfo"
 	"gourdian/internal/coach"
@@ -86,10 +87,11 @@ type Server struct {
 	brief   briefingCache
 	picks   pickCache
 
-	roleMu   sync.Mutex
-	roleHero int
-	roleLock string // match in which the player picked the role themselves
-	ai       aiState
+	roleMu    sync.Mutex
+	roleHero  int
+	roleLock  string // match in which the player picked the role themselves
+	ai        aiState
+	providers *aisvc.Service
 
 	matches   matchdata.Service
 	importing atomic.Bool
@@ -116,7 +118,12 @@ func New(cfg *config.Store, engine *coach.Engine, st *stats.Store, data *dotadat
 	s.applyRules()
 	s.targets = &targetCache{s: s}
 	engine.SetTargetSource(s.targets)
-	s.ai.providers = newProviders(ai.NewProviders(s.aiEnv(s.keys)))
+	s.providers = aisvc.New(aisvc.Host{Settings: cfg, Keys: s.keys, WorkDir: workDir, Log: log, Ctx: s.baseCtx,
+		Spawn: s.spawn, Publish: s.hub.publish, PublishSettings: s.publishSettings, Resumed: s.resumePending,
+		Paused: func(aisvc.Health) {
+			s.ai.noticePending.Store(true)
+			s.noticeAIProblem()
+		}})
 	s.applyFocus(cfg.Settings().Role, 0)
 	return s
 }
@@ -258,7 +265,7 @@ func (s *Server) Run(ctx context.Context) {
 	}
 	defer s.tasks.Done()
 	s.spawn(func(context.Context) { s.resumePending() })
-	s.spawn(func(context.Context) { s.startupAICheck() })
+	s.spawn(func(context.Context) { s.providers.StartupCheck() })
 	s.spawn(func(context.Context) { s.ensurePiper() })
 	tick := time.NewTicker(400 * time.Millisecond)
 	defer tick.Stop()
@@ -496,7 +503,7 @@ func (s *Server) settingsResponse() settingsResponse {
 		Version:        buildinfo.Version,
 		Build:          webBuild(),
 		Speech:         s.speechName(),
-		AIReady:        s.aiReady(),
+		AIReady:        s.providers.Ready(),
 		AIEfforts:      config.AIEfforts,
 		HeroNames:      s.heroNames(),
 		Autostart:      autostart.Enabled(),
@@ -542,7 +549,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if set.Voice == config.VoiceSystem && s.speaker == nil {
 			return errNoSystemVoice
 		}
-		return s.validAIChoices(set.AI)
+		return s.providers.ValidChoices(set.AI)
 	}
 	// Model checks ask the providers, which takes a while, so they run on a copy first and the
 	// settings are only locked to apply the request.
@@ -556,14 +563,14 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.markTyped(r.Context(), &prev.AI, &picked.AI)
-	s.fillModels(r.Context(), &picked.AI)
+	s.providers.MarkTyped(r.Context(), &prev.AI, &picked.AI)
+	s.providers.FillModels(r.Context(), &picked.AI)
 	next, err := s.cfg.Update(func(cur *config.Settings) error {
 		if err := apply(cur); err != nil {
 			return err
 		}
-		now := aiJobs(&picked.AI)
-		for i, c := range aiJobs(&cur.AI) {
+		now := aisvc.Jobs(&picked.AI)
+		for i, c := range aisvc.Jobs(&cur.AI) {
 			if c.Provider == now[i].Provider {
 				c.Model, c.Typed = now[i].Model, now[i].Typed
 			}
