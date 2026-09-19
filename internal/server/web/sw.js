@@ -1,8 +1,8 @@
 // The dashboard runs in its own window, so a restart of the trainer must not show the
 // browser's "can't reach this site" page. The shell is kept in a cache and served when the
 // server is away; app.js then shows a reconnecting overlay until it answers again.
-const CACHE = 'shell-v2';
-const SHELL = ['/', '/app.css', '/app.js', '/stats.html', '/rules.html', '/hud.html', '/ai.html', '/settings.html', '/icon.svg', '/fonts/RussoOne-Regular.ttf'];
+const CACHE = 'shell-v3';
+const SHELL = ['/', '/app.css', '/app.js', '/events-worker.js', '/stats.html', '/rules.html', '/hud.html', '/ai.html', '/settings.html', '/icon.svg', '/fonts/RussoOne-Regular.ttf'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

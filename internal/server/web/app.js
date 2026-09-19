@@ -106,22 +106,57 @@ function sayInBrowser(text, lang, rate, urgent) {
 // tp translates a sentence that has values in it: tp('{n} of {m} done', { n, m }).
 const tp = (template, vars) => t(template).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
 
-// Events: one EventSource per page, shared by the shell and the page.
+// Events: every dashboard page in the browser shares one stream through events-worker.js,
+// since a browser allows only six connections to the trainer and each stream keeps one.
+// Where there are no shared workers, the page opens its own stream.
 const events = (() => {
   const handlers = {}, openers = [];
-  let es;
+  let port = null, es = null;
+  const dispatch = (type, raw) => { for (const fn of handlers[type] || []) fn(JSON.parse(raw), raw); };
+  // In order, so the shell has the language loaded before a page renders text with t().
+  const opened = async () => { for (const fn of openers) { try { await fn(); } catch (e) { /* the next one still runs */ } } };
+  const offline = () => (handlers.offline || []).forEach((fn) => fn());
   const on = (type, fn) => {
+    const fresh = !handlers[type];
     (handlers[type] ||= []).push(fn);
-    if (es) es.addEventListener(type, (e) => fn(JSON.parse(e.data), e.data));
+    if (!fresh || type === 'offline') return;
+    if (port) port.postMessage({ subscribe: [type] });
+    else if (es) es.addEventListener(type, (e) => dispatch(type, e.data));
+  };
+  const direct = () => {
+    port = null;
+    es = new EventSource('/events');
+    for (const type of Object.keys(handlers)) if (type !== 'offline') es.addEventListener(type, (e) => dispatch(type, e.data));
+    es.onopen = opened;
+    es.onerror = offline;
+  };
+  let heard = 0;
+  const join = () => {
+    if (port) port.postMessage({ bye: true });
+    try {
+      const worker = new SharedWorker('/events-worker.js');
+      port = worker.port;
+      worker.onerror = () => { if (!es) direct(); };
+      port.onmessage = (m) => {
+        const d = m.data;
+        heard = Date.now();
+        if (d.open) opened();
+        else if (d.offline) offline();
+        else if (d.type) dispatch(d.type, d.data);
+      };
+      port.start();
+      heard = Date.now();
+      port.postMessage({ subscribe: Object.keys(handlers).filter((t) => t !== 'offline'), hello: true });
+    } catch (e) {
+      direct();
+    }
   };
   const start = () => {
-    es = new EventSource('/events');
-    for (const [type, fns] of Object.entries(handlers)) {
-      for (const fn of fns) es.addEventListener(type, (e) => fn(JSON.parse(e.data), e.data));
-    }
-    // In order, so the shell has the language loaded before a page renders text with t().
-    es.onopen = async () => { for (const fn of openers) { try { await fn(); } catch (e) { /* the next one still runs */ } } };
-    es.onerror = () => (handlers.offline || []).forEach((fn) => fn());
+    if (!('SharedWorker' in window)) { direct(); return; }
+    join();
+    addEventListener('pagehide', () => { if (port) port.postMessage({ bye: true }); });
+    // The worker says it's alive every 5s; a browser can still end it, and then the page joins again.
+    setInterval(() => { if (port && Date.now() - heard > 15000) join(); }, 5000);
   };
   return { on, onOpen: (fn) => openers.push(fn), start };
 })();
