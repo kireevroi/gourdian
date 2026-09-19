@@ -6,45 +6,6 @@ import (
 	"fmt"
 )
 
-const matchColumnList = `match_id, ended_at, source, hero_id, hero, role, team, result, duration_sec, kills, deaths,
-	assists, last_hits, denies, gpm, xpm, rank_tier, simulated, ranked, parsed, lane_role, net_worth, hero_damage,
-	tower_damage, obs_placed, sen_placed, camps_stacked, teamfight, gpm_pct, lh_pct, hero_damage_pct, enemy_heroes,
-	last_hits_at, death_clocks, tip_counts`
-
-func matchValues(m MatchSummary) []any {
-	return []any{m.MatchID, timeValue(m.EndedAt), m.Source, m.HeroID, m.Hero, m.Role, m.Team, m.Result, m.DurationSec,
-		m.Kills, m.Deaths, m.Assists, m.LastHits, m.Denies, m.GPM, m.XPM, m.RankTier, boolInt(m.Simulated),
-		boolInt(m.Ranked), boolInt(m.Parsed), m.LaneRole, m.NetWorth, m.HeroDamage, m.TowerDamage, m.ObsPlaced,
-		m.SenPlaced, m.CampsStacked, m.TeamfightParticipation, m.GPMPct, m.LHPct, m.HeroDamagePct,
-		jsonValue(m.EnemyHeroes), jsonValue(m.LastHitsAt), jsonValue(m.DeathClocks), jsonValue(m.TipCounts)}
-}
-
-func scanMatch(rows *sql.Rows) (MatchSummary, error) {
-	var m MatchSummary
-	var endedAt, enemies, lastHits, deaths, counts string
-	var simulated, ranked, parsed int
-	err := rows.Scan(&m.MatchID, &endedAt, &m.Source, &m.HeroID, &m.Hero, &m.Role, &m.Team, &m.Result, &m.DurationSec,
-		&m.Kills, &m.Deaths, &m.Assists, &m.LastHits, &m.Denies, &m.GPM, &m.XPM, &m.RankTier, &simulated, &ranked,
-		&parsed, &m.LaneRole, &m.NetWorth, &m.HeroDamage, &m.TowerDamage, &m.ObsPlaced, &m.SenPlaced, &m.CampsStacked,
-		&m.TeamfightParticipation, &m.GPMPct, &m.LHPct, &m.HeroDamagePct, &enemies, &lastHits, &deaths, &counts)
-	if err != nil {
-		return m, err
-	}
-	m.EndedAt = parseTime(endedAt)
-	m.Simulated, m.Ranked, m.Parsed = simulated == 1, ranked == 1, parsed == 1
-	m.EnemyHeroes = stringsFromJSON(enemies)
-	m.LastHitsAt = countsFromJSON(lastHits)
-	m.DeathClocks = intsFromJSON(deaths)
-	m.TipCounts = countsFromJSON(counts)
-	if m.Source == "" {
-		m.Source = SourceLive
-		if m.Simulated {
-			m.Source = SourceSim
-		}
-	}
-	return m, nil
-}
-
 func (s *Store) AppendMatch(m MatchSummary) error {
 	return s.tx(func(tx *sql.Tx) error { return appendMatch(tx, m) })
 }
@@ -63,7 +24,7 @@ func appendMatch(q execer, m MatchSummary) error {
 	case !errors.Is(err, sql.ErrNoRows):
 		return err
 	}
-	_, err := q.Exec(`INSERT INTO matches (`+matchColumnList+`) VALUES (`+placeholders(35)+`)`, matchValues(m)...)
+	_, err := q.Exec(`INSERT INTO matches (`+matchColumnList+`) VALUES (`+matchPlaceholder+`)`, matchValues(m)...)
 	return err
 }
 
@@ -90,7 +51,7 @@ func (s *Store) UpdateMatch(matchID string, update func(*MatchSummary)) error {
 		update(&m)
 		m.MatchID = matchID
 		// The row keeps its rowid, so matches stay in the order they were played.
-		_, err = tx.Exec(`REPLACE INTO matches (rowid, `+matchColumnList+`) VALUES (?, `+placeholders(35)+`)`,
+		_, err = tx.Exec(`REPLACE INTO matches (rowid, `+matchColumnList+`) VALUES (?, `+matchPlaceholder+`)`,
 			append([]any{rowID}, matchValues(m)...)...)
 		return err
 	})

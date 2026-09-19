@@ -17,13 +17,6 @@ import (
 const DataFile = "trainer.data"
 
 const schema = `
-CREATE TABLE IF NOT EXISTS matches (
-  match_id TEXT PRIMARY KEY, ended_at TEXT, source TEXT, hero_id INTEGER, hero TEXT, role TEXT, team TEXT,
-  result TEXT, duration_sec INTEGER, kills INTEGER, deaths INTEGER, assists INTEGER, last_hits INTEGER,
-  denies INTEGER, gpm INTEGER, xpm INTEGER, rank_tier INTEGER, simulated INTEGER, ranked INTEGER,
-  parsed INTEGER, lane_role INTEGER, net_worth INTEGER, hero_damage INTEGER, tower_damage INTEGER,
-  obs_placed INTEGER, sen_placed INTEGER, camps_stacked INTEGER, teamfight REAL, gpm_pct REAL, lh_pct REAL,
-  hero_damage_pct REAL, enemy_heroes TEXT, last_hits_at TEXT, death_clocks TEXT, tip_counts TEXT);
 CREATE INDEX IF NOT EXISTS matches_ended ON matches(ended_at);
 
 CREATE TABLE IF NOT EXISTS samples (
@@ -69,7 +62,7 @@ func Open(configDir string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.Exec(matchTable + schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("prepare %s: %w", DataFile, err)
 	}

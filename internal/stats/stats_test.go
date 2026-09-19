@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -315,5 +316,42 @@ func TestOpenUpgradesAnOlderFile(t *testing.T) {
 		if version != len(migrations) || hasColumn != 1 || hasIndex != 1 {
 			t.Fatalf("version %d of %d, followed_focus %d, index %d", version, len(migrations), hasColumn, hasIndex)
 		}
+	}
+}
+
+// Every field of a match survives being saved and read back. The sample must set every field,
+// so a new one can't be left out of the matches table unnoticed.
+func TestMatchKeepsEveryField(t *testing.T) {
+	m := MatchSummary{MatchID: "m1", HeroID: 26, Hero: "Lion", Role: "hard_support", Team: "radiant", Result: "win",
+		EndedAt: time.Date(2026, 9, 19, 20, 0, 0, 0, time.UTC), DurationSec: 2400, Kills: 3, Deaths: 4, Assists: 20,
+		LastHits: 40, Denies: 5, GPM: 300, XPM: 400, LastHitsAt: map[string]int{"10:00": 12}, DeathClocks: []int{300, 900},
+		TipCounts: map[string]int{"no_tp": 2}, RankTier: 45, Simulated: true, Ranked: true, Source: SourcePractice,
+		Parsed: true, LaneRole: 3, NetWorth: 9000, HeroDamage: 12000, TowerDamage: 500, ObsPlaced: 8, SenPlaced: 6,
+		CampsStacked: 4, TeamfightParticipation: 0.75, GPMPct: 0.4, LHPct: 0.3, HeroDamagePct: 0.2,
+		EnemyHeroes: []string{"Axe", "Lina"}}
+	v := reflect.ValueOf(m)
+	for i := range v.NumField() {
+		if name := v.Type().Field(i).Name; name != "Items" && v.Field(i).IsZero() {
+			t.Fatalf("the sample leaves %s empty; set it so its column is checked", name)
+		}
+	}
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.AppendMatch(m); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.Match("m1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.EndedAt.Equal(m.EndedAt) {
+		t.Fatalf("ended_at %v, want %v", got.EndedAt, m.EndedAt)
+	}
+	got.EndedAt = m.EndedAt
+	if !reflect.DeepEqual(got, m) {
+		t.Fatalf("read back\n%+v\nwant\n%+v", got, m)
 	}
 }
