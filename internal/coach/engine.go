@@ -89,8 +89,10 @@ type Engine struct {
 	log       *slog.Logger
 	now       func() time.Time
 
-	mu          sync.Mutex
-	last        *gsi.State
+	mu   sync.Mutex
+	last *gsi.State
+	// prev is the earlier state the last update compared with, for the rule editor's check.
+	prev        *gsi.State
 	lastSeen    time.Time
 	lastInMatch time.Time
 	match       *match
@@ -178,6 +180,13 @@ func (e *Engine) SetOverrides(o map[string]RuleOverride) {
 	e.rebuild()
 }
 
+// newCtx is what rules see for state s. The rule editor's live check builds it the same way,
+// so it shows the values the rule really gets. The caller holds e.mu.
+func (e *Engine) newCtx(s, prev *gsi.State, set config.Settings, now time.Time) *Ctx {
+	return &Ctx{S: s, Prev: prev, Clock: s.Map.ClockTime, Settings: set, T: set.Timings, Focus: e.focus, RoleNote: e.roleNote,
+		Targets: e.targetsFor(s.Hero.ID, set.Role), data: e.data, m: e.match, now: now}
+}
+
 func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
 type Result struct {
@@ -231,6 +240,7 @@ func (e *Engine) Update(s *gsi.State, set config.Settings) Result {
 	if !prev.InMatch() || prev.Map.MatchID != m.gsiID {
 		prev = nil
 	}
+	e.prev = prev
 	m.role = set.Role
 	m.observe(s, prev, set.Timings)
 	m.seeItems(heldNames(s), s.Map.ClockTime, !m.observed)
@@ -248,8 +258,7 @@ func (e *Engine) Update(s *gsi.State, set config.Settings) Result {
 		return res
 	}
 
-	c := &Ctx{S: s, Prev: prev, Clock: s.Map.ClockTime, Settings: set, T: set.Timings, Focus: e.focus, RoleNote: e.roleNote,
-		Targets: e.targetsFor(s.Hero.ID, set.Role), data: e.data, m: m, now: now}
+	c := e.newCtx(s, prev, set, now)
 	for i := range e.rules {
 		r := &e.rules[i]
 		o, hasOverride := e.overrides[r.ID]
