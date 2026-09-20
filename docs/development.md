@@ -58,6 +58,8 @@ Everything slow hangs off that path rather than sitting in it: OpenDota lookups,
 
 ## Code map
 
+[Architecture](architecture.md) covers how these layer and the planned reshaping; this is the index.
+
 | Path | Contents |
 |---|---|
 | `internal/gsi` | GSI payload types |

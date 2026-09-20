@@ -51,6 +51,7 @@ Everything else lives on the dashboard at **http://127.0.0.1:4570** — the live
 - **[Statistics](docs/stats.md)** — the data file, CSV export, match import, patch timings
 - **[Linux](docs/linux.md)** — installing and what differs from Windows
 - **[Development](docs/development.md)** — building, releases, commands, code map
+- **[Architecture](docs/architecture.md)** — how the packages layer, and where the structure needs work
 
 ## License
 
