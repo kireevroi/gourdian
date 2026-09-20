@@ -149,3 +149,61 @@ func mustJSON(v any) []byte {
 	}
 	return b
 }
+
+// The trainer drops a reading that stops being renewed, so the loop has to keep telling it
+// what it can see even when nothing new has settled. Most of a draft is quiet: the first few
+// heroes go in and then nothing happens for a while.
+func TestTheDraftIsReportedEvenWhenNothingChanges(t *testing.T) {
+	heroes := []int{1, 8}
+	table := screen.Table{}
+	for _, id := range heroes {
+		table.Add(id, portrait(id))
+	}
+	var slots [2 * screen.Slots]int
+	slots[screen.Slots], slots[screen.Slots+1] = heroes[0], heroes[1]
+	size := image.Rect(0, 0, 1920, 1080)
+	shot := fakeScreen(size, slots)
+
+	var mu sync.Mutex
+	posts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		posts++
+		mu.Unlock()
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	m := newModel(time.Now(), false)
+	m.apply("snapshot", []byte(`{"connected":true,"team":"radiant"}`), time.Now())
+	m.apply("hud", mustJSON(hud.Payload{Draft: true}), time.Now())
+	a := newAPI(srv.URL)
+
+	// Long enough that the race detector's slowdown can't make an unchanging draft look like
+	// a quiet one.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	go func() {
+		for ctx.Err() == nil {
+			mu.Lock()
+			enough := posts >= 3
+			mu.Unlock()
+			if enough {
+				cancel()
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+	watchWith(ctx, m, &a, table, eyes{
+		size: func() (image.Rectangle, error) { return size, nil },
+		grab: func(image.Rectangle) (image.Image, error) { return shot, nil },
+	}, 20*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	mu.Lock()
+	defer mu.Unlock()
+	// The two heroes settle once and never change; the trainer must still hear about them.
+	if posts < 3 {
+		t.Errorf("told the trainer %d times over an unchanging draft, want it kept up", posts)
+	}
+}

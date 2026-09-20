@@ -75,7 +75,7 @@ func watchWith(ctx context.Context, m *model, a *api, table screen.Table, look e
 			log.Warn("couldn't read the screen", "err", err)
 			continue
 		}
-		read, settled := seen.Add(shot, bar, table)
+		read, _ := seen.Add(shot, bar, table)
 		// Dota's interface can be scaled by hand, which moves the portraits away from where
 		// the screen's height says they are. Look for them properly, once per draft.
 		if read == 0 && !searched {
@@ -85,7 +85,11 @@ func watchWith(ctx context.Context, m *model, a *api, table screen.Table, look e
 				bar = found
 			}
 		}
-		if settled == 0 {
+		// Tell the trainer every time round, not only when a hero has just settled. It drops
+		// a reading that stops being renewed, so a quiet stretch of the draft -- which is
+		// most of it, once the first few are in -- would take the other side off the board
+		// and undo the advice that rests on them.
+		if seen.Settled() == 0 {
 			continue
 		}
 		dire := m.dire()
