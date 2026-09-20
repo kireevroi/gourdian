@@ -122,6 +122,9 @@ type Timer struct {
 	Label string `json:"label"`
 	At    int    `json:"at"`
 	Kind  string `json:"kind"`
+	// Guess marks a time the trainer worked out rather than saw. An Aegis the player isn't
+	// carrying is the one of these: Dota tells nobody when someone else's is used up.
+	Guess bool `json:"guess,omitempty"`
 }
 
 var itemSlots = []string{"slot0", "slot1", "slot2", "slot3", "slot4", "slot5", "slot6", "slot7", "slot8",
@@ -300,6 +303,11 @@ func timers(clock int, daytime bool, set config.Settings, m *match) []Timer {
 			label = "Your Aegis expires"
 		}
 		add(label, "objective", m.aegisExpires)
+		// The player's own Aegis leaves their inventory where the trainer can see it. Anyone
+		// else's may already have brought them back, and nothing in the game says so.
+		if len(out) > 0 && !m.aegisMine {
+			out[len(out)-1].Guess = true
+		}
 	}
 	if slices.Contains(supports, set.Role) && clock >= 0 {
 		pull := clock - clock%60 + 53

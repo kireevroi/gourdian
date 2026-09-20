@@ -349,7 +349,11 @@ func timerLines(timers []coach.Timer, clock int, w config.HUDWidget, l words) []
 		if in <= 20 {
 			kind = KindWarn
 		}
-		out = append(out, Line{dota.Clock(in) + "  " + l.timer(t.Label), kind})
+		label := l.timer(t.Label)
+		if t.Guess {
+			label = l.f("%s, if it hasn't been used", label)
+		}
+		out = append(out, Line{dota.Clock(in) + "  " + label, kind})
 	}
 	return out
 }

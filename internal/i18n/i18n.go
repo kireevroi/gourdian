@@ -20,6 +20,7 @@ func Say(lang, format string, args ...any) string { return fmt.Sprintf(Word(lang
 // order as its English.
 var phrases = map[string]string{
 	// The HUD's own lines; alerts arrive already worded by the coach, and roles by dota.
+	"%s, if it hasn't been used":           "%s, если его не использовали",
 	"Position %d · %s":                     "Позиция %d · %s",
 	" · Ctrl+Shift+1–5 to change":          " · Ctrl+Shift+1–5 чтобы сменить",
 	"Drill: %s · %d this game":             "Тренировка: %s · %d за игру",

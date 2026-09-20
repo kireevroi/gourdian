@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"gourdian/internal/config"
 	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
@@ -103,5 +104,32 @@ func TestAKilledHolderHasUsedTheirAegis(t *testing.T) {
 	}
 	if got := byRule(play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(4, killed(3))), "aegis"); len(got) != 1 {
 		t.Fatalf("another hero's death leaves the Aegis alone: %+v", got)
+	}
+}
+
+// The trainer sees its own Aegis leave the inventory, so that timer is a fact. Nothing in the
+// game says when anyone else's is used, so the countdown beside it is only a guess -- a coach
+// told one flat said "the team's Aegis burns out in 48 seconds" while it was already spent.
+func TestOnlyYourOwnAegisTimerIsCertain(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		mine  bool
+		guess bool
+	}{{"my own Aegis", true, false}, {"a team-mate's", false, true}} {
+		m := &match{aegisKnown: true, aegisExpires: 2364, aegisTeam: "radiant", team: "radiant", aegisMine: c.mine}
+		set := config.Default().Settings
+		var found *Timer
+		got := timers(2334, true, set, m)
+		for i := range got {
+			if strings.Contains(got[i].Label, "Aegis") {
+				found = &got[i]
+			}
+		}
+		if found == nil {
+			t.Fatalf("%s: no Aegis timer", c.name)
+		}
+		if found.Guess != c.guess {
+			t.Errorf("%s: timer guess = %v, want %v", c.name, found.Guess, c.guess)
+		}
 	}
 }

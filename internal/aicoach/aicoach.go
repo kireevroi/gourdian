@@ -277,11 +277,21 @@ func Prompt(in Input) string {
 		w.line("Build still to get, in order: %s.", strings.Join(next[:min(4, len(next))], ", "))
 	}
 	var timers []string
+	guessed := false
 	for _, t := range s.Timers {
-		timers = append(timers, fmt.Sprintf("%s in %s", t.Label, dota.Clock(t.At-s.Clock)))
+		line := fmt.Sprintf("%s in %s", t.Label, dota.Clock(t.At-s.Clock))
+		if t.Guess {
+			line += " at the latest, if it hasn't been used already"
+			guessed = true
+		}
+		timers = append(timers, line)
 	}
 	if len(timers) > 0 {
 		w.line("Upcoming: %s.", strings.Join(timers, "; "))
+	}
+	if guessed {
+		w.line("A time marked that way is worked out from when it started, not something the game reports. " +
+			"Say it as the guess it is, and don't build a plan on it holding.")
 	}
 	var alerts, advice []string
 	for _, t := range in.Tips {
