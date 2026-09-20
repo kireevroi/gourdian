@@ -4,7 +4,7 @@
 
 The Rules page on the dashboard lists every rule with how often it fired in your last 10 matches.
 
-**Built-in rules** can be switched off, limited to certain positions, given another severity, made silent or always spoken, and retuned: how long a problem must last before a warning, how often it repeats, the HP percentage, the gold threshold and so on. **Reset to default** undoes the changes.
+**Built-in rules** can be switched off, limited to certain positions, given another severity, made silent or always spoken, and retuned: how long a problem must last before a warning, how often it repeats, the HP percentage, the gold threshold and so on. **Reset to default** undoes the changes. A few arrive switched off — advice rather than mistakes, such as the two about Aghanim's Shard — and wait for you to turn them on.
 
 **Your own rules** are cards:
 

@@ -37,6 +37,7 @@ Map timings are built into each version; updating the app brings new patch timin
 | Lotus pools | a lotus every 3:00, six at most | |
 | Day and night | day from 0:00, then five minutes each | |
 | Tormentor | 20:00, then 10:00 after it dies | 7.39 (was 15:00) |
+| Aghanim's Shard | on sale from 15:00 for 1,400 gold; a Tormentor drops one too | |
 | Neutral items | crafted from Madstone; tiers at 5, 15, 25, 35 and 60 minutes, tier 1 costs 5 Madstone | 7.38 |
 | Roshan | respawns 8–11 minutes after he dies; the Aegis lasts 5:00 | |
 | Skill points | one per level; talents have their own points at 10, 15, 20, 25 and 27–30 | 7.40 |

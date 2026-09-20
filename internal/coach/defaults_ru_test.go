@@ -1,6 +1,11 @@
 package coach
 
-import "testing"
+import (
+	"slices"
+	"testing"
+
+	"gourdian/internal/config"
+)
 
 // Every rule that ships with the trainer needs Russian wording, or a Russian player gets
 // English alerts in the middle of a match.
@@ -54,6 +59,17 @@ func TestRussianWordingUsesTheSameValues(t *testing.T) {
 			if !en[f] && !fields(spec.Then.Speech)[f] {
 				t.Errorf("%s: the Russian speech says %s, which the English doesn't", spec.ID, f)
 			}
+		}
+	}
+}
+
+// config names the rules that ship switched off by id, and it can't import this package to
+// check them. A typo there would silently ship the rule on.
+func TestRulesThatShipOffAreRealRules(t *testing.T) {
+	specs := DefaultSpecs("en")
+	for _, id := range config.RulesShipOff {
+		if !slices.ContainsFunc(specs, func(s RuleSpec) bool { return s.ID == id }) {
+			t.Errorf("config.RulesShipOff names %q, which is not a built-in rule", id)
 		}
 	}
 }

@@ -125,6 +125,48 @@ func TestOldClaudeSettingsMigrate(t *testing.T) {
 	}
 }
 
+// A rule that ships switched off is off on a fresh install, and on a config written before it
+// existed. A player who turns it on keeps it on, however many times the app starts.
+func TestRulesThatShipOffStayOffUntilThePlayerSaysOtherwise(t *testing.T) {
+	for _, id := range RulesShipOff {
+		if Default().Settings.RuleEnabled(id) {
+			t.Errorf("%s should ship switched off", id)
+		}
+	}
+
+	dir := t.TempDir()
+	// A config from before the rules existed: it has settings of its own and no word on them.
+	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"settings":{"role":"mid","disabled_rules":["stack"]}}`), 0o600)
+	st, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := st.Settings()
+	if set.Role != "mid" || !slices.Contains(set.DisabledRules, "stack") {
+		t.Fatalf("an upgrade should leave the rest of the settings alone: %+v", set.DisabledRules)
+	}
+	for _, id := range RulesShipOff {
+		if set.RuleEnabled(id) {
+			t.Errorf("an upgrade should switch %s off: %+v", id, set.DisabledRules)
+		}
+	}
+
+	// The player turns them on. Starting again must not switch them off a second time.
+	set.DisabledRules = []string{"stack"}
+	if err := st.UpdateSettings(set); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range RulesShipOff {
+		if !again.Settings().RuleEnabled(id) {
+			t.Errorf("%s was turned on by hand and came back off: %+v", id, again.Settings().DisabledRules)
+		}
+	}
+}
+
 func widgetByID(s *Settings, id string) *HUDWidget {
 	for i := range s.HUDWidgets {
 		if s.HUDWidgets[i].ID == id {

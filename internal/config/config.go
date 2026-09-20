@@ -226,12 +226,15 @@ type Settings struct {
 	// Drill is the rule whose habit the player is working on, counted live and after each match.
 	Drill string `json:"drill,omitempty"`
 	// QuietInFights holds back spoken reminders while the hero is losing health fast.
-	QuietInFights bool         `json:"quiet_in_fights"`
-	Voice         string       `json:"voice"`
-	VoiceRate     int          `json:"voice_rate"` // -10 (slow) .. 10 (fast)
-	VoiceLevel    string       `json:"voice_level"`
-	DisabledRules []string     `json:"disabled_rules"`
-	Timings       dota.Timings `json:"-"` // always dota.DefaultTimings()
+	QuietInFights bool     `json:"quiet_in_fights"`
+	Voice         string   `json:"voice"`
+	VoiceRate     int      `json:"voice_rate"` // -10 (slow) .. 10 (fast)
+	VoiceLevel    string   `json:"voice_level"`
+	DisabledRules []string `json:"disabled_rules"`
+	// RulesOffSeen records which of the rules that ship switched off this config has already
+	// had switched off, so an upgrade does it once and a player who turns one back on keeps it.
+	RulesOffSeen []string     `json:"rules_off_seen,omitempty"`
+	Timings      dota.Timings `json:"-"` // always dota.DefaultTimings()
 	// Picks tunes how heroes are ranked while you choose one.
 	Picks     picks.Tuning      `json:"picks"`
 	AI        AISettings        `json:"ai"`
@@ -253,9 +256,33 @@ type Settings struct {
 
 func (s Settings) RuleEnabled(id string) bool { return !slices.Contains(s.DisabledRules, id) }
 
+// RulesShipOff are the built-in rules that arrive switched off, for the player to turn on from
+// the Rules page. They are the ones whose answer is a matter of taste rather than a mistake, so
+// the trainer offers them instead of pressing them.
+var RulesShipOff = []string{"shard_sale", "shard"}
+
+// shipOff switches off each rule in RulesShipOff the first time this config sees it. Afterwards
+// its id stays in RulesOffSeen, so the next start leaves the player's own choice alone. It
+// reports whether anything changed, which is when the config is worth writing back.
+func (s *Settings) shipOff() bool {
+	changed := false
+	for _, id := range RulesShipOff {
+		if slices.Contains(s.RulesOffSeen, id) {
+			continue
+		}
+		s.RulesOffSeen = append(s.RulesOffSeen, id)
+		if !slices.Contains(s.DisabledRules, id) {
+			s.DisabledRules = append(s.DisabledRules, id)
+		}
+		changed = true
+	}
+	return changed
+}
+
 // Clone copies every slice and map, so decoding JSON into a copy can't write into the stored settings.
 func (s Settings) Clone() Settings {
 	s.DisabledRules = slices.Clone(s.DisabledRules)
+	s.RulesOffSeen = slices.Clone(s.RulesOffSeen)
 	s.HUDWidgets = slices.Clone(s.HUDWidgets)
 	for i := range s.HUDWidgets {
 		s.HUDWidgets[i].Kinds = slices.Clone(s.HUDWidgets[i].Kinds)
@@ -361,7 +388,7 @@ type Config struct {
 }
 
 func Default() Config {
-	return Config{
+	c := Config{
 		Listen: "127.0.0.1:4570",
 		Settings: Settings{
 			Role:          dota.Carry,
@@ -385,6 +412,8 @@ func Default() Config {
 			TiltCheck:       true,
 		},
 	}
+	c.Settings.shipOff()
+	return c
 }
 
 // DashboardHost is the host:port to reach a trainer listening on addr, which may be a wildcard.
@@ -555,6 +584,9 @@ func Open(dir string) (*Store, error) {
 	case err != nil:
 		return nil, err
 	default:
+		// The file decides which rules that ship off it has already seen; the default's answer
+		// is for a config that doesn't exist yet, and would hide an upgrade from shipOff.
+		s.cfg.Settings.RulesOffSeen = nil
 		// Unmarshal over defaults so keys missing from an older file keep their defaults.
 		if err := json.Unmarshal(data, &s.cfg); err != nil {
 			return nil, fmt.Errorf("parse %s: %w", s.path, err)
@@ -569,6 +601,13 @@ func Open(dir string) (*Store, error) {
 		if err := os.WriteFile(s.path+".bad", data, 0o600); err != nil {
 			return nil, err
 		}
+		if err := s.save(); err != nil {
+			return nil, err
+		}
+	}
+	if s.cfg.Settings.shipOff() {
+		// A rule that ships off was switched off just now: write that down, or the next start
+		// would undo the player turning it on.
 		if err := s.save(); err != nil {
 			return nil, err
 		}
