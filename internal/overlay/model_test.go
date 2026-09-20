@@ -76,3 +76,28 @@ func TestAskingPositionUntilLaneDetection(t *testing.T) {
 		t.Fatal("position keys stop at 2:30")
 	}
 }
+
+// The position keys are live while the player is choosing a hero. The pick advice is worked
+// out for a position, so that is the moment to be able to say which one; they used to come
+// alive only once a match had started.
+func TestPositionKeysAreLiveWhileChoosing(t *testing.T) {
+	m := newModel(time.Now(), false)
+	m.apply("snapshot", []byte(`{"connected":true,"in_match":false}`), time.Now())
+	if m.askingPosition() {
+		t.Error("the keys are live with nothing happening")
+	}
+	m.apply("hud", []byte(`{"choosing":true}`), time.Now())
+	if !m.askingPosition() {
+		t.Error("the keys are dead while the player is choosing a hero")
+	}
+	// Reading the screen is a different thing, and off by default: the keys can't depend on it.
+	m.apply("hud", []byte(`{"choosing":true,"draft":false}`), time.Now())
+	if !m.askingPosition() {
+		t.Error("the keys went dead because the screen isn't being read")
+	}
+	// Once the hero is picked and the game is on, the old rule takes over again.
+	m.apply("hud", []byte(`{"choosing":false}`), time.Now())
+	if m.askingPosition() {
+		t.Error("the keys stayed live after the pick, with no match running")
+	}
+}

@@ -29,6 +29,9 @@ type pickCache struct {
 	// when one opens. Dota doesn't always set the match id during hero selection, so the
 	// draft is spotted by the change of state rather than by the match it belongs to.
 	drafting bool
+	// spokenFor is the position the picks were last read out for. Changing position changes
+	// the advice entirely, so it is worth hearing again.
+	spokenFor string
 }
 
 // pickBoard is the heroes worth taking in this position: the player's own record, weighed
@@ -128,16 +131,22 @@ func drafting(st *gsi.State) bool {
 	return draftState(st.Map.GameState)
 }
 
-// draftOpened reports the one update on which the player enters a draft, so the trainer can
-// speak and ask about the pick once rather than twice a second.
-func (s *Server) draftOpened(st *gsi.State) bool {
+// draftWorthSaying reports the updates on which the pick advice is worth reading out: when a
+// draft opens, and when the player names a different position while it is still going, since
+// that is a different set of heroes entirely.
+func (s *Server) draftWorthSaying(st *gsi.State, role string) bool {
 	open := drafting(st)
 	c := &s.picks
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	first := open && !c.drafting
+	was, wasFor := c.drafting, c.spokenFor
 	c.drafting = open
-	return first
+	if !open {
+		c.spokenFor = ""
+		return false
+	}
+	c.spokenFor = role
+	return !was || wasFor != role
 }
 
 // speakPicks reads out the top of the board.

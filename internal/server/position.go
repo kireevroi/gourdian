@@ -13,6 +13,10 @@ import (
 	"gourdian/internal/dota"
 )
 
+// roleChosenFor is how long a position chosen while picking a hero waits for one to appear.
+// A draft runs a couple of minutes; anything older belongs to a game that never started.
+const roleChosenFor = 10 * time.Minute
+
 // lockRole records that the player picked the role for this match, so lane detection leaves it alone.
 func (s *Server) lockRole(matchID string) {
 	s.roleMu.Lock()
@@ -78,7 +82,26 @@ func (s *Server) handleRole(w http.ResponseWriter, r *http.Request) {
 		s.settingsProblem(w, err)
 		return
 	}
-	if snap := s.engine.Snapshot(set); snap.InMatch && snap.Hero != nil && !strings.HasPrefix(snap.MatchID, "sim-") {
+	snapNow := s.engine.Snapshot(set)
+	// Chosen while still picking a hero, so there is no hero to remember it against yet.
+	// Hold on to it: the moment one appears it becomes the player's own pick for the match,
+	// rather than being overwritten by what they happened to play on that hero last time.
+	if pickMatters(snapNow) {
+		s.roleMu.Lock()
+		s.roleChosen, s.roleChosenAt = set.Role, time.Now()
+		s.roleMu.Unlock()
+		s.engine.SetRoleNote(roleSay(set.Language, "your pick"))
+		if changed {
+			name := dota.RoleName(set.Role, set.Language)
+			tip := coach.Tip{Rule: "role_pick", Category: "focus", Severity: coach.Info, Clock: snapNow.Clock, At: time.Now(),
+				Text: roleSay(set.Language, "Coaching you as %s", name), Speech: roleSay(set.Language, "Coaching you as %s.", name)}
+			if set.Language != "en" {
+				tip.SpeechEN = roleSay("en", "Coaching you as %s.", dota.RoleName(set.Role, "en"))
+			}
+			s.emitTips(snapNow.MatchID, []coach.Tip{tip}, set)
+		}
+	}
+	if snap := snapNow; snap.InMatch && snap.Hero != nil && !strings.HasPrefix(snap.MatchID, "sim-") {
 		s.lockRole(snap.MatchID)
 		s.rememberHeroRole(snap.Hero.ID, set.Role)
 		s.engine.SetRoleNote(roleSay(set.Language, "your pick"))
@@ -127,6 +150,13 @@ func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings 
 	}
 	s.roleHero = heroID
 	role, note := s.roleFor(heroID, set)
+	// A position the player chose while they were still picking beats anything worked out
+	// from the hero: they said which one they are playing, and they said it about this game.
+	if chosen := s.roleChosen; chosen != "" && time.Since(s.roleChosenAt) < roleChosenFor {
+		s.roleChosen = ""
+		role, note = chosen, roleSay(set.Language, "your pick")
+		defer s.rememberHeroRole(heroID, chosen)
+	}
 	s.engine.SetRoleNote(note)
 	defer func() { s.applyFocus(s.cfg.Settings().Role, heroID) }()
 	if role == "" {
