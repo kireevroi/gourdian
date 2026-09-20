@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"slices"
 	"time"
 
@@ -19,7 +18,7 @@ const (
 
 // tiltReason looks at the session the latest match ended and says why a break would help,
 // or returns "".
-func tiltReason(matches []model.MatchSummary, mmr []model.MMREntry) string {
+func tiltReason(matches []model.MatchSummary, mmr []model.MMREntry, lang string) string {
 	var decided []model.MatchSummary
 	for _, m := range matches {
 		if m.Real() && m.Result != "unknown" {
@@ -40,9 +39,9 @@ func tiltReason(matches []model.MatchSummary, mmr []model.MMREntry) string {
 	k := len(session)
 	switch {
 	case k >= 3 && lost(k-1) && lost(k-2) && lost(k-3):
-		return "Three losses in a row. Take a proper break before you queue again"
+		return roleSay(lang, "Three losses in a row. Take a proper break before you queue again")
 	case k >= 2 && lost(k-1) && lost(k-2):
-		return "Two losses in a row. Take a 10-minute break before you queue again"
+		return roleSay(lang, "Two losses in a row. Take a 10-minute break before you queue again")
 	case k >= 4 && lost(k-1):
 		losses := 0
 		for i := k - 4; i < k; i++ {
@@ -51,7 +50,7 @@ func tiltReason(matches []model.MatchSummary, mmr []model.MMREntry) string {
 			}
 		}
 		if losses >= 3 {
-			return "Three of your last four games were losses. Take a break before the next one"
+			return roleSay(lang, "Three of your last four games were losses. Take a break before the next one")
 		}
 	}
 	var first, last *model.MMREntry
@@ -64,7 +63,7 @@ func tiltReason(matches []model.MatchSummary, mmr []model.MMREntry) string {
 		}
 	}
 	if first != nil && last != first && first.MMR-last.MMR >= tiltMMRDrop && lost(k-1) {
-		return fmt.Sprintf("You're down %d MMR this session. Take a break before you queue again", first.MMR-last.MMR)
+		return roleSay(lang, "You're down %d MMR this session. Take a break before you queue again", first.MMR-last.MMR)
 	}
 	return ""
 }
@@ -80,7 +79,7 @@ func (s *Server) tiltCheck(m model.MatchSummary, set config.Settings) {
 		return
 	}
 	mmr, _ := s.stats.MMR()
-	reason := tiltReason(matches, mmr)
+	reason := tiltReason(matches, mmr, set.Language)
 	if reason == "" {
 		return
 	}
@@ -88,6 +87,9 @@ func (s *Server) tiltCheck(m model.MatchSummary, set config.Settings) {
 	s.brief.tiltAt = time.Now()
 	s.brief.mu.Unlock()
 	tip := coach.Tip{Rule: "tilt", Category: "focus", Severity: coach.Warn, Text: reason, Speech: reason + ".", Clock: m.DurationSec, At: time.Now()}
+	if set.Language != "en" {
+		tip.SpeechEN = tiltReason(matches, mmr, "en") + "."
+	}
 	s.emitTips(m.MatchID, []coach.Tip{tip}, set)
 }
 
@@ -101,7 +103,10 @@ func (s *Server) tiltReminder(matchID string, set config.Settings) {
 		return
 	}
 	tip := coach.Tip{Rule: "tilt", Category: "focus", Severity: coach.Info, At: time.Now(),
-		Text:   "Straight back in after a losing run: play this one calm, mute anyone tilting you, and focus on your own farm",
-		Speech: "Play this one calm. Mute anyone tilting you."}
+		Text:   roleSay(set.Language, "Straight back in after a losing run: play this one calm, mute anyone tilting you, and focus on your own farm"),
+		Speech: roleSay(set.Language, "Play this one calm. Mute anyone tilting you.")}
+	if set.Language != "en" {
+		tip.SpeechEN = roleSay("en", "Play this one calm. Mute anyone tilting you.")
+	}
 	s.emitTips(matchID, []coach.Tip{tip}, set)
 }

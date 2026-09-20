@@ -20,6 +20,27 @@ func Say(lang, format string, args ...any) string { return fmt.Sprintf(Word(lang
 // order as its English.
 var phrases = map[string]string{
 	// The HUD's own lines; alerts arrive already worded by the coach, and roles by dota.
+	// The tips the trainer builds itself, before the horn and after the match.
+	"aim for %d last hits at 10:00":        "цель — %d добиваний к 10:00",
+	"Aim for %d last hits at ten minutes.": "Цель — %d добиваний к десятой минуте.",
+	"%s by %d minutes.":                    "%s к %d-й минуте.",
+	"goal: %s (%d/%d)":                     "цель: %s (%d/%d)",
+	"This week's goal: %s.":                "Цель недели: %s.",
+	"Three losses in a row. Take a proper break before you queue again":           "Три поражения подряд. Сделайте настоящий перерыв перед следующей игрой",
+	"Two losses in a row. Take a 10-minute break before you queue again":          "Два поражения подряд. Сделайте перерыв на 10 минут перед следующей игрой",
+	"Three of your last four games were losses. Take a break before the next one": "Три из последних четырёх игр — поражения. Сделайте перерыв перед следующей",
+	"your 11 games 63%":  "ваших матчей: 11, 63%",
+	"your 8 games 62%":   "ваших матчей: 8, 62%",
+	"meta 54% at Archon": "в мете 54% (Archon)",
+	"You're down %d MMR this session. Take a break before you queue again":                                         "За сессию вы потеряли %d MMR. Сделайте перерыв перед следующей игрой",
+	"Straight back in after a losing run: play this one calm, mute anyone tilting you, and focus on your own farm": "Сразу после серии поражений: играйте спокойно, мьютите тех, кто вас заводит, и следите за своим фармом",
+	"Play this one calm. Mute anyone tilting you.":                                                                 "Играйте спокойно. Мьютите тех, кто вас заводит.",
+	"Weekly goal done: %s, met in %d matches":                                                                      "Цель недели выполнена: %s, засчитано матчей: %d",
+	"Weekly goal done. %s":              "Цель недели выполнена. %s",
+	"Goal met: %s (%d of %d this week)": "Цель достигнута: %s (%d из %d за неделю)",
+	"Goal met. %d of %d this week.":     "Цель достигнута. %d из %d за неделю.",
+	"Goal missed: %s (you had %g)":      "Цель не достигнута: %s (у вас %g)",
+
 	"Position %d · %s":                     "Позиция %d · %s",
 	" · Ctrl+Shift+1–5 to change":          " · Ctrl+Shift+1–5 чтобы сменить",
 	"Drill: %s · %d this game":             "Тренировка: %s · %d за игру",
