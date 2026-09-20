@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"maps"
 	"net/http"
 	"slices"
@@ -55,6 +54,7 @@ func (s *Server) goalFeedback(m model.MatchSummary, set config.Settings) {
 		return
 	}
 	var tips []coach.Tip
+	lang := set.Language
 	for _, p := range s.weekProgress(m.EndedAt) {
 		met, ok := p.Goal.Met(m)
 		if !ok || m.MatchID == p.MatchID {
@@ -64,13 +64,15 @@ func (s *Server) goalFeedback(m model.MatchSummary, set config.Settings) {
 		tip := coach.Tip{Rule: "goals", Category: "focus", Severity: coach.Info, Clock: m.DurationSec, At: time.Now()}
 		switch {
 		case met && p.Met == model.GoalsDone:
-			tip.Text = fmt.Sprintf("Weekly goal done: %s, met in %d matches", p.Label, model.GoalsDone)
-			tip.Speech = "Weekly goal done. " + p.Label
+			tip.Text = roleSay(lang, "Weekly goal done: %s, met in %d matches", p.Label, model.GoalsDone)
+			tip.Speech = roleSay(lang, "Weekly goal done. %s", p.Label)
+			tip.SpeechEN = roleSay("en", "Weekly goal done. %s", p.Label)
 		case met:
-			tip.Text = fmt.Sprintf("Goal met: %s (%d of %d this week)", p.Label, min(p.Met, model.GoalsDone), model.GoalsDone)
-			tip.Speech = fmt.Sprintf("Goal met. %d of %d this week.", min(p.Met, model.GoalsDone), model.GoalsDone)
+			tip.Text = roleSay(lang, "Goal met: %s (%d of %d this week)", p.Label, min(p.Met, model.GoalsDone), model.GoalsDone)
+			tip.Speech = roleSay(lang, "Goal met. %d of %d this week.", min(p.Met, model.GoalsDone), model.GoalsDone)
+			tip.SpeechEN = roleSay("en", "Goal met. %d of %d this week.", min(p.Met, model.GoalsDone), model.GoalsDone)
 		default:
-			tip.Text = fmt.Sprintf("Goal missed: %s (you had %g)", p.Label, v)
+			tip.Text = roleSay(lang, "Goal missed: %s (you had %g)", p.Label, v)
 			tip.Quiet = true
 		}
 		tips = append(tips, tip)

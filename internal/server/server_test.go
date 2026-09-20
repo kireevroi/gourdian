@@ -668,7 +668,7 @@ func TestTiltReason(t *testing.T) {
 			[]model.MMREntry{{Date: base, MMR: 3000}, {Date: base.Add(50 * time.Minute), MMR: 2940}}, "down 60 MMR"},
 	}
 	for _, c := range cases {
-		if got := tiltReason(c.matches, c.mmr); c.want == "" && got != "" || !strings.Contains(got, c.want) {
+		if got := tiltReason(c.matches, c.mmr, "en"); c.want == "" && got != "" || !strings.Contains(got, c.want) {
 			t.Errorf("%s: %q", c.name, got)
 		}
 	}

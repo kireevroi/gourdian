@@ -99,23 +99,36 @@ func (s *Server) briefMatch(matchID string, set config.Settings) {
 	if b == nil {
 		return
 	}
-	var text, speech []string
-	if b.Target10 > 0 {
-		text = append(text, fmt.Sprintf("aim for %d last hits at 10:00", b.Target10))
-		speech = append(speech, fmt.Sprintf("Aim for %d last hits at ten minutes.", b.Target10))
-	}
-	for _, it := range b.Items[:min(len(b.Items), 1)] {
-		text = append(text, fmt.Sprintf("%s by %s", it.Name, dota.Clock(it.By)))
-		speech = append(speech, fmt.Sprintf("%s by %d minutes.", it.Name, (it.By+30)/60))
-	}
-	for _, g := range b.Goals[:min(len(b.Goals), 1)] {
-		text = append(text, fmt.Sprintf("goal: %s (%d/%d)", g.Label, g.Met, model.GoalsDone))
-		speech = append(speech, "This week's goal: "+g.Label+".")
-	}
-	if len(text) == 0 {
+	text, speech := briefingWords(b, set.Language)
+	if text == "" {
 		return
 	}
 	tip := coach.Tip{Rule: "briefing", Category: "focus", Severity: coach.Info, Clock: snap.Clock, At: time.Now(),
-		Text: b.Hero + ": " + strings.Join(text, " · "), Speech: strings.Join(speech, " ")}
+		Text: text, Speech: speech}
+	if set.Language != "en" {
+		_, tip.SpeechEN = briefingWords(b, "en")
+	}
 	s.emitTips(matchID, []coach.Tip{tip}, set)
+}
+
+// briefingWords is the briefing as the player reads and hears it, in their language. It is
+// empty when there is nothing worth saying before the horn.
+func briefingWords(b *coach.Briefing, lang string) (text, speech string) {
+	var parts, said []string
+	if b.Target10 > 0 {
+		parts = append(parts, roleSay(lang, "aim for %d last hits at 10:00", b.Target10))
+		said = append(said, roleSay(lang, "Aim for %d last hits at ten minutes.", b.Target10))
+	}
+	for _, it := range b.Items[:min(len(b.Items), 1)] {
+		parts = append(parts, roleSay(lang, "%s by %s", it.Name, dota.Clock(it.By)))
+		said = append(said, roleSay(lang, "%s by %d minutes.", it.Name, (it.By+30)/60))
+	}
+	for _, g := range b.Goals[:min(len(b.Goals), 1)] {
+		parts = append(parts, roleSay(lang, "goal: %s (%d/%d)", g.Label, g.Met, model.GoalsDone))
+		said = append(said, roleSay(lang, "This week's goal: %s.", g.Label))
+	}
+	if len(parts) == 0 {
+		return "", ""
+	}
+	return b.Hero + ": " + strings.Join(parts, " · "), strings.Join(said, " ")
 }
