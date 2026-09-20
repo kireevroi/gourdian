@@ -1,9 +1,7 @@
 package server
 
 import (
-	"errors"
 	"gourdian/internal/model"
-	"gourdian/internal/stats"
 	"net/http"
 	"sync"
 	"time"
@@ -104,12 +102,12 @@ func (s *Server) handleMatchRanked(w http.ResponseWriter, r *http.Request) {
 	}
 	matchID := r.PathValue("id")
 	if err := s.stats.UpdateMatch(matchID, func(m *model.MatchSummary) { m.Ranked = body.Ranked }); err != nil {
-		http.Error(w, err.Error(), matchErrorStatus(err))
+		s.matchProblem(w, "couldn't mark that match", err)
 		return
 	}
 	m, err := s.stats.Match(matchID)
 	if err != nil {
-		http.Error(w, err.Error(), matchErrorStatus(err))
+		s.matchProblem(w, "couldn't read that match", err)
 		return
 	}
 	switch p := s.pendingMMR(); {
@@ -148,7 +146,7 @@ func (s *Server) handleMatchMMR(w http.ResponseWriter, r *http.Request) {
 	matchID := r.PathValue("id")
 	m, err := s.stats.Match(matchID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		s.matchProblem(w, "couldn't read that match", err)
 		return
 	}
 	entry := model.MMREntry{Date: m.EndedAt, MMR: body.MMR, Note: m.Result, MatchID: matchID}
@@ -175,7 +173,7 @@ func (s *Server) handleMatchMMR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.stats.AppendMMR(entry); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't save your MMR", err)
 		return
 	}
 	if p := s.pendingMMR(); p != nil && p.MatchID == matchID {
@@ -218,27 +216,18 @@ func (s *Server) handleMMRChange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.stats.AppendMMR(entry); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't save your MMR", err)
 		return
 	}
 	s.clearMMRPrompt()
 	writeJSON(w, entry)
 }
 
-// matchErrorStatus is the HTTP status for failing to read or change a recorded match: only a
-// match that isn't there is a 404.
-func matchErrorStatus(err error) int {
-	if errors.Is(err, stats.ErrNoMatch) {
-		return http.StatusNotFound
-	}
-	return http.StatusInternalServerError
-}
-
 // handleMMRList returns every MMR entry, so the match lists can show what was logged.
 func (s *Server) handleMMRList(w http.ResponseWriter, r *http.Request) {
 	entries, err := s.stats.MMR()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't read your MMR log", err)
 		return
 	}
 	if entries == nil {
@@ -258,7 +247,7 @@ func (s *Server) handleMMR(w http.ResponseWriter, r *http.Request) {
 	}
 	entry := model.MMREntry{Date: time.Now(), MMR: body.MMR, Note: body.Note}
 	if err := s.stats.AppendMMR(entry); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't save your MMR", err)
 		return
 	}
 	writeJSON(w, entry)

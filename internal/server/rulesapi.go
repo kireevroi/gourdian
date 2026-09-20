@@ -111,7 +111,7 @@ func (s *Server) handleOverride(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleResetOverride(w http.ResponseWriter, r *http.Request) {
 	if err := s.rules.ResetOverride(r.PathValue("id")); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't put that rule back as it was", err)
 		return
 	}
 	s.rulesChanged(w)

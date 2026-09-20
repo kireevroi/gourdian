@@ -580,7 +580,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return check(*cur)
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		s.settingsProblem(w, err)
 		return
 	}
 	if snap := s.engine.Snapshot(next); snap.InMatch && snap.Hero != nil && !strings.HasPrefix(snap.MatchID, "sim-") {
@@ -657,6 +657,34 @@ func readOptionalJSON(w http.ResponseWriter, r *http.Request, limit int64, v any
 }
 
 func writeJSON(w http.ResponseWriter, v any) { writeJSONStatus(w, http.StatusOK, v) }
+
+// failed answers a request that couldn't be carried out for a reason the player can't do
+// anything about. They get the sentence, the log gets what actually went wrong, so a database
+// message or a file path never lands on the dashboard.
+func (s *Server) failed(w http.ResponseWriter, status int, msg string, err error) {
+	s.log.Error(msg, "err", err)
+	http.Error(w, msg, status)
+}
+
+// settingsProblem answers a settings change that didn't stick: a value the player can fix is
+// theirs to correct, a file that wouldn't save is ours.
+func (s *Server) settingsProblem(w http.ResponseWriter, err error) {
+	if errors.Is(err, config.ErrSave) {
+		s.failed(w, http.StatusInternalServerError, "couldn't save your settings", err)
+		return
+	}
+	http.Error(w, err.Error(), http.StatusBadRequest)
+}
+
+// matchProblem answers when a recorded match can't be read or changed: asking for a match
+// that isn't there is a bad request, anything else is ours to fix.
+func (s *Server) matchProblem(w http.ResponseWriter, msg string, err error) {
+	if errors.Is(err, stats.ErrNoMatch) {
+		http.Error(w, "that match isn't in your history", http.StatusNotFound)
+		return
+	}
+	s.failed(w, http.StatusInternalServerError, msg, err)
+}
 
 // writeJSONStatus answers with v and a status other than 200. Headers must be set before the
 // status is written, or they're dropped.

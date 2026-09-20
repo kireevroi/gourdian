@@ -36,7 +36,7 @@ func (s *Server) handleAutostart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := autostart.Set(body.On); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't change whether the trainer starts with your session", err)
 		return
 	}
 	resp := s.settingsResponse()
@@ -70,7 +70,7 @@ func (s *Server) handleOpenFolder(w http.ResponseWriter, r *http.Request) {
 		opener = exec.Command("xdg-open", dir)
 	}
 	if err := opener.Start(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't open that folder", err)
 		return
 	}
 	writeJSON(w, map[string]string{"opened": dir})

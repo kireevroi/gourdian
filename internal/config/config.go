@@ -589,6 +589,10 @@ func (s *Store) UpdateSettings(next Settings) error {
 	return err
 }
 
+// ErrSave means the change itself was fine, but the settings file wouldn't take it, so
+// nothing changed. Every other error from Update is about a value the player can fix.
+var ErrSave = errors.New("the settings file couldn't be written")
+
 // Update changes the settings in place: change edits the current settings under the store's
 // lock, so changes made at the same time from different places all land. If change fails or
 // leaves the settings invalid, nothing changes. It returns the settings after the change.
@@ -611,7 +615,7 @@ func (s *Store) Update(change func(*Settings) error) (Settings, error) {
 	s.cfg.Settings = next
 	if err := s.save(); err != nil {
 		s.cfg.Settings = prev
-		return prev.Clone(), err
+		return prev.Clone(), fmt.Errorf("%w: %w", ErrSave, err)
 	}
 	return next.Clone(), nil
 }

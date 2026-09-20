@@ -194,7 +194,7 @@ func (s *Server) handleRecording(w http.ResponseWriter, r *http.Request) {
 		err = s.StopRecording()
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't "+map[bool]string{true: "start", false: "stop"}[body.On]+" recording", err)
 		return
 	}
 	resp := s.settingsResponse()

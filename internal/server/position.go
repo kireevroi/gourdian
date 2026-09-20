@@ -75,7 +75,7 @@ func (s *Server) handleRole(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		s.settingsProblem(w, err)
 		return
 	}
 	if snap := s.engine.Snapshot(set); snap.InMatch && snap.Hero != nil && !strings.HasPrefix(snap.MatchID, "sim-") {
