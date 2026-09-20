@@ -189,7 +189,7 @@ function renderShell() {
   const header = document.createElement('header');
   header.className = 'shell';
   header.innerHTML = `
-    <a class="brand" href="/" id="brand"><img src="/icon.svg" alt="">Gourdian</a>
+    <a class="brand" href="/" id="brand"><img src="/icon.svg" alt="">Gourdian<span class="version" id="brand-version"></span></a>
     <nav class="pages">${PAGES.map(([href, name]) => `<a href="${href}" class="${href === here ? 'on' : ''}">${name}</a>`).join('')}</nav>
     <div class="spacer"></div>
     <span class="status down" id="shell-status">Connecting…</span>`;
@@ -223,7 +223,9 @@ function renderShell() {
     api('/api/ai/status').then(renderAIHealth).catch(() => {});
     return loadSettings().catch(() => {});
   });
-  onSettings((c) => { $('brand').title = `Gourdian ${c.version}`; });
+  // The version sits beside the wordmark on every page, so telling which build is installed
+  // never means going to the settings page.
+  onSettings((c) => { $('brand-version').textContent = c.version; });
 
   $('ai-login').addEventListener('click', async () => {
     try { $('ai-banner-text').textContent = (await api('/api/ai/login', { method: 'POST' })).status; } catch (e) { $('ai-banner-text').textContent = e.message; }
