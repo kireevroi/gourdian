@@ -53,12 +53,9 @@ func backpackActive(s *gsi.State) string {
 	return ""
 }
 
-// shardItem is Aghanim's Shard under OpenDota's item names.
-const shardItem = "aghanims_shard"
-
 // shardCost is what Aghanim's Shard costs, from OpenDota's item prices when they have loaded.
 func shardCost(c *Ctx) float64 {
-	if info, ok := c.items()[shardItem]; ok && info.Cost > 0 {
+	if info, ok := c.items()[dota.ShardItem]; ok && info.Cost > 0 {
 		return f64(info.Cost)
 	}
 	return dota.ShardCost
@@ -66,7 +63,7 @@ func shardCost(c *Ctx) float64 {
 
 // shardInBuild reports whether the build the trainer shows for this hero and position, the one
 // most players there take, includes a Shard. Plenty of heroes never buy one.
-func shardInBuild(c *Ctx) bool { return c.build().Has(shardItem) }
+func shardInBuild(c *Ctx) bool { return c.build().Has(dota.ShardItem) }
 
 // teamSuffix names whose Roshan kill or Aegis an event was, when GSI reports the team.
 func teamSuffix(team, mine, preposition string) string {
@@ -108,7 +105,7 @@ func heldNames(s *gsi.State) []string {
 	// A Shard is spent on the hero the moment it is bought, so no slot ever holds it and the
 	// build would keep asking for one. The hero's own flag is the only record that it was bought.
 	if s.Hero != nil && s.Hero.AghanimsShard {
-		out = append(out, shardItem)
+		out = append(out, dota.ShardItem)
 	}
 	return out
 }

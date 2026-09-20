@@ -46,7 +46,7 @@ func TestPromptIncludesLiveStateAndHistory(t *testing.T) {
 	p := Prompt(in)
 	for _, want := range []string{
 		"Clock 12:30 (day)", "Anti-Mage, level 11", "Last hits 58", "expected 84 by now", "Stash: Broadsword.",
-		"Battle Fury (1250g to finish)", "Power rune in 1:30", "[11:40] No TP scroll", "10:00: 45 LH",
+		"Battle Fury (1250g to finish, the player can pay for it now)", "Power rune in 1:30", "[11:40] No TP scroll", "10:00: 45 LH",
 		"win rate 38%", "No TP scroll 2.1", "2310 on Sep 1", "last match review: Carry a TP scroll", "themselves: Archon 3, mostly mid",
 	} {
 		if !strings.Contains(p, want) {
@@ -158,7 +158,7 @@ func TestPromptsCarryTheProfessionalBuild(t *testing.T) {
 		Build: map[string][]string{"early": {"Bottle", "Power Treads"}, "mid": {"Orchid Malevolence", "Kaya and Sange"}},
 		Owned: []string{"Bottle"}}
 	live := Prompt(Input{Context: Context{Hero: facts}, Reason: "test"})
-	for _, want := range []string{"Storm Spirit's roles: Carry, Escape, Nuker.", "Professional mid-game items for Storm Spirit from up to 100 recent professional games in every position, won or lost, most bought first: Orchid Malevolence, Kaya and Sange.", "The player has: Bottle."} {
+	for _, want := range []string{"Storm Spirit's roles: Carry, Escape, Nuker.", "Professional mid-game items for Storm Spirit from up to 100 recent professional games in every position, won or lost, in the order they buy them: Orchid Malevolence, Kaya and Sange.", "The player has: Bottle."} {
 		if !strings.Contains(live, want) {
 			t.Errorf("live prompt is missing %q:\n%s", want, live)
 		}
@@ -233,5 +233,65 @@ func TestTheDraftPromptSaysWhetherTheEnemyIsKnown(t *testing.T) {
 	}
 	if !strings.Contains(blindToTheDraft, "NOT given") || strings.Contains(seesTheDraft, "NOT given") {
 		t.Error("the two sets of instructions say the same thing about the draft")
+	}
+}
+
+// The model has told a player to buy an item they were 470 gold short of, and one the shop
+// doesn't sell before 15:00, so the prompt does that arithmetic and says so outright.
+func TestPromptSaysWhatThePlayerCannotBuyYet(t *testing.T) {
+	in := Input{
+		Reason:  "regular check-in",
+		Role:    "offlane",
+		Timings: dota.DefaultTimings(),
+		Snapshot: coach.Snapshot{
+			Clock:  534,
+			Player: &gsi.Player{Gold: 930},
+			Build: []coach.BuildView{
+				{BuildItem: dotadata.BuildItem{Name: dota.ShardItem, DName: "Aghanim's Shard"}, Remaining: 1400, Next: true},
+				{BuildItem: dotadata.BuildItem{Name: "black_king_bar", DName: "Black King Bar"}, Remaining: 4050},
+			},
+		},
+	}
+	p := Prompt(in)
+	for _, want := range []string{
+		"Aghanim's Shard (1400g to finish, 470g short)",
+		"Black King Bar (4050g to finish, 3120g short)",
+		"Aghanim's Shard goes on sale at 15:00 and cannot be bought before then.",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt missing %q:\n%s", want, p)
+		}
+	}
+	in.Snapshot.Clock = 1200
+	if p := Prompt(in); strings.Contains(p, "cannot be bought before then") {
+		t.Errorf("past 15:00 the Shard is on sale:\n%s", p)
+	}
+}
+
+// The trainer puts its own item goals on the player's screen, so the coach is told what they
+// are and cannot quietly send the player after a third item instead.
+func TestPromptCarriesTheTrainersItemGoals(t *testing.T) {
+	in := Input{
+		Reason: "regular check-in",
+		Role:   "offlane",
+		Snapshot: coach.Snapshot{
+			Clock: 780, ItemGames: 6,
+			Player: &gsi.Player{Gold: 400},
+			ItemGoals: []coach.ItemGoalView{
+				{ItemGoal: coach.ItemGoal{Item: "blade_mail", Name: "Blade Mail", By: 900}, Remaining: 2084},
+				{ItemGoal: coach.ItemGoal{Item: "black_king_bar", Name: "Black King Bar", By: 1800}, Owned: true, At: 1500},
+			},
+		},
+	}
+	p := Prompt(in)
+	for _, want := range []string{
+		"from the core items the player finished first in their last 6 games on this hero",
+		"Blade Mail by 15:00 (2084g to finish)",
+		"Black King Bar by 30:00, bought at 25:00",
+		"name the item you would buy instead and say why it beats them",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt missing %q:\n%s", want, p)
+		}
 	}
 }

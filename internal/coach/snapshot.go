@@ -40,6 +40,9 @@ type Snapshot struct {
 	Timers    []Timer        `json:"timers,omitempty"`
 	Focus     string         `json:"focus,omitempty"`
 	ItemGoals []ItemGoalView `json:"item_goals,omitempty"`
+	// ItemGames is how many of the player's own games the goals were picked from; 0 means
+	// they come from the pro build instead.
+	ItemGames int `json:"item_games,omitempty"`
 	// Picks and Briefing are filled in by the trainer, before the pick and before the horn.
 	Picks    *picks.Board `json:"picks,omitempty"`
 	Drill    *DrillView   `json:"drill,omitempty"`
@@ -236,6 +239,7 @@ func (e *Engine) Snapshot(set config.Settings) Snapshot {
 			}
 			snap.ItemGoals = append(snap.ItemGoals, v)
 		}
+		snap.ItemGames = targets.ItemGames
 	}
 	snap.Timers = timers(s.Map.ClockTime, s.Map.Daytime, set, e.match)
 	var skills *dotadata.SkillBuild

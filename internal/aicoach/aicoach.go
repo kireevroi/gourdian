@@ -84,8 +84,8 @@ type Context struct {
 type HeroFacts struct {
 	Name  string
 	Roles []string // OpenDota's roles, like Carry, Escape, Nuker
-	// Build is the professional item build by phase: start, early, mid, late, each in order
-	// of how often professional players buy it.
+	// Build is the professional item build by phase: start, early, mid, late, each in the order
+	// professional players buy it, and each item with what it costs.
 	Build map[string][]string
 	// BuildPosition is the position the build comes from, 1 to 5, or 0 for every position.
 	BuildPosition int
@@ -102,6 +102,8 @@ type Input struct {
 	Facts    coach.MatchFacts
 	Tips     []coach.Tip
 	Timeline []model.Sample
+	// Timings are the clock times the match runs on, for facts like when a Shard goes on sale.
+	Timings dota.Timings
 }
 
 type ReviewInput struct {
@@ -150,7 +152,7 @@ func (w *writer) heroFacts(h *HeroFacts) {
 	source := sourceFor(h.BuildPosition, h.BuildGames, h.BuildWon)
 	for _, phase := range []string{"start", "early", "mid", "late"} {
 		if items := h.Build[phase]; len(items) > 0 {
-			w.line("Professional %s-game items for %s %s, most bought first: %s.", phase, h.Name, source, strings.Join(items, ", "))
+			w.line("Professional %s-game items for %s %s, in the order they buy them: %s.", phase, h.Name, source, strings.Join(items, ", "))
 		}
 	}
 	if len(h.Owned) > 0 {
@@ -267,14 +269,52 @@ func Prompt(in Input) string {
 	for _, p := range f.Parts {
 		w.line("Toward %s the player has %s; missing %s; %dg to finish.", p.Item, strings.Join(p.Have, ", "), listOr(p.Missing, "nothing"), p.Left)
 	}
+	// Whether the player can pay for an item is arithmetic, so it is done here rather than left
+	// to the model, which has read a player the price of an item they were 470 gold short of.
+	gold := 0
+	if s.Player != nil {
+		gold = s.Player.Gold
+	}
 	var next []string
+	wantsShard := false
 	for _, it := range s.Build {
-		if !it.Owned && !it.Skipped {
-			next = append(next, fmt.Sprintf("%s (%dg to finish)", it.DName, it.Remaining))
+		if it.Owned || it.Skipped {
+			continue
 		}
+		wantsShard = wantsShard || it.Name == dota.ShardItem
+		afford := fmt.Sprintf("%dg short", it.Remaining-gold)
+		if it.Remaining <= gold {
+			afford = "the player can pay for it now"
+		}
+		next = append(next, fmt.Sprintf("%s (%dg to finish, %s)", it.DName, it.Remaining, afford))
 	}
 	if len(next) > 0 {
 		w.line("Build still to get, in order: %s.", strings.Join(next[:min(4, len(next))], ", "))
+	}
+	// The one item in the build the shop won't sell yet, however much gold is in hand.
+	if wantsShard && in.Timings.ShardFrom > 0 && s.Clock < in.Timings.ShardFrom {
+		w.line("Aghanim's Shard goes on sale at %s and cannot be bought before then.", dota.Clock(in.Timings.ShardFrom))
+	}
+	// The trainer names core items and a time for each, on the HUD and in its own alerts, so
+	// advice that reaches past them without a word reads as the trainer contradicting itself.
+	if len(s.ItemGoals) > 0 {
+		var goals []string
+		for _, g := range s.ItemGoals {
+			switch {
+			case g.Owned && g.At > 0:
+				goals = append(goals, fmt.Sprintf("%s by %s, bought at %s", g.Name, dota.Clock(g.By), dota.Clock(g.At)))
+			case g.Owned:
+				goals = append(goals, fmt.Sprintf("%s by %s, already bought", g.Name, dota.Clock(g.By)))
+			default:
+				goals = append(goals, fmt.Sprintf("%s by %s (%dg to finish)", g.Name, dota.Clock(g.By), g.Remaining))
+			}
+		}
+		from := "the core items of the professional build"
+		if s.ItemGames > 0 {
+			from = fmt.Sprintf("the core items the player finished first in their last %d games on this hero", s.ItemGames)
+		}
+		w.line("Item goals the trainer already has on the player's screen, from %s: %s.", from, strings.Join(goals, "; "))
+		w.line("Back those goals, or name the item you would buy instead and say why it beats them. Don't pass over them in silence.")
 	}
 	var timers []string
 	for _, t := range s.Timers {
