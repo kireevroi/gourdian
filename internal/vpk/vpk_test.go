@@ -119,11 +119,11 @@ func TestReadingAPack(t *testing.T) {
 
 func TestRefusingSomethingThatIsNotAPack(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "pak01_dir.vpk")
-	if err := os.WriteFile(path, []byte("not a pack at all, really"), 0o644); err != nil {
+	fake := filepath.Join(dir, "pak01_dir.vpk")
+	if err := os.WriteFile(fake, []byte("not a pack at all, really"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Open(path); err == nil {
+	if _, err := Open(fake); err == nil {
 		t.Error("a file that isn't a pack was accepted")
 	}
 	if _, err := Open(filepath.Join(dir, "missing_dir.vpk")); err == nil {
