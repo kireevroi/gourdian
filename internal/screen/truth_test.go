@@ -12,11 +12,29 @@ import (
 
 // truth is what the game's own log recorded as picked in the captured frames: radiant 0 to 4
 // then dire 5 to 9.
-var truth = []string{
-	"npc_dota_hero_tinker", "npc_dota_hero_tidehunter", "npc_dota_hero_lion",
-	"npc_dota_hero_juggernaut", "npc_dota_hero_vengefulspirit",
-	"npc_dota_hero_dragon_knight", "npc_dota_hero_necrolyte", "npc_dota_hero_lich",
-	"npc_dota_hero_witch_doctor", "npc_dota_hero_sven",
+var truth = games["1"]
+
+// games are the drafts captured so far, each taken from the game's own log rather than read
+// off the picture, so the reader can be measured against something certain. TRUTH picks one.
+var games = map[string][]string{
+	"1": {
+		"npc_dota_hero_tinker", "npc_dota_hero_tidehunter", "npc_dota_hero_lion",
+		"npc_dota_hero_juggernaut", "npc_dota_hero_vengefulspirit",
+		"npc_dota_hero_dragon_knight", "npc_dota_hero_necrolyte", "npc_dota_hero_lich",
+		"npc_dota_hero_witch_doctor", "npc_dota_hero_sven",
+	},
+	"2": {
+		"npc_dota_hero_clinkz", "npc_dota_hero_lich", "npc_dota_hero_witch_doctor",
+		"npc_dota_hero_viper", "npc_dota_hero_earthshaker",
+		"npc_dota_hero_skeleton_king", "npc_dota_hero_zuus", "npc_dota_hero_drow_ranger",
+		"npc_dota_hero_lion", "npc_dota_hero_warlock",
+	},
+}
+
+func init() {
+	if g := os.Getenv("TRUTH"); g != "" {
+		truth = games[g]
+	}
 }
 
 // namedTable builds the table the way the trainer does: only heroes OpenDota knows about, so
@@ -55,6 +73,7 @@ func TestAgainstARealFrame(t *testing.T) {
 		t.Skip("set FRAME to a captured screen")
 	}
 	img := openFrame(t, src)
+	measuredBar = Predict(img.Bounds())
 	table, names := namedTable(t)
 	right, unknown, wrong := 0, 0, 0
 	for slot, want := range truth {

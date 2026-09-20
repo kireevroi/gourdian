@@ -39,7 +39,7 @@ var heroes = []int{1, 2, 8, 11, 14, 17, 22, 26, 35, 41, 44, 49, 53, 62, 74, 76, 
 // screenshot paints a 1920x1080 screen with the given heroes in the bar, drawn small, framed
 // in team colours and with a health bar over the bottom, the way the game does.
 func screenshot(bar Bar, slots [2 * Slots]int) image.Image {
-	shot := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
+	shot := image.NewRGBA(screenSize)
 	draw.Draw(shot, shot.Bounds(), image.NewUniform(color.RGBA{18, 20, 26, 255}), image.Point{}, draw.Src)
 	for i, id := range slots {
 		if id == 0 {
@@ -60,7 +60,11 @@ func screenshot(bar Bar, slots [2 * Slots]int) image.Image {
 	return shot
 }
 
-var bar = Bar{Left: Box{X: 560, Y: 6, W: 380, H: 46}, Right: Box{X: 1000, Y: 6, W: 380, H: 46}}
+// bar is where Dota really puts the portraits on a 1920x1080 screen, so the made-up pictures
+// the tests paint have the proportions of a real one.
+var screenSize = image.Rect(0, 0, 1920, 1080)
+
+var bar = Predict(screenSize)
 
 func TestReadingAFullBar(t *testing.T) {
 	want := [2 * Slots]int{1, 8, 14, 26, 35, 44, 53, 74, 86, 101}
@@ -127,7 +131,8 @@ func TestEveryHeroReadsAsItself(t *testing.T) {
 // trainer its calibration is wrong.
 func TestAMisplacedBarReadsNothing(t *testing.T) {
 	shot := screenshot(bar, [2 * Slots]int{1, 8, 14, 26, 35, 44, 53, 74, 86, 101})
-	wrong := Bar{Left: Box{X: 560, Y: 400, W: 380, H: 46}, Right: Box{X: 1000, Y: 400, W: 380, H: 46}}
+	wrong := Bar{Left: Box{X: bar.Left.X, Y: 400, W: bar.Left.W, H: bar.Left.H},
+		Right: Box{X: bar.Right.X, Y: 400, W: bar.Right.W, H: bar.Right.H}}
 	if n := ReadCount(wrong.Read(shot, table(heroes))); n != 0 {
 		t.Errorf("a bar over empty screen read %d heroes", n)
 	}
@@ -148,41 +153,26 @@ func TestABarMustDescribeTenReadablePortraits(t *testing.T) {
 	}
 }
 
-// The trainer finds the bar by looking for the one portrait it is sure of: in a match it
-// knows its own hero and which of the ten slots that hero sits in.
-func TestFindingTheBarFromOneKnownPortrait(t *testing.T) {
+// When the guess from the screen's height is wrong, the bar is searched for, and what makes
+// that safe is asking which whole bar reads the most heroes rather than which rectangle looks
+// most like some hero.
+func TestLocatingAMovedBar(t *testing.T) {
 	tab := table(heroes)
 	want := [2 * Slots]int{1, 8, 14, 26, 35, 44, 53, 74, 86, 101}
 	shot := screenshot(bar, want)
-
-	const slot = 2 // the third portrait on the left run
-	found, ok := Find(shot, tab[want[slot]][0])
+	found, read, ok := Locate(shot, tab)
 	if !ok {
-		t.Fatal("the portrait wasn't found at all")
+		t.Fatalf("the bar wasn't found; best read %d", read)
 	}
-	// Find lands on the art, which sits inside the slot the portraits are spaced by; Fit is
-	// what turns that into the geometry.
-	if truth := bar.Cell(slot); !found.Cell.In(truth) {
-		t.Errorf("found the portrait at %v, which is not inside its slot %v", found.Cell, truth)
-	}
-
-	got, read, ok := Fit(shot, tab, found.Cell, slot)
-	if !ok {
-		t.Fatalf("no bar could be fitted around %v", found.Cell)
-	}
-	if read != 2*Slots {
-		t.Errorf("the bar it worked out reads %d of the ten heroes: %+v", read, got)
+	if got := ReadCount(found.Read(shot, tab)); got != 2*Slots {
+		t.Errorf("the bar found reads %d of the ten: %+v", got, found)
 	}
 }
 
-// A screen with no portrait on it must not yield a bar that reads anything.
-func TestFindingNothingOnAnEmptyScreen(t *testing.T) {
+// A screen with no bar on it must yield no bar, however much hero-shaped noise it holds.
+func TestLocatingNothingOnAnEmptyScreen(t *testing.T) {
 	shot := screenshot(bar, [2 * Slots]int{})
-	found, ok := Find(shot, table(heroes)[26][0])
-	if !ok {
-		return // nothing found at all is a fine answer
-	}
-	if _, read, ok := Fit(shot, table(heroes), found.Cell, 0); ok {
-		t.Errorf("a bar fitted to an empty screen read %d heroes", read)
+	if found, read, ok := Locate(shot, table(heroes)); ok {
+		t.Errorf("found a bar on an empty screen reading %d heroes: %+v", read, found)
 	}
 }

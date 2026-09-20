@@ -67,14 +67,13 @@ func draftCmd(args []string) error {
 		}
 		fresh := seen.Add(img, bar, table)
 		// Dota's interface can be scaled by hand, and then the guess reads nothing. Look for
-		// the bar properly, once, before giving up on it.
+		// the bar properly before giving up on it.
 		if seen.Settled() == 0 && !searched {
 			searched = true
-			if found := screen.FindAny(img, table); len(found) > 0 {
-				fmt.Printf("frame %2d: the guess found nothing, but a sweep found %d portraits:\n", shot, len(found))
-				for _, f := range found {
-					fmt.Printf("   %-22s at %d,%d %dx%d\n", names[f.Hero], f.Cell.Min.X, f.Cell.Min.Y, f.Cell.Dx(), f.Cell.Dy())
-				}
+			if found, read, ok := screen.Locate(img, table); ok {
+				fmt.Printf("frame %2d: the guess read nothing; the bar is at %+v and %+v (%d heroes)\n",
+					shot, found.Left, found.Right, read)
+				bar = found
 			}
 		}
 		fmt.Printf("frame %2d: %d of 10 known%s\n", shot, seen.Settled(), more(fresh))

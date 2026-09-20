@@ -30,13 +30,23 @@ const Inset = 0.14
 
 // Ratio is how much closer the best match must be than the runner-up for it to be believed,
 // as a fraction of the runner-up's distance. It is what turns a doubtful reading into no
-// reading: a slot nobody has picked looks a little like every hero, and the trainer would
-// rather say nothing than name the wrong one. Measured over every portrait at every size the
-// bar is drawn at, 0.7 never once gave a wrong answer.
+// reading: a slot nobody has picked looks a little like every hero.
 //
-// TODO: tune. Measured against portraits painted into a bar by the tests, not against frames
-// from a real client.
-const Ratio = 0.7
+// Measured over two drafts captured from a real client, with the heroes taken from the game's
+// own log: the nearest hero was the right one in all twenty slots, and the ones that were
+// least certain were the dark heroes, which sit around 0.8. A line at 0.85 reads every slot
+// of both drafts and never reads one wrongly. It is deliberately looser than it could be for
+// a lone rectangle, because a cell is never judged alone: it has to be one of several read in
+// the same frame, and to be read the same way twice. See Reading.
+const Ratio = 0.85
+
+// LeastContrast is how much a slot's colours must vary before it is taken to hold a picture
+// of anything at all. Every draft begins with ten empty slots, which are flat grey panels;
+// measured, they come out at 132 while a portrait on screen runs from 1577 upwards and the
+// palest of the game's own portraits is 1411. Without this the trainer opens every draft by
+// confidently naming ten heroes, all the same one, because a flat panel is a little like the
+// darkest hero there is.
+const LeastContrast = 600
 
 // Signature is one portrait's thumbnail, red, green and blue for each block in turn.
 type Signature [sigLen]uint8
@@ -112,6 +122,9 @@ func (t Table) add(heroID int, s Signature) { t[heroID] = append(t[heroID], s) }
 // The runner-up is the closest portrait of a different hero, not simply the second closest
 // picture: two styles of the same hero sitting near each other is agreement, not doubt.
 func (t Table) Match(s Signature) (heroID int, ok bool) {
+	if s.Contrast() < LeastContrast {
+		return 0, false
+	}
 	best, second := -1, -1
 	for id, arts := range t {
 		near := -1
@@ -132,4 +145,21 @@ func (t Table) Match(s Signature) (heroID int, ok bool) {
 		return 0, false
 	}
 	return heroID, true
+}
+
+// Contrast is how much a signature's colours vary from their own average. A portrait is a
+// picture of something and varies a great deal; a slot nobody has picked yet is a flat grey
+// panel and hardly varies at all, however much it may happen to resemble some dark hero.
+func (s Signature) Contrast() int {
+	sum := 0
+	for _, v := range s {
+		sum += int(v)
+	}
+	mean := sum / len(s)
+	total := 0
+	for _, v := range s {
+		d := int(v) - mean
+		total += d * d
+	}
+	return total / len(s)
 }

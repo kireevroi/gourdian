@@ -16,21 +16,51 @@ type Reading struct {
 }
 
 // Add reads the bar in one frame and returns how many slots that settled.
+//
+// A frame only counts when it shows several portraits at once. One rectangle of a screen can
+// resemble a hero by chance -- a menu, a loading screen, the desktop -- but a whole row of
+// them resembling heroes in the places the bar's portraits go is the bar.
 func (r *Reading) Add(shot image.Image, bar Bar, t Table) int {
 	if !bar.Ready() || len(t) == 0 {
 		return 0
 	}
-	settled := 0
-	for slot := range r.heroes {
+	var seen [2 * Slots]int
+	found := 0
+	for slot := range seen {
 		if r.heroes[slot] != 0 {
+			found++ // a slot settled earlier is still a portrait in this frame
 			continue
 		}
 		cell := bar.Cell(slot)
 		if !cell.In(shot.Bounds()) {
 			continue
 		}
-		id, ok := t.Match(Of(shot, cell))
-		if !ok {
+		if id, ok := t.Match(Of(shot, cell)); ok {
+			seen[slot], found = id, found+1
+		}
+	}
+	if found < LeastRead {
+		return 0
+	}
+	// Dota lets nobody take a hero someone else has, so the same hero in two slots is a
+	// mistake in at least one of them, and there is no telling which.
+	twice := map[int]bool{}
+	for slot, id := range seen {
+		if id == 0 {
+			continue
+		}
+		for other := slot + 1; other < len(seen); other++ {
+			if seen[other] == id {
+				twice[id] = true
+			}
+		}
+		if r.taken(id, slot) {
+			twice[id] = true
+		}
+	}
+	settled := 0
+	for slot, id := range seen {
+		if id == 0 || twice[id] {
 			continue
 		}
 		if r.votes[slot] == nil {
@@ -42,6 +72,16 @@ func (r *Reading) Add(shot image.Image, bar Bar, t Table) int {
 		}
 	}
 	return settled
+}
+
+// taken reports whether a hero has already settled in some other slot.
+func (r *Reading) taken(heroID, notSlot int) bool {
+	for slot, id := range r.heroes {
+		if id == heroID && slot != notSlot {
+			return true
+		}
+	}
+	return false
 }
 
 // Heroes is what has settled: radiant 0 to 4 then dire 5 to 9, 0 where nothing has.

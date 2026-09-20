@@ -24,6 +24,9 @@ type Bar struct {
 	Right Box `json:"right"`
 }
 
+// Y is the top of the portraits.
+func (b Bar) Y() int { return b.Left.Y }
+
 // Ready reports whether the bar describes ten portraits big enough to tell apart. A portrait
 // smaller than the hash it is shrunk to carries no information.
 func (b Bar) Ready() bool {
@@ -70,16 +73,6 @@ func (b Box) ReadRun(shot image.Image, t Table) [Slots]int {
 		}
 	}
 	return out
-}
-
-func runCount(slots [Slots]int) int {
-	n := 0
-	for _, id := range slots {
-		if id != 0 {
-			n++
-		}
-	}
-	return n
 }
 
 // Read is the hero in each of the ten slots, 0 where a slot is empty or can't be read.
