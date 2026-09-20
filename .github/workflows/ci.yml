@@ -20,6 +20,8 @@ jobs:
       - run: make test
       # staticcheck: unused code, suspicious constructs and style
       - run: make lint
+      # The .deb the Release workflow publishes, so packaging breaks here and not at a tag.
+      - run: make linux-deb
       - name: Third-party notices are current
         run: make notices && git diff --exit-code THIRD_PARTY_NOTICES.txt
 
