@@ -132,7 +132,42 @@ func fromDXT5(pixels []byte, width, height int) (image.Image, error) {
 			}
 		}
 	}
+	if looksYCoCg(img) {
+		fromYCoCg(img)
+	}
 	return img, nil
+}
+
+// Valve compresses most of its DXT5 as YCoCg rather than as colour: the alpha channel, which
+// a block stores more finely than the others, carries the brightness, red and green carry the
+// two chroma axes, and blue carries a scale for them. Nothing in the header says so, but it
+// shows: a picture whose blue never varies while its alpha varies over most of its range is
+// not a picture with an alpha channel, it is one of these.
+func looksYCoCg(img *image.RGBA) bool {
+	minB, maxB, minA, maxA := 255, 0, 255, 0
+	for i := 0; i < len(img.Pix); i += 4 {
+		b, a := int(img.Pix[i+2]), int(img.Pix[i+3])
+		minB, maxB = min(minB, b), max(maxB, b)
+		minA, maxA = min(minA, a), max(maxA, a)
+	}
+	return maxB-minB <= 48 && maxA-minA >= 64
+}
+
+// fromYCoCg turns the picture back into colour, in place.
+func fromYCoCg(img *image.RGBA) {
+	clamp := func(v int) uint8 { return uint8(max(0, min(255, v))) }
+	for i := 0; i < len(img.Pix); i += 4 {
+		// The scale is what the blue channel was spent on, so the two chroma axes can use
+		// the whole of their range in a picture that isn't very colourful.
+		scale := int(img.Pix[i+2])*31/255 + 1
+		co := (int(img.Pix[i]) - 128) / scale
+		cg := (int(img.Pix[i+1]) - 128) / scale
+		y := int(img.Pix[i+3])
+		img.Pix[i] = clamp(y + co - cg)
+		img.Pix[i+1] = clamp(y + cg)
+		img.Pix[i+2] = clamp(y - co - cg)
+		img.Pix[i+3] = 255
+	}
 }
 
 // rgb565 widens a packed colour to eight bits a channel, spreading the top bits down so white
