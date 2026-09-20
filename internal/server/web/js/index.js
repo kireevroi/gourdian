@@ -309,7 +309,14 @@ function renderPicks(p) {
   };
   const list = (heroes, label, avoid) => (heroes && heroes.length
     ? `<div class="label">${t(label)}</div>` + heroes.map((h) => row(h, avoid)).join('') : '');
-  $('picks').innerHTML = list(p.best, 'Your best on this position', false)
+  // The heroes read off the screen, so you can see what it made of them rather than having
+  // to take the advice on trust.
+  const enemies = (p.enemies || []).length
+    ? `<div class="label">${t('The other side has taken')}</div><div class="enemies">` +
+      p.enemies.map((h) => `<span class="enemy">${h.img ? `<img src="${esc(imgURL(h.img))}" alt="">` : ''}${esc(h.hero)}</span>`).join('') + '</div>'
+    : '';
+  $('picks').innerHTML = enemies
+    + list(p.best, 'Your best on this position', false)
     + list(p.fresh, 'Strong right now, new to you', false)
     + list(p.avoid, 'Losing on this position', true);
 }

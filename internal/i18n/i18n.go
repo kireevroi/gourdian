@@ -27,6 +27,7 @@ var phrases = map[string]string{
 	"Coach: %s":                   "Тренер: %s",
 	"Your best %s heroes:":        "Ваши лучшие герои (%s):",
 	"New to you: %s":              "Новый для вас: %s",
+	"Against: %s":                 "Против: %s",
 	"Best %s picks: %s":           "Лучшие пики (%s): %s",
 	"Avoid %s":                    "Избегайте %s",
 	"Avoid %s · %d%% of %d":       "Избегайте %s · %d%% из %d",
