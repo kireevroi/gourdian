@@ -15,6 +15,9 @@ import (
 
 const connectedWindow = 35 * time.Second
 
+// dayNightWithin is how soon the day or night turn has to be for the HUD to show a timer for it.
+const dayNightWithin = 60
+
 type Snapshot struct {
 	Connected  bool        `json:"connected"`
 	LastUpdate time.Time   `json:"last_update"`
@@ -249,7 +252,7 @@ func (e *Engine) Snapshot(set config.Settings) Snapshot {
 			snap.ItemGoals = append(snap.ItemGoals, v)
 		}
 	}
-	snap.Timers = timers(s.Map.ClockTime, set, e.match)
+	snap.Timers = timers(s.Map.ClockTime, s.Map.Daytime, set, e.match)
 	var skills *dotadata.SkillBuild
 	if e.data != nil {
 		skills = e.data.SkillBuildFor(h.ID, set.Role)
@@ -258,7 +261,7 @@ func (e *Engine) Snapshot(set config.Settings) Snapshot {
 	return snap
 }
 
-func timers(clock int, set config.Settings, m *match) []Timer {
+func timers(clock int, daytime bool, set config.Settings, m *match) []Timer {
 	t := set.Timings
 	var out []Timer
 	add := func(label, kind string, at int) {
@@ -288,6 +291,15 @@ func timers(clock int, set config.Settings, m *match) []Timer {
 	}
 	if t.TormentorSpawn > 0 {
 		add("Tormentor", "objective", t.TormentorSpawn)
+	}
+	// Day and night turn over every five minutes, so a timer for it all game would cost a line
+	// most of the time; it appears as the turn comes close, which is when it changes what you do.
+	if at, ok := nextPeriodic(clock, t.DayNightEvery, t.DayNightEvery); ok && clock >= 0 && at-clock <= dayNightWithin {
+		label := "Night falls"
+		if !daytime {
+			label = "Day breaks"
+		}
+		add(label, "daynight", at)
 	}
 	if m != nil && m.roshanKnown {
 		lo, hi := m.roshanDeadAt+t.RoshanRespawnMin, m.roshanDeadAt+t.RoshanRespawnMax

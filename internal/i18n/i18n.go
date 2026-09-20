@@ -54,6 +54,7 @@ var phrases = map[string]string{
 	"Bounty runes": "Руны богатства", "Neutral tier %d": "Нейтральные предметы %d-го тира",
 	"Power rune": "Руна силы", "Roshan surely up": "Рошан точно жив", "Roshan window opens": "Открывается окно Рошана",
 	"Stack pull": "Стак", "Tormentor": "Торментор", "Water runes": "Водяные руны", "Shrines of Wisdom": "Святилища мудрости",
+	"Night falls": "Наступает ночь", "Day breaks": "Наступает день",
 
 	"Stack the ancient camp at 0:53": "Стакните лагерь древних в 0:53",
 	"No TP scroll":                   "Нет свитка телепорта",

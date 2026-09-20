@@ -378,6 +378,7 @@ func SampleIn(widgets []config.HUDWidget, lang string) View {
 	var v View
 	l := wordsFor(lang)
 	timers := []coach.Timer{
+		{Label: "Night falls", At: 12, Kind: "daynight"},
 		{Label: "Power rune", At: 18, Kind: "rune"},
 		{Label: "Stack pull", At: 53, Kind: "stack"},
 		{Label: "Neutral tier 2", At: 165, Kind: "neutral"},

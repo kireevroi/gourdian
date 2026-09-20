@@ -9,6 +9,7 @@ type Timings struct {
 	PowerRuneEvery   int   `json:"power_rune_every"`
 	WisdomRuneEvery  int   `json:"wisdom_rune_every"`
 	LotusEvery       int   `json:"lotus_every"`
+	DayNightEvery    int   `json:"day_night_every"`
 	TormentorSpawn   int   `json:"tormentor_spawn"`
 	NeutralTiers     []int `json:"neutral_tiers"`
 	RoshanRespawnMin int   `json:"roshan_respawn_min"`
@@ -28,6 +29,7 @@ func DefaultTimings() Timings {
 		PowerRuneEvery:   120,                               // then every 2:00
 		WisdomRuneEvery:  420,                               // Shrines of Wisdom every 7:00 since 7.38
 		LotusEvery:       180,                               // a lotus every 3:00, six at most
+		DayNightEvery:    300,                               // day from 0:00, night from 5:00, and so on
 		TormentorSpawn:   1200,                              // 20:00 since 7.39, then 10:00 after it dies
 		NeutralTiers:     []int{300, 900, 1500, 2100, 3600}, // Madstone cap rises at 5/15/25/35/60 min
 		RoshanRespawnMin: 480,                               // 8 to 11 minutes after he dies
