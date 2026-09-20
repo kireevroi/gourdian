@@ -36,3 +36,30 @@ func TestMedian(t *testing.T) {
 		}
 	}
 }
+
+func TestTalentsAtLevel(t *testing.T) {
+	for level, want := range map[int]int{0: 0, 9: 0, 10: 1, 14: 1, 15: 2, 20: 3, 25: 4, 26: 4, 27: 5, 30: 8} {
+		if got := TalentsAtLevel(level); got != want {
+			t.Errorf("TalentsAtLevel(%d) = %d, want %d", level, got, want)
+		}
+	}
+	if n := TalentsAtLevel(30); n != len(TalentLevels) {
+		t.Errorf("level 30 gives %d talent points, but there are %d levels handing one out", n, len(TalentLevels))
+	}
+}
+
+// TalentDueAt names the talent still waiting, so an alert can say which level it came from.
+func TestTalentDueAt(t *testing.T) {
+	for _, c := range []struct{ taken, level, want int }{
+		{0, 9, 0},   // none handed out yet
+		{0, 12, 10}, // the level 10 talent is waiting
+		{1, 12, 0},  // and it has been taken
+		{2, 21, 20},
+		{4, 28, 27},
+		{8, 30, 0}, // every talent taken
+	} {
+		if got := TalentDueAt(c.taken, c.level); got != c.want {
+			t.Errorf("TalentDueAt(taken %d, level %d) = %d, want %d", c.taken, c.level, got, c.want)
+		}
+	}
+}
