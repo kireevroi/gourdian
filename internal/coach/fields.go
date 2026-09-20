@@ -394,6 +394,14 @@ var Fields = []Field{
 	{ID: "skill_points", Label: "Unspent skill points", Group: "Abilities", Type: "number",
 		Help: "Counted against the fewest the hero has had this match, so innate and auto-levelled abilities don't show up as unspent.",
 		num:  num(func(c *Ctx) float64 { return f64(c.m.skillSpare()) })},
+	{ID: "talent_points", Label: "Unspent talents", Group: "Abilities", Type: "number",
+		Help: "Talents have their own points since 7.40, so an unspent one doesn't show up as a skill point.",
+		num:  num(func(c *Ctx) float64 { return f64(talentSpare(c.S)) })},
+	{ID: "talent_level", Label: "Level of the waiting talent", Group: "Abilities", Type: "number",
+		Help: "The level that handed out the talent you haven't taken, or 0 when none is waiting.",
+		num: num(func(c *Ctx) float64 {
+			return f64(dota.TalentDueAt(c.S.Hero.TalentsTaken(), c.S.Hero.Level))
+		})},
 	{ID: "next_skill", Label: "Ability pros level next", Group: "Abilities", Type: "text",
 		Help: "From OpenDota's recent pro games on this hero and position, worked out from your own ability levels. Empty while it loads.",
 		text: func(c *Ctx, _ string) string { return c.nextSkillName() }},

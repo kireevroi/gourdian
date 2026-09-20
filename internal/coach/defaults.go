@@ -413,6 +413,15 @@ func DefaultSpecs(lang string) []RuleSpec {
 			Cooldown: 240, Max: 5,
 		},
 		{
+			ID: "talent", Name: "Unspent talent", Category: "skills",
+			When: Trigger{Type: WhenState, For: 20},
+			If:   []Cond{{Field: "talent_points", Op: "ge", Num: 1}},
+			Then: AlertSpec{Text: "Your level {talent_level} talent is unspent. Take one from the talent tree",
+				Speech: "Take your level {talent_level} talent", Severity: "warn", Mistake: true, Habit: "Unspent talent",
+				Advice: "Talents are free power and cost nothing but a click. Take yours the moment the level lands."},
+			Cooldown: 60, Max: 4,
+		},
+		{
 			ID: "skill_points", Name: "Unspent skill point", Category: "skills",
 			When: Trigger{Type: WhenState, For: 15},
 			If: []Cond{
