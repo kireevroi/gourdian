@@ -14,13 +14,13 @@ const (
 	unitHeight = 1080.0
 	// unitCellW and unitCellH are one portrait's slot.
 	unitCellW = 123.75
-	unitCellH = 72.0
+	unitCellH = 66.0
 	// unitTop is how far below the top of the screen the portraits start.
-	unitTop = 3.0
+	unitTop = 6.0
 	// unitLeftEdge and unitRightEdge are where each run begins, measured from the middle of
 	// the screen, where the clock is.
-	unitLeftEdge  = -751.5
-	unitRightEdge = 141.75
+	unitLeftEdge  = -752.25
+	unitRightEdge = 134.25
 )
 
 // Predict is where the portraits probably are on a screen of this size.

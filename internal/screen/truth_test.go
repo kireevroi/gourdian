@@ -41,10 +41,12 @@ func namedTable(t *testing.T) (Table, map[int]string) {
 	return TableFor(ids), names
 }
 
-// measuredBar is the geometry read off a real 2560x1440 frame.
+// measuredBar is the geometry of a real 2560x1440 frame, fitted to it rather than eyeballed:
+// the portraits start below the bar of the player's colour, and the two runs are the same
+// size and pitch as each other.
 var measuredBar = Bar{
-	Left:  Box{X: 278, Y: 4, W: 825, H: 96},
-	Right: Box{X: 1469, Y: 4, W: 822, H: 96},
+	Left:  Box{X: 277, Y: 8, W: 825, H: 88},
+	Right: Box{X: 1459, Y: 8, W: 825, H: 88},
 }
 
 func TestAgainstARealFrame(t *testing.T) {
