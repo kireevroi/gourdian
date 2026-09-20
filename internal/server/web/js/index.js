@@ -315,7 +315,9 @@ function renderPicks(p) {
     ? `<div class="label">${t('The other side has taken')}</div><div class="enemies">` +
       p.enemies.map((h) => `<span class="enemy">${h.img ? `<img src="${esc(imgURL(h.img))}" alt="">` : ''}${esc(h.hero)}</span>`).join('') + '</div>'
     : '';
-  $('picks').innerHTML = enemies
+  const notes = (p.notes || []).length
+    ? `<div class="notes">${p.notes.map((n) => `<div>${esc(n)}</div>`).join('')}</div>` : '';
+  $('picks').innerHTML = enemies + notes
     + list(p.best, 'Your best on this position', false)
     + list(p.fresh, 'Strong right now, new to you', false)
     + list(p.avoid, 'Losing on this position', true);

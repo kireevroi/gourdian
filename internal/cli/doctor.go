@@ -19,6 +19,7 @@ import (
 	"gourdian/internal/dotadata"
 	"gourdian/internal/hidewin"
 	"gourdian/internal/install"
+	"gourdian/internal/screen"
 	"gourdian/internal/secrets"
 	"gourdian/internal/server"
 	"gourdian/internal/speech"
@@ -76,6 +77,23 @@ func doctor() error {
 		c.ok("Dota has sent a draft board (first seen %s); counter-pick advice can use it", strings.TrimSpace(string(at)))
 	} else {
 		c.ok("no draft board from Dota, as expected: Valve sends picks to spectators only")
+	}
+
+	// Reading the enemy picks means reading the screen, so say plainly whether that is on and
+	// whether this machine can do it at all.
+	switch {
+	case !set.Screen.Draft:
+		c.ok("not reading the screen (Settings > Pick help turns it on for the enemy picks)")
+	case screen.Wayland():
+		c.fail("reading the screen is on, but this is a Wayland session where a program can't; log in with X11")
+	default:
+		if size, err := screen.Size(); err != nil {
+			c.fail("reading the screen is on, but the screen can't be read: %v", err)
+		} else {
+			bar := screen.Predict(size)
+			c.ok("reading the screen: %dx%d, expecting the portraits at %d,%d and %d,%d",
+				size.Dx(), size.Dy(), bar.Left.X, bar.Y(), bar.Right.X, bar.Y())
+		}
 	}
 
 	if opts := install.LaunchOptions(); len(opts) > 0 {

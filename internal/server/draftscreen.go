@@ -26,16 +26,16 @@ type draftBoard struct {
 // couple of seconds while the draft is open; once it stops, the board goes with it.
 const draftFresh = 20 * time.Second
 
-// enemies is who the other side has taken, or nothing when the screen hasn't been read or the
+// sides is who each team has taken, or nothing when the screen hasn't been read or the
 // reading has gone stale.
-func (s *Server) enemies(matchID string) []int {
+func (s *Server) sides(matchID string) (ours, theirs []int) {
 	b := &s.draft
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.matchID != matchID || time.Since(b.at) > draftFresh {
-		return nil
+		return nil, nil
 	}
-	return slices.Clone(b.theirs)
+	return slices.Clone(b.ours), slices.Clone(b.theirs)
 }
 
 // handleHeroNames gives the overlay the hero numbers, which it needs to say what it saw and

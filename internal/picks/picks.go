@@ -112,6 +112,9 @@ type Board struct {
 	Avoid []Hero `json:"avoid,omitempty"`
 	// Enemies are the heroes on the other side, once they are known.
 	Enemies []Hero `json:"enemies,omitempty"`
+	// Notes are what the two line-ups are short of or heavy in, once enough of them is known
+	// to say anything.
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Empty reports whether the board has nothing to show.
@@ -127,6 +130,9 @@ type Hero struct {
 	Score int `json:"score"`
 	// Games, Wins and WinPct are the player's plain record over Window, whatever the score
 	// makes of it.
+	// Roles are what the hero is for, as OpenDota tags them: shown for the other side, so the
+	// kind of trouble they are is plain without knowing every hero.
+	Roles     []string `json:"roles,omitempty"`
 	Games     int      `json:"games,omitempty"`
 	Wins      int      `json:"wins,omitempty"`
 	WinPct    int      `json:"win_pct,omitempty"`
@@ -146,10 +152,11 @@ type Input struct {
 	History []model.MatchSummary
 	Heroes  []dotadata.HeroInfo
 	Meta    map[int]dotadata.HeroMeta
-	// Enemies are the heroes the other team has taken, when the trainer can see them, and
-	// Matchups is each of those heroes' record against the rest. Both are empty when it
-	// can't, and then the board simply says nothing about them.
+	// Enemies are the heroes the other team has taken, when the trainer can see them, Allies
+	// the player's own side, and Matchups each enemy's record against the rest. All are empty
+	// when the draft can't be seen, and then the board simply says nothing about it.
 	Enemies  []int
+	Allies   []int
 	Matchups map[int]map[int]dotadata.Matchup
 }
 
@@ -161,6 +168,14 @@ func (w words) f(en, ru string, args ...any) string {
 		return fmt.Sprintf(ru, args...)
 	}
 	return fmt.Sprintf(en, args...)
+}
+
+// s is f for a line that takes no values.
+func (w words) s(en, ru string) string {
+	if w == "ru" {
+		return ru
+	}
+	return en
 }
 
 // record is one hero's history in the position.
@@ -224,8 +239,10 @@ func Rank(in Input, now time.Time) *Board {
 	b.Avoid = b.Avoid[:min(len(b.Avoid), t.Avoid)]
 	b.Fresh = fresh(in, t, byHero, bracket, w)
 	for _, id := range in.Enemies {
-		b.Enemies = append(b.Enemies, Hero{ID: id, Name: info[id].LocalizedName, Img: info[id].Img})
+		b.Enemies = append(b.Enemies, Hero{ID: id, Name: info[id].LocalizedName, Img: info[id].Img,
+			Roles: in.Meta[id].Roles})
 	}
+	b.Notes = notes(in, w)
 	if b.Empty() {
 		return nil
 	}
@@ -335,6 +352,59 @@ func counter(in Input, heroID int, info map[int]dotadata.HeroInfo, h *Hero, w wo
 		h.Why = append(h.Why, w.f("%d%% against %s", "%d%% против %s", term, name))
 	}
 	return term
+}
+
+// LeastForShape is how much of a line-up has to be known before anything is said about its
+// shape. With two heroes picked, "nobody here can stun" is not a gap, it is the draft not
+// having happened yet.
+const LeastForShape = 4
+
+// notes are what the two sides are short of or heavy in. They are drawn only from what
+// OpenDota tags each hero as, so they stay the sort of thing anyone would say looking at the
+// board, rather than pretending to judge a line-up.
+func notes(in Input, w words) []string {
+	var out []string
+	has := func(ids []int, role string) int {
+		n := 0
+		for _, id := range ids {
+			if slices.Contains(in.Meta[id].Roles, role) {
+				n++
+			}
+		}
+		return n
+	}
+	if len(in.Enemies) >= LeastForShape {
+		if n := has(in.Enemies, "Disabler"); n >= 3 {
+			out = append(out, w.f("%d of them can stun or hold you", "стан или контроль есть у %d из них", n))
+		}
+		ranged := 0
+		for _, id := range in.Enemies {
+			if !in.Meta[id].Melee() {
+				ranged++
+			}
+		}
+		if ranged == len(in.Enemies) {
+			out = append(out, w.s("Every one of them is ranged", "Все они дальнего боя"))
+		}
+	}
+	if len(in.Allies) >= LeastForShape {
+		if has(in.Allies, "Disabler") == 0 {
+			out = append(out, w.s("Nobody on your side can stun or hold", "На вашей стороне некому дать контроль"))
+		}
+		if has(in.Allies, "Durable") == 0 {
+			out = append(out, w.s("Nobody on your side can take a beating", "На вашей стороне некому держать урон"))
+		}
+		melee := 0
+		for _, id := range in.Allies {
+			if in.Meta[id].Melee() {
+				melee++
+			}
+		}
+		if melee == len(in.Allies) {
+			out = append(out, w.s("Your whole side is melee", "Вся ваша сторона ближнего боя"))
+		}
+	}
+	return out
 }
 
 // roleFit is the OpenDota roles that suit each position.

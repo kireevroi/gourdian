@@ -88,7 +88,9 @@ Once it is on, the heroes the other side has taken are shown on the pick card, a
 
 It recognises the portraits by their colours, against the art from your own Dota install, so an Arcana, a persona or an alternate style is read as the hero it is. It says nothing rather than guessing: an unpicked slot, a hero it isn't sure of, or the same hero seemingly in two places are all left blank, and a hero has to be read the same way twice before it is believed. Measured over three drafts, all ten heroes were read within two to three readings, none wrongly.
 
-It needs the game drawn where a program can read it: on Linux that means an X11 session, not Wayland.
+Once a few heroes are picked on either side, it also says what the two line-ups are short of or heavy in — three of them able to stun you, nobody on your side who can take a beating, a side that is all melee. Those come from nothing more than the roles OpenDota tags each hero with, so they are the sort of thing anyone would say looking at the board rather than a judgement of the draft, and nothing is said until at least four heroes of a side are known.
+
+It needs the game drawn where a program can read it: on Linux that means an X11 session, not Wayland. `gourdian doctor` says whether it is on, whether this machine can read its screen, and where it expects the portraits to be.
 
 ## Personal targets
 

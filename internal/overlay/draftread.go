@@ -3,6 +3,7 @@ package overlay
 import (
 	"context"
 	"fmt"
+	"image"
 	"log/slog"
 	"time"
 
@@ -26,7 +27,16 @@ func watchDraft(ctx context.Context, m *model, a *api, heroes map[string]int, lo
 		log.Info("not reading the draft: a program can't read a Wayland desktop")
 		return
 	}
-	table := screen.TableFor(heroes)
+	watchWith(ctx, m, a, screen.TableFor(heroes), eyes{screen.Size, screen.Grab}, readEvery, log)
+}
+
+// eyes is where the pictures come from, so the loop can be run against a made-up screen.
+type eyes struct {
+	size func() (image.Rectangle, error)
+	grab func(image.Rectangle) (image.Image, error)
+}
+
+func watchWith(ctx context.Context, m *model, a *api, table screen.Table, look eyes, every time.Duration, log *slog.Logger) {
 	if len(table) == 0 {
 		log.Warn("not reading the draft: no hero portraits to compare against")
 		return
@@ -35,7 +45,7 @@ func watchDraft(ctx context.Context, m *model, a *api, heroes map[string]int, lo
 	var bar screen.Bar
 	var size string
 	drafting, searched := false, false
-	tick := time.NewTicker(readEvery)
+	tick := time.NewTicker(every)
 	defer tick.Stop()
 	for {
 		select {
@@ -52,7 +62,7 @@ func watchDraft(ctx context.Context, m *model, a *api, heroes map[string]int, lo
 			continue
 		}
 		drafting = true
-		where, err := screen.Size()
+		where, err := look.size()
 		if err != nil {
 			log.Warn("couldn't measure the screen", "err", err)
 			continue
@@ -60,7 +70,7 @@ func watchDraft(ctx context.Context, m *model, a *api, heroes map[string]int, lo
 		if next := fmt.Sprintf("%dx%d", where.Dx(), where.Dy()); next != size {
 			size, bar, searched = next, screen.Predict(where), false
 		}
-		shot, err := screen.Grab(where)
+		shot, err := look.grab(where)
 		if err != nil {
 			log.Warn("couldn't read the screen", "err", err)
 			continue
