@@ -155,7 +155,7 @@ func (s *Server) heroFacts(heroID int, role string, owned []string) *aicoach.Her
 	if b := s.data.BuildFor(heroID, role); b != nil {
 		h.BuildPosition, h.BuildGames, h.BuildWon = b.Position, b.Games, b.Won
 		for _, it := range b.Items {
-			h.Build[it.Phase] = append(h.Build[it.Phase], it.DName)
+			h.Build[it.Phase] = append(h.Build[it.Phase], fmt.Sprintf("%s (%dg)", it.DName, it.Cost))
 		}
 	}
 	return h
@@ -192,6 +192,7 @@ func (s *Server) aiInput(reason, matchID string, set config.Settings) aicoach.In
 		Facts:    s.engine.Facts(set.Role),
 		Tips:     s.engine.RecentTips(),
 		Timeline: s.matchTimeline(matchID),
+		Timings:  set.Timings,
 	}
 }
 

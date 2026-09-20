@@ -42,5 +42,8 @@ func DefaultTimings() Timings {
 	}
 }
 
+// ShardItem is Aghanim's Shard under OpenDota's item names.
+const ShardItem = "aghanims_shard"
+
 // ShardCost is what Aghanim's Shard costs when OpenDota's item prices haven't loaded yet.
 const ShardCost = 1400
