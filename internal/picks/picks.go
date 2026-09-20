@@ -41,6 +41,10 @@ type Tuning struct {
 	Avoid int `json:"avoid"`
 }
 
+// MatchupMinGames is how many games a pair of heroes must have met in before their record
+// against each other counts for anything.
+const MatchupMinGames = 200
+
 func DefaultTuning() Tuning {
 	return Tuning{Days: 365, HalfLifeDays: 45, TrustAfter: 20, MinGames: 3, AvoidPct: 40, Show: 4, Fresh: 2, Avoid: 2}
 }
@@ -89,6 +93,11 @@ const (
 	fitBonus = 3
 	rustyCap = 5
 
+	// counterCap is small on purpose. OpenDota's pairs are a hundred-odd games each and are
+	// measured across every position, so five points of edge is within the noise; the term
+	// is here to order heroes that are otherwise level, not to pick one.
+	counterCap = 8
+
 	// even is the score of a hero with nothing for or against it.
 	even = 50
 )
@@ -101,6 +110,8 @@ type Board struct {
 	Best  []Hero `json:"best,omitempty"`
 	Fresh []Hero `json:"fresh,omitempty"`
 	Avoid []Hero `json:"avoid,omitempty"`
+	// Enemies are the heroes on the other side, once they are known.
+	Enemies []Hero `json:"enemies,omitempty"`
 }
 
 // Empty reports whether the board has nothing to show.
@@ -135,6 +146,11 @@ type Input struct {
 	History []model.MatchSummary
 	Heroes  []dotadata.HeroInfo
 	Meta    map[int]dotadata.HeroMeta
+	// Enemies are the heroes the other team has taken, when the trainer can see them, and
+	// Matchups is each of those heroes' record against the rest. Both are empty when it
+	// can't, and then the board simply says nothing about them.
+	Enemies  []int
+	Matchups map[int]map[int]dotadata.Matchup
 }
 
 // words formats a reason in the player's language, the way coach.sources does.
@@ -190,7 +206,8 @@ func Rank(in Input, now time.Time) *Board {
 		}
 		h.Img = info[r.id].Img
 		meta := in.Meta[r.id]
-		h.Score = even + yours(r, &h, t, w) + metaTerm(meta, bracket, &h, w) + fit(meta.Roles, in.Role)
+		h.Score = even + yours(r, &h, t, w) + metaTerm(meta, bracket, &h, w) + fit(meta.Roles, in.Role) +
+			counter(in, r.id, info, &h, w)
 		if rust := now.Sub(r.last); rust > t.rustyAfter() {
 			h.Score -= min(int(rust/t.rustyAfter()), rustyCap)
 			h.Why = append(h.Why, w.f("rusty, %d days", "не играли %d дн.", int(rust/day)))
@@ -206,6 +223,9 @@ func Rank(in Input, now time.Time) *Board {
 	b.Best = b.Best[:min(len(b.Best), t.Show)]
 	b.Avoid = b.Avoid[:min(len(b.Avoid), t.Avoid)]
 	b.Fresh = fresh(in, t, byHero, bracket, w)
+	for _, id := range in.Enemies {
+		b.Enemies = append(b.Enemies, Hero{ID: id, Name: info[id].LocalizedName, Img: info[id].Img})
+	}
 	if b.Empty() {
 		return nil
 	}
@@ -278,6 +298,45 @@ func metaTerm(m dotadata.HeroMeta, bracket int, h *Hero, w words) int {
 	return clamp(pct-even, metaCap)
 }
 
+// counter is how the hero fares against the ones the other team has already taken. Each pair
+// is shrunk by how few games it rests on, and the whole term is capped low, because these are
+// small samples measured across every position.
+func counter(in Input, heroID int, info map[int]dotadata.HeroInfo, h *Hero, w words) int {
+	if len(in.Enemies) == 0 || len(in.Matchups) == 0 {
+		return 0
+	}
+	total, counted := 0.0, 0
+	worst, worstID := 0.0, 0
+	for _, enemy := range in.Enemies {
+		m, ok := in.Matchups[enemy][heroID]
+		if !ok || m.Games == 0 {
+			continue
+		}
+		// The record is the enemy's against this hero, so the hero's edge is what is left.
+		edge := float64(even-m.WinPct()) * float64(m.Games) / float64(m.Games+MatchupMinGames)
+		total += edge
+		counted++
+		if edge < worst {
+			worst, worstID = edge, enemy
+		}
+	}
+	if counted == 0 {
+		return 0
+	}
+	term := clamp(int(math.Round(total)), counterCap)
+	switch {
+	case term > 0:
+		h.Why = append(h.Why, w.f("+%d%% against their picks", "+%d%% против их пиков", term))
+	case term < 0 && worstID != 0:
+		name := info[worstID].LocalizedName
+		if name == "" {
+			name = w.f("their picks", "их пики")
+		}
+		h.Why = append(h.Why, w.f("%d%% against %s", "%d%% против %s", term, name))
+	}
+	return term
+}
+
 // roleFit is the OpenDota roles that suit each position.
 var roleFit = map[string][]string{
 	dota.Carry:       {"Carry"},
@@ -319,7 +378,7 @@ func fresh(in Input, t Tuning, played map[int]*record, bracket int, w words) []H
 			continue
 		}
 		h := Hero{ID: info.ID, Name: info.LocalizedName, Img: info.Img}
-		h.Score = even + metaTerm(m, bracket, &h, w) + fit(m.Roles, in.Role)
+		h.Score = even + metaTerm(m, bracket, &h, w) + fit(m.Roles, in.Role) + counter(in, info.ID, nil, &h, w)
 		out = append(out, h)
 	}
 	slices.SortFunc(out, byScore)

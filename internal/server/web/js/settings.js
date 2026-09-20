@@ -49,6 +49,7 @@ onSettings((c) => {
   $('rate-v').textContent = s.voice_rate > 0 ? `+${s.voice_rate}` : s.voice_rate;
   $('voice-missing').hidden = !(!c.natural_voice && s.language !== 'en' && s.voice === 'system' && c.voice_langs && !c.voice_langs.includes(s.language));
 
+  $('screen-draft').checked = !!(s.screen && s.screen.draft);
   for (const [id, key] of PICK_FIELDS) {
     if (document.activeElement !== $(id)) $(id).value = s.picks[key];
   }
@@ -161,6 +162,7 @@ for (const [id, key] of PICK_FIELDS) {
   });
 }
 $('picks-reset').addEventListener('click', () => saveSettings({ picks: null }));
+$('screen-draft').addEventListener('change', (e) => saveSettings({ screen: { draft: e.target.checked } }));
 
 $('rec-auto').addEventListener('change', (e) => saveSettings({ recording: { auto: e.target.checked } }));
 $('rec-keep').addEventListener('change', (e) => saveSettings({ recording: { keep: Number(e.target.value) } }));

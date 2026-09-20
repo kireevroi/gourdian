@@ -128,6 +128,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 	}()
 	go stream(ctx, o.URL, u.model, u.poke, u.onEvent)
+	go startDraftReader(ctx, u.model, &u.api, u.log)
 	go u.loadSettings(ctx)
 
 	tick := time.NewTicker(time.Second)

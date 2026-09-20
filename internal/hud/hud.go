@@ -63,6 +63,10 @@ func (v View) Empty() bool { return v.Alert == nil && len(v.Rows) == 0 }
 type Payload struct {
 	Live   View `json:"live"`
 	Sample View `json:"sample"`
+	// Draft tells the overlay that the player is choosing a hero, which is when it reads the
+	// portraits off the screen. The overlay is the part of the trainer running where the
+	// screen is, which under WSL is not where the rest of it runs.
+	Draft bool `json:"draft"`
 }
 
 // PositionUntil is when the HUD stops offering the position hotkeys; lane detection decides then.

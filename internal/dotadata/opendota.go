@@ -59,6 +59,10 @@ type Client struct {
 	meta        map[int]HeroMeta
 	metaPending bool
 	metaFailed  time.Time
+
+	matchups        map[int]map[int]Matchup
+	matchupsPending map[int]bool
+	matchupsFailed  map[int]time.Time
 }
 
 func New(cacheDir string, log *slog.Logger) *Client {
@@ -83,6 +87,10 @@ func New(cacheDir string, log *slog.Logger) *Client {
 
 		rankTiers:   map[string]int{},
 		rankPending: map[string]bool{},
+
+		matchups:        map[int]map[int]Matchup{},
+		matchupsPending: map[int]bool{},
+		matchupsFailed:  map[int]time.Time{},
 
 		timings:        map[timingsKey][]ItemTiming{},
 		timingsPending: map[timingsKey]bool{},

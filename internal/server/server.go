@@ -88,6 +88,7 @@ type Server struct {
 	targets *targetCache
 	brief   briefingCache
 	picks   pickCache
+	draft   draftBoard
 
 	roleMu    sync.Mutex
 	roleHero  int
@@ -205,6 +206,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/ai/providers/{id}/models", s.handleProviderModels)
 	mux.HandleFunc("POST /api/ai/providers/{id}/test", s.handleProviderTest)
 	mux.HandleFunc("POST /api/picks/ask", s.handlePicksAsk)
+	mux.HandleFunc("POST /api/draft", s.handleDraftSeen)
+	mux.HandleFunc("GET /api/heroes", s.handleHeroNames)
 	mux.HandleFunc("GET /api/reviews", s.handleReviews)
 	mux.HandleFunc("POST /api/matches/{id}/review", s.handleReviewMatch)
 	mux.HandleFunc("POST /api/voice/test", s.handleVoiceTest)

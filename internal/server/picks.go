@@ -35,34 +35,54 @@ type pickCache struct {
 // against how each hero is doing at their rank.
 func (s *Server) pickBoard(set config.Settings) *picks.Board {
 	rank := s.rankTier()
+	enemies := s.enemies(s.engine.Snapshot(set).MatchID)
 	// Everything the board is made of belongs in the key. The rank and the hero meta arrive
 	// from OpenDota after the first draft update, so without them an early empty board would
 	// be kept all day; without the tuning, changing a setting would appear to do nothing.
 	meta := s.data.Meta()
-	key := fmt.Sprintf("%s/%d/%d/%d/%+v/%s", set.Role, s.stats.HistoryVersion(), rank, len(meta), set.Picks, time.Now().Format(time.DateOnly))
+	key := fmt.Sprintf("%s/%d/%d/%d/%+v/%v/%s", set.Role, s.stats.HistoryVersion(), rank, len(meta),
+		set.Picks, enemies, time.Now().Format(time.DateOnly))
 	c := &s.picks
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.key != key {
-		c.key, c.board = key, s.readPickBoard(set, rank, meta)
+		c.key, c.board = key, s.readPickBoard(set, rank, meta, enemies)
 	}
 	return c.board
 }
 
-func (s *Server) readPickBoard(set config.Settings, rank int, meta map[int]dotadata.HeroMeta) *picks.Board {
+func (s *Server) readPickBoard(set config.Settings, rank int, meta map[int]dotadata.HeroMeta, enemies []int) *picks.Board {
 	history, err := s.stats.MatchesWhere(stats.MatchFilter{Role: set.Role, Since: time.Now().Add(-set.Picks.Window()), Real: true})
 	if err != nil {
 		s.log.Warn("no match history for pick help", "err", err)
 	}
 	return picks.Rank(picks.Input{
-		Role:    set.Role,
-		Lang:    set.Language,
-		Rank:    rank,
-		Tuning:  set.Picks,
-		History: history,
-		Heroes:  s.data.Heroes(),
-		Meta:    meta,
+		Role:     set.Role,
+		Lang:     set.Language,
+		Rank:     rank,
+		Tuning:   set.Picks,
+		History:  history,
+		Heroes:   s.data.Heroes(),
+		Meta:     meta,
+		Enemies:  enemies,
+		Matchups: s.matchups(enemies),
 	}, time.Now())
+}
+
+// matchups is each enemy hero's record against the rest, which is what the pick advice
+// weighs a hero against. OpenDota answers in the background, so the first draft against a
+// hero says nothing about it and the next one does.
+func (s *Server) matchups(enemies []int) map[int]map[int]dotadata.Matchup {
+	if len(enemies) == 0 {
+		return nil
+	}
+	out := make(map[int]map[int]dotadata.Matchup, len(enemies))
+	for _, id := range enemies {
+		if against := s.data.Matchups(id); len(against) > 0 {
+			out[id] = against
+		}
+	}
+	return out
 }
 
 // rankTier is the player's medal, or 0 while OpenDota hasn't answered.

@@ -5,6 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 version=$(tr -d '[:space:]' < VERSION)
+# Windows version resources are four numbers, so a prerelease suffix is left off that one.
+numversion=${version%%-*}
 win() { (cd /mnt/c && "$@" | tr -d '\r'); }
 ps() { win powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass "$@"; }
 
@@ -26,7 +28,7 @@ echo "signing the app"
 ps -File "$stage_win\\sign.ps1" "$stage_win\\Gourdian.exe"
 
 echo "building the installer"
-(cd "$stage" && "$iscc" /Q "/DAppVersion=$version" \
+(cd "$stage" && "$iscc" /Q "/DAppVersion=$version" "/DNumVersion=$numversion" \
 	"/Sgourdian=powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$q$stage_win\\sign.ps1\$q \$f" \
 	Gourdian.iss)
 

@@ -2,6 +2,7 @@ package picks
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -287,5 +288,91 @@ func TestAnEmptyTuningFallsBackToTheDefaults(t *testing.T) {
 	in := Input{Role: dota.Mid, History: games(1, "Steady", 40, 26, time.Hour)}
 	if b := Rank(in, now); b == nil || len(b.Best) != 1 {
 		t.Fatalf("board = %+v", b)
+	}
+}
+
+// against builds an enemy's record against other heroes, as OpenDota reports it: from the
+// enemy's point of view.
+func against(enemy int, wins map[int]int, games int) map[int]map[int]dotadata.Matchup {
+	out := map[int]dotadata.Matchup{}
+	for hero, pct := range wins {
+		out[hero] = dotadata.Matchup{HeroID: hero, Games: games, Wins: games * pct / 100}
+	}
+	return map[int]map[int]dotadata.Matchup{enemy: out}
+}
+
+// A hero the enemy's pick loses to should rise, and one it beats should fall.
+func TestCounteringTheEnemyPicks(t *testing.T) {
+	in := Input{Role: dota.Mid, Tuning: DefaultTuning()}
+	in.History = append(games(1, "Good", 20, 10, time.Hour), games(2, "Bad", 20, 10, time.Hour)...)
+	plain := Rank(in, now)
+	before := map[string]int{}
+	for _, h := range plain.Best {
+		before[h.Name] = h.Score
+	}
+
+	// Sniper is on the other side; he loses to Good and beats Bad, over plenty of games.
+	in.Enemies = []int{35}
+	in.Matchups = against(35, map[int]int{1: 35, 2: 65}, 4000)
+	after := Rank(in, now)
+	good, _ := find(after.Best, "Good")
+	bad, _ := find(after.Best, "Bad")
+	if good.Score <= before["Good"] {
+		t.Errorf("the hero that beats their pick didn't rise: %d then %d", before["Good"], good.Score)
+	}
+	if bad.Score >= before["Bad"] {
+		t.Errorf("the hero their pick beats didn't fall: %d then %d", before["Bad"], bad.Score)
+	}
+	if !slices.ContainsFunc(good.Why, func(s string) bool { return strings.Contains(s, "against") }) {
+		t.Errorf("no reason mentions the matchup: %q", good.Why)
+	}
+}
+
+// A handful of games between two heroes says nothing, and must move the score by nothing.
+func TestAThinMatchupBarelyCounts(t *testing.T) {
+	in := Input{Role: dota.Mid, Tuning: DefaultTuning(), History: games(1, "Good", 20, 10, time.Hour)}
+	in.Enemies = []int{35}
+	in.Matchups = against(35, map[int]int{1: 0}, 5) // five games, all lost by the enemy
+	thin, _ := find(Rank(in, now).Best, "Good")
+	in.Matchups = against(35, map[int]int{1: 0}, 5000)
+	thick, _ := find(Rank(in, now).Best, "Good")
+	if thin.Score >= thick.Score {
+		t.Errorf("five games counted as much as five thousand: %d against %d", thin.Score, thick.Score)
+	}
+	if thin.Score > even+2 {
+		t.Errorf("five games moved the score to %d", thin.Score)
+	}
+}
+
+// However lopsided the draft, the matchups may only nudge the order.
+func TestCounteringIsCapped(t *testing.T) {
+	in := Input{Role: dota.Mid, Tuning: DefaultTuning(), History: games(1, "Good", 20, 10, time.Hour)}
+	in.Enemies = []int{35, 26, 14, 8, 11}
+	in.Matchups = map[int]map[int]dotadata.Matchup{}
+	for _, enemy := range in.Enemies {
+		for e, m := range against(enemy, map[int]int{1: 0}, 9000) {
+			in.Matchups[e] = m
+		}
+	}
+	h, _ := find(Rank(in, now).Best, "Good")
+	if h.Score > even+yoursCap+counterCap+metaCap+fitBonus {
+		t.Errorf("score ran away to %d", h.Score)
+	}
+	if h.Score <= even {
+		t.Errorf("a whole enemy team it beats didn't help at all: %d", h.Score)
+	}
+}
+
+// Without the draft the board says nothing about it, which is the usual case.
+func TestNoEnemiesMeansNoMatchupTalk(t *testing.T) {
+	in := Input{Role: dota.Mid, Tuning: DefaultTuning(), History: games(1, "Good", 20, 10, time.Hour)}
+	b := Rank(in, now)
+	if len(b.Enemies) != 0 {
+		t.Errorf("enemies appeared from nowhere: %+v", b.Enemies)
+	}
+	for _, why := range b.Best[0].Why {
+		if strings.Contains(why, "against") {
+			t.Errorf("a matchup was mentioned with no draft: %q", why)
+		}
 	}
 }

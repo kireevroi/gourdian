@@ -67,6 +67,8 @@ Everything slow hangs off that path rather than sitting in it: OpenDota lookups,
 | `internal/rules` | Rule storage (custom rules and edits to built-in ones) and templates |
 | `internal/hud` | What the HUD shows, per widget |
 | `internal/picks` | Scoring the heroes worth taking in a position, from the player's record and the hero meta |
+| `internal/screen` | Reading the hero portraits along the top of the game, and the table of what they look like |
+| `internal/vpk` | Valve's pack files and the textures inside them, for `make portraits` |
 | `internal/i18n` | Russian for the phrases the trainer builds, and a glossary of game terms |
 | `internal/ai` | AI providers: Claude Code and Codex CLIs (with their installers), Anthropic API, OpenAI-compatible APIs |
 | `internal/aicoach` | Coach prompts and answer schemas |

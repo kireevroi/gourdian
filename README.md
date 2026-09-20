@@ -7,13 +7,15 @@ A live coach for Dota 2, called Dota Trainer before 1.5. While you play it:
 - **Speaks tips**: rune timings, a missing TP scroll, low HP, unspent gold, items stuck in the stash or backpack, unspent skill points, farm pace, item timing goals, Roshan and Aegis timers, and more.
 - **Draws a transparent HUD** over the game — you choose where it sits, how big and see-through it is, and which lines it shows.
 - **Coaches for the position you actually play**, picked with Ctrl+Shift+1…5 or worked out from the lane you stand in.
-- **Helps you pick**: while you choose a hero, the heroes worth taking in your position, ranked from your own record and how each is doing at your rank, each line saying why.
+- **Helps you pick**: while you choose a hero, the heroes worth taking in your position, ranked from your own record and how each is doing at your rank, each line saying why — and, if you turn it on, weighed against the heroes the other side has taken.
 - **Sets personal targets** from your own match history: last hits at each checkpoint, timings for your core items, goals for the week.
 - **Asks an AI coach** for advice during the game and reviews every match afterwards. The Claude Code and Codex CLIs run on your existing subscriptions; API keys and any OpenAI-compatible server work too.
 - **Runs your own rules** next to the built-in ones, built with When / If / Then cards.
 - **Records every match** in its own data file and charts the trends; one click exports it all as CSV.
 
-It reads Valve's official Game State Integration feed, which only describes your own hero. It never reads game memory, injects into Dota, or sees enemy information. The HUD is a separate click-through window, as safe as a second monitor.
+It reads Valve's official Game State Integration feed, which only describes your own hero. It never injects into Dota or reads game memory. The HUD is a separate click-through window, as safe as a second monitor.
+
+If you turn on **pick help from the screen**, it also reads the ten hero portraits along the top of the game while you are choosing — the same pixels a screenshot would take, and the only way to learn who the other side picked, since Valve sends the draft to spectators and not to players. It looks only at that strip, only during the draft, and it is off until you ask for it.
 
 ## Install
 
