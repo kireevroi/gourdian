@@ -270,15 +270,9 @@ func (s *Server) handleAIAsk(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleReviewMatch(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	matches, err := s.stats.Matches()
+	m, err := s.stats.Match(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	i := slices.IndexFunc(matches, func(m stats.MatchSummary) bool { return m.MatchID == id })
-	switch {
-	case i < 0:
-		http.Error(w, "match not found", http.StatusNotFound)
+		http.Error(w, err.Error(), matchErrorStatus(err))
 		return
 	}
 	set := s.cfg.Settings()
@@ -286,7 +280,6 @@ func (s *Server) handleReviewMatch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, cmp.Or(s.aiBanner().Message, "the AI coach isn't connected; set it up on the AI coach page"), http.StatusConflict)
 		return
 	}
-	m := matches[i]
 	s.hub.publish("review_status", reviewStatus{Text: "Preparing the match review…", MatchID: id})
 	s.spawn(func(ctx context.Context) {
 		var detail *matchdata.Detail

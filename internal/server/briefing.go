@@ -45,13 +45,11 @@ func (s *Server) briefing(heroID int, hero, role string) *coach.Briefing {
 		return c.b
 	}
 	b := &coach.Briefing{Hero: hero, Role: role}
-	if matches, err := s.stats.Matches(); err == nil {
+	if matches, err := s.stats.MatchesWhere(stats.MatchFilter{HeroID: heroID, Role: role, Real: true}); err == nil {
 		for _, m := range matches {
-			if m.HeroID == heroID && m.Role == role && m.Real() {
-				b.Games++
-				if m.Result == "win" {
-					b.Wins++
-				}
+			b.Games++
+			if m.Result == "win" {
+				b.Wins++
 			}
 		}
 	}

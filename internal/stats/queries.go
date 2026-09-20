@@ -1,52 +1,21 @@
 package stats
 
 import (
+	"cmp"
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
+	"time"
 )
 
-const matchColumnList = `match_id, ended_at, source, hero_id, hero, role, team, result, duration_sec, kills, deaths,
-	assists, last_hits, denies, gpm, xpm, rank_tier, simulated, ranked, parsed, lane_role, net_worth, hero_damage,
-	tower_damage, obs_placed, sen_placed, camps_stacked, teamfight, gpm_pct, lh_pct, hero_damage_pct, enemy_heroes,
-	last_hits_at, death_clocks, tip_counts`
-
-func matchValues(m MatchSummary) []any {
-	return []any{m.MatchID, timeValue(m.EndedAt), m.Source, m.HeroID, m.Hero, m.Role, m.Team, m.Result, m.DurationSec,
-		m.Kills, m.Deaths, m.Assists, m.LastHits, m.Denies, m.GPM, m.XPM, m.RankTier, boolInt(m.Simulated),
-		boolInt(m.Ranked), boolInt(m.Parsed), m.LaneRole, m.NetWorth, m.HeroDamage, m.TowerDamage, m.ObsPlaced,
-		m.SenPlaced, m.CampsStacked, m.TeamfightParticipation, m.GPMPct, m.LHPct, m.HeroDamagePct,
-		jsonValue(m.EnemyHeroes), jsonValue(m.LastHitsAt), jsonValue(m.DeathClocks), jsonValue(m.TipCounts)}
-}
-
-func scanMatch(rows *sql.Rows) (MatchSummary, error) {
-	var m MatchSummary
-	var endedAt, enemies, lastHits, deaths, counts string
-	var simulated, ranked, parsed int
-	err := rows.Scan(&m.MatchID, &endedAt, &m.Source, &m.HeroID, &m.Hero, &m.Role, &m.Team, &m.Result, &m.DurationSec,
-		&m.Kills, &m.Deaths, &m.Assists, &m.LastHits, &m.Denies, &m.GPM, &m.XPM, &m.RankTier, &simulated, &ranked,
-		&parsed, &m.LaneRole, &m.NetWorth, &m.HeroDamage, &m.TowerDamage, &m.ObsPlaced, &m.SenPlaced, &m.CampsStacked,
-		&m.TeamfightParticipation, &m.GPMPct, &m.LHPct, &m.HeroDamagePct, &enemies, &lastHits, &deaths, &counts)
-	if err != nil {
-		return m, err
-	}
-	m.EndedAt = parseTime(endedAt)
-	m.Simulated, m.Ranked, m.Parsed = simulated == 1, ranked == 1, parsed == 1
-	m.EnemyHeroes = stringsFromJSON(enemies)
-	m.LastHitsAt = countsFromJSON(lastHits)
-	m.DeathClocks = intsFromJSON(deaths)
-	m.TipCounts = countsFromJSON(counts)
-	if m.Source == "" {
-		m.Source = SourceLive
-		if m.Simulated {
-			m.Source = SourceSim
-		}
-	}
-	return m, nil
-}
-
 func (s *Store) AppendMatch(m MatchSummary) error {
-	return s.tx(func(tx *sql.Tx) error { return appendMatch(tx, m) })
+	err := s.tx(func(tx *sql.Tx) error { return appendMatch(tx, m) })
+	if err == nil {
+		s.history.Add(1)
+	}
+	return err
 }
 
 // execer runs statements on the store's connection or inside a transaction.
@@ -63,16 +32,19 @@ func appendMatch(q execer, m MatchSummary) error {
 	case !errors.Is(err, sql.ErrNoRows):
 		return err
 	}
-	_, err := q.Exec(`INSERT INTO matches (`+matchColumnList+`) VALUES (`+placeholders(35)+`)`, matchValues(m)...)
+	_, err := q.Exec(`INSERT INTO matches (`+matchColumnList+`) VALUES (`+matchPlaceholder+`)`, matchValues(m)...)
 	return err
 }
 
 // UpdateMatch changes one match, for example to add OpenDota's data after the game.
 func (s *Store) UpdateMatch(matchID string, update func(*MatchSummary)) error {
+	defer s.history.Add(1)
 	return s.tx(func(tx *sql.Tx) error {
 		var rowID int64
-		if err := tx.QueryRow(`SELECT rowid FROM matches WHERE match_id = ?`, matchID).Scan(&rowID); err != nil {
-			return fmt.Errorf("match %s not recorded", matchID)
+		if err := tx.QueryRow(`SELECT rowid FROM matches WHERE match_id = ?`, matchID).Scan(&rowID); errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("match %s: %w", matchID, ErrNoMatch)
+		} else if err != nil {
+			return err
 		}
 		rows, err := tx.Query(`SELECT `+matchColumnList+` FROM matches WHERE match_id = ?`, matchID)
 		if err != nil {
@@ -80,7 +52,7 @@ func (s *Store) UpdateMatch(matchID string, update func(*MatchSummary)) error {
 		}
 		if !rows.Next() {
 			rows.Close()
-			return fmt.Errorf("match %s not recorded", matchID)
+			return cmp.Or(rows.Err(), fmt.Errorf("match %s: %w", matchID, ErrNoMatch))
 		}
 		m, err := scanMatch(rows)
 		rows.Close()
@@ -90,7 +62,7 @@ func (s *Store) UpdateMatch(matchID string, update func(*MatchSummary)) error {
 		update(&m)
 		m.MatchID = matchID
 		// The row keeps its rowid, so matches stay in the order they were played.
-		_, err = tx.Exec(`REPLACE INTO matches (rowid, `+matchColumnList+`) VALUES (?, `+placeholders(35)+`)`,
+		_, err = tx.Exec(`REPLACE INTO matches (rowid, `+matchColumnList+`) VALUES (?, `+matchPlaceholder+`)`,
 			append([]any{rowID}, matchValues(m)...)...)
 		return err
 	})
@@ -130,7 +102,7 @@ func (s *Store) Match(matchID string) (MatchSummary, error) {
 		return MatchSummary{}, err
 	}
 	if len(found) == 0 {
-		return MatchSummary{}, fmt.Errorf("match %s not recorded", matchID)
+		return MatchSummary{}, fmt.Errorf("match %s: %w", matchID, ErrNoMatch)
 	}
 	return found[0], nil
 }
@@ -140,6 +112,7 @@ func (s *Store) AppendItems(items []ItemTiming) error {
 	if len(items) == 0 {
 		return nil
 	}
+	defer s.history.Add(1) // item timings are part of what targets are built from
 	return s.tx(func(tx *sql.Tx) error { return appendItems(tx, items) })
 }
 
@@ -468,3 +441,89 @@ func (s *Store) RulesImported() bool {
 
 // MarkRulesImported records that the old rules file has been read.
 func (s *Store) MarkRulesImported() error { return setMeta(s.db, "rules_imported", "yes") }
+
+// MatchFilter says which matches MatchesWhere returns; the zero value means all of them.
+type MatchFilter struct {
+	HeroID int       // 0: any hero
+	Role   string    // "": any position
+	Since  time.Time // zero: any time
+	Real   bool      // only matches the player really played, as MatchSummary.Real says
+	Limit  int       // 0: all; otherwise only the newest this many
+}
+
+// MatchesWhere returns the matches f describes, oldest first, asking the data file for only
+// those instead of reading the whole history.
+func (s *Store) MatchesWhere(f MatchFilter) ([]MatchSummary, error) {
+	var where []string
+	var args []any
+	if f.HeroID != 0 {
+		where, args = append(where, "hero_id = ?"), append(args, f.HeroID)
+	}
+	if f.Role != "" {
+		where, args = append(where, "role = ?"), append(args, f.Role)
+	}
+	if !f.Since.IsZero() {
+		where, args = append(where, "julianday(ended_at) >= julianday(?)"), append(args, timeValue(f.Since))
+	}
+	if f.Real {
+		where, args = append(where, "simulated = 0 AND IFNULL(source, '') != ?"), append(args, SourcePractice)
+	}
+	q := ""
+	if len(where) > 0 {
+		q = "WHERE " + strings.Join(where, " AND ")
+	}
+	if f.Limit <= 0 {
+		return s.queryMatches(q+` ORDER BY julianday(ended_at), rowid`, args...)
+	}
+	matches, err := s.queryMatches(q+` ORDER BY julianday(ended_at) DESC, rowid DESC LIMIT ?`, append(args, f.Limit)...)
+	slices.Reverse(matches)
+	return matches, err
+}
+
+// ItemsIn returns the item timings of the given matches.
+func (s *Store) ItemsIn(matchIDs []string) ([]ItemTiming, error) {
+	if len(matchIDs) == 0 {
+		return nil, nil
+	}
+	args := make([]any, len(matchIDs))
+	for i, id := range matchIDs {
+		args[i] = id
+	}
+	rows, err := s.db.Query(`SELECT match_id, hero, item, time, source FROM items WHERE match_id IN (`+placeholders(len(args))+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ItemTiming
+	for rows.Next() {
+		var it ItemTiming
+		if err := rows.Scan(&it.MatchID, &it.Hero, &it.Item, &it.Time, &it.Source); err != nil {
+			return nil, err
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// UsualRole is the position the player has played most on a hero, among roles, leaving out
+// simulated games; a tie goes to the one played most recently. "" when there's none.
+func (s *Store) UsualRole(heroID int, roles []string) (string, error) {
+	if len(roles) == 0 {
+		return "", nil
+	}
+	args := []any{heroID}
+	for _, r := range roles {
+		args = append(args, r)
+	}
+	var role string
+	err := s.db.QueryRow(`SELECT role FROM matches WHERE hero_id = ? AND simulated = 0 AND role IN (`+placeholders(len(roles))+`)
+		GROUP BY role ORDER BY COUNT(*) DESC, MAX(julianday(ended_at)) DESC, MAX(rowid) DESC LIMIT 1`, args...).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return role, err
+}
+
+// HistoryVersion changes whenever a match is saved or changed, so what's worked out from the
+// match history can be kept until then.
+func (s *Store) HistoryVersion() int64 { return s.history.Load() }

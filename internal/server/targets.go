@@ -17,39 +17,33 @@ import (
 const (
 	coreGoalCost   = 2000
 	incompleteWait = 10 * time.Second // retry while OpenDota data is still loading
-	goalHistory    = 10
+	goalHistory    = 10               // games on the hero in the position that targets are made from
 )
 
 // targetCache builds personal targets from the match history and OpenDota's item timings. The
-// engine asks several times a second, so answers are kept until the history changes.
+// engine asks several times a second, so answers are kept until the history changes, which
+// stats counts for us.
 type targetCache struct {
 	s       *Server
 	mu      sync.Mutex
-	gen     int
 	entries map[string]cachedTargets
 }
 
 type cachedTargets struct {
 	t        coach.Targets
-	gen      int
+	history  int64
 	complete bool
 	at       time.Time
 }
 
-func (tc *targetCache) reset() {
-	tc.mu.Lock()
-	tc.gen++
-	tc.mu.Unlock()
-}
-
 func (tc *targetCache) TargetsFor(heroID int, role string) coach.Targets {
 	key := role + "/" + strconv.Itoa(heroID)
+	history := tc.s.stats.HistoryVersion()
 	tc.mu.Lock()
-	if e, ok := tc.entries[key]; ok && e.gen == tc.gen && (e.complete || time.Since(e.at) < incompleteWait) {
+	if e, ok := tc.entries[key]; ok && e.history == history && (e.complete || time.Since(e.at) < incompleteWait) {
 		tc.mu.Unlock()
 		return e.t
 	}
-	gen := tc.gen
 	tc.mu.Unlock()
 
 	t, complete := tc.build(heroID, role)
@@ -57,23 +51,19 @@ func (tc *targetCache) TargetsFor(heroID int, role string) coach.Targets {
 	if tc.entries == nil {
 		tc.entries = map[string]cachedTargets{}
 	}
-	tc.entries[key] = cachedTargets{t: t, gen: gen, complete: complete, at: time.Now()}
+	tc.entries[key] = cachedTargets{t: t, history: history, complete: complete, at: time.Now()}
 	tc.mu.Unlock()
 	return t
 }
 
 func (tc *targetCache) build(heroID int, role string) (coach.Targets, bool) {
 	s := tc.s
-	matches, err := s.stats.Matches()
+	matches, err := s.stats.MatchesWhere(stats.MatchFilter{HeroID: heroID, Role: role, Real: true, Limit: goalHistory})
 	if err != nil {
 		return coach.RoleTargets(role), false
 	}
-	var history []stats.MatchSummary
-	for _, m := range slices.Backward(matches) {
-		if m.HeroID == heroID && m.Role == role && m.Real() {
-			history = append(history, m)
-		}
-	}
+	history := slices.Clone(matches)
+	slices.Reverse(history) // newest first
 	t := coach.PersonalLastHits(role, history)
 	if role != config.RoleCarry && role != config.RoleMid && role != config.RoleOfflane || s.data == nil {
 		return t, true
@@ -92,10 +82,12 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []stats.MatchS
 		return nil, 0, false
 	}
 	ids := map[string]bool{}
+	var idList []string
 	for _, m := range history[:min(len(history), goalHistory)] {
 		ids[m.MatchID] = true
+		idList = append(idList, m.MatchID)
 	}
-	rows, _ := s.stats.Items()
+	rows, _ := s.stats.ItemsIn(idList)
 	perMatch := map[string]map[string]int{}
 	for _, r := range rows {
 		if !ids[r.MatchID] || items[r.Item].Cost < coreGoalCost {

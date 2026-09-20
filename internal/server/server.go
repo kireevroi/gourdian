@@ -82,6 +82,7 @@ type Server struct {
 	rules   *rules.Store
 	targets *targetCache
 	brief   briefingCache
+	picks   pickCache
 
 	roleMu   sync.Mutex
 	roleHero int
@@ -101,7 +102,7 @@ type Server struct {
 
 func New(cfg *config.Store, engine *coach.Engine, st *stats.Store, data *dotadata.Client, speaker *speech.Speaker, workDir, cacheDir string, log *slog.Logger) *Server {
 	s := &Server{cfg: cfg, engine: engine, stats: st, data: data, speaker: speaker, workDir: workDir, cacheDir: cacheDir, log: log,
-		hub: hub{clients: map[chan []byte]struct{}{}}, matches: matchdata.Service{Data: data, Stats: st, Log: log}}
+		hub: newHub(log), matches: matchdata.Service{Data: data, Stats: st, Log: log}}
 	s.baseCtx, s.cancel = context.WithCancel(context.Background())
 	s.keys = secrets.Open(workDir)
 	ai.SetToolsDir(workDir)
@@ -375,7 +376,6 @@ func (s *Server) recordMatch(m *stats.MatchSummary, set config.Settings) {
 	if err := s.stats.AppendItems(m.Items); err != nil {
 		s.log.Error("save item timings", "err", err)
 	}
-	s.targets.reset()
 	s.drillResult(*m, set)
 	s.askForMMR(m)
 	s.goalFeedback(*m, set)
@@ -407,6 +407,8 @@ func (s *Server) rememberHeroRole(heroID int, role string) {
 // applyHeroRole picks the role when a match starts on a different hero. The pre-game
 // role line tells the player where the choice came from.
 func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings {
+	// The lock covers the choice and its settings write, so a post about an older hero can't
+	// write its role over a newer hero's. The dashboard update runs without it.
 	s.roleMu.Lock()
 	defer s.roleMu.Unlock()
 	if s.roleHero == heroID {
@@ -416,10 +418,13 @@ func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings 
 	role, note := s.roleFor(heroID, set)
 	s.engine.SetRoleNote(note)
 	defer func() { s.applyFocus(s.cfg.Settings().Role, heroID) }()
-	if role == "" || role == set.Role {
+	if role == "" {
 		return set
 	}
+	// Compared with the settings now, not set: another post may have changed them since.
+	changed := false
 	set, err := s.cfg.Update(func(cur *config.Settings) error {
+		changed = cur.Role != role
 		cur.Role = role
 		return nil
 	})
@@ -427,9 +432,18 @@ func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings 
 		s.log.Error("apply hero role", "err", err)
 		return set
 	}
-	s.hub.publish("settings", s.settingsResponse())
+	if !changed {
+		return set
+	}
+	s.publishSettingsLater()
 	s.log.Info("role set for hero", "role", role, "why", note)
 	return set
+}
+
+// publishSettingsLater sends the dashboard the new settings without holding up the
+// game-state post, since settingsResponse asks Windows about autostart and voices.
+func (s *Server) publishSettingsLater() {
+	s.spawn(func(context.Context) { s.hub.publish("settings", s.settingsResponse()) })
 }
 
 // roleFor tries the role last played on the hero, then the player's most common role on it
@@ -456,23 +470,11 @@ func (s *Server) roleFor(heroID int, set config.Settings) (role, note string) {
 }
 
 func (s *Server) usualRole(heroID int) string {
-	matches, err := s.stats.Matches()
+	role, err := s.stats.UsualRole(heroID, config.Roles)
 	if err != nil {
-		return ""
+		s.log.Warn("read the usual role", "hero", heroID, "err", err)
 	}
-	counts := map[string]int{}
-	best := ""
-	// Newest last, so ties go to the most recent role.
-	for _, m := range matches {
-		if m.HeroID != heroID || m.Simulated || !slices.Contains(config.Roles, m.Role) {
-			continue
-		}
-		counts[m.Role]++
-		if counts[m.Role] >= counts[best] {
-			best = m.Role
-		}
-	}
-	return best
+	return role
 }
 
 // roleFromHeroRoles reads OpenDota's hero roles, which list the main ones first.
@@ -754,14 +756,24 @@ func sse(event string, v any) []byte {
 }
 
 type hub struct {
-	mu      sync.Mutex
-	clients map[chan []byte]struct{}
+	mu  sync.Mutex
+	log *slog.Logger
+	// clients maps each dashboard's buffer to whether it has had to drop an event.
+	clients map[chan []byte]bool
 }
 
+func newHub(log *slog.Logger) hub {
+	return hub{log: log, clients: map[chan []byte]bool{}}
+}
+
+// hubBuffer is how many events a dashboard can fall behind by, a minute or so of a match,
+// before events are dropped for it.
+const hubBuffer = 256
+
 func (h *hub) subscribe() chan []byte {
-	ch := make(chan []byte, 64)
+	ch := make(chan []byte, hubBuffer)
 	h.mu.Lock()
-	h.clients[ch] = struct{}{}
+	h.clients[ch] = false
 	h.mu.Unlock()
 	return ch
 }
@@ -780,15 +792,22 @@ func (h *hub) publish(event string, v any) {
 	h.publishRaw(event, data)
 }
 
-// publishRaw sends an event whose JSON is already encoded.
+// publishRaw sends an event whose JSON is already encoded. A client that has fallen a whole
+// buffer behind misses the event, which is logged once for it: the game-state post can't
+// wait for it. Disconnecting it instead would lose the event just the same, and blank the
+// dashboard while it reconnects.
 func (h *hub) publishRaw(event string, data []byte) {
 	msg := fmt.Appendf(nil, "event: %s\ndata: %s\n\n", event, data)
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for ch := range h.clients {
+	for ch, dropped := range h.clients {
 		select {
 		case ch <- msg:
 		default:
+			if !dropped {
+				h.clients[ch] = true
+				h.log.Warn("a dashboard fell behind; dropping events for it", "event", event, "buffer", cap(ch))
+			}
 		}
 	}
 }

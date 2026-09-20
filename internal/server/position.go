@@ -40,7 +40,7 @@ func (s *Server) applyDetectedRole(res coach.Result, matchID string, set config.
 	lang := set.Language
 	s.engine.SetRoleNote(roleSay(lang, "you laned %s", laneIn(lang, res.DetectedLane)))
 	s.applyFocus(set.Role, s.engine.HeroID())
-	s.hub.publish("settings", s.settingsResponse())
+	s.publishSettingsLater()
 	s.log.Info("role detected from laning", "lane", res.DetectedLane, "role", set.Role)
 	snap := s.engine.Snapshot(set)
 	say := func(lang string) (string, string) {

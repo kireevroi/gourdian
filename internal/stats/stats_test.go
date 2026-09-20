@@ -1,10 +1,12 @@
 package stats
 
 import (
+	"database/sql"
 	"encoding/csv"
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -286,5 +288,161 @@ func TestCSVImportIsAllOrNothing(t *testing.T) {
 		if tips, goals := counts(); tips != 2 || goals != 1 {
 			t.Fatalf("%d tips (want 2) and %d goals (want 1) after the retry", tips, goals)
 		}
+	}
+}
+
+// A data file from an older version gets the columns and indexes it lacks, once.
+func TestOpenUpgradesAnOlderFile(t *testing.T) {
+	dir := t.TempDir()
+	old, err := sql.Open("sqlite", "file:"+filepath.Join(dir, DataFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Exec(`CREATE TABLE reviews (date TEXT, match_id TEXT, hero TEXT, hero_id INTEGER, role TEXT, result TEXT,
+		summary TEXT, strengths TEXT, improve TEXT, next_game_focus TEXT)`); err != nil { // before 1.2: no followed_focus
+		t.Fatal(err)
+	}
+	old.Close()
+	for range 2 {
+		st, err := Open(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var version, hasColumn, hasIndex int
+		st.db.QueryRow(`PRAGMA user_version`).Scan(&version)
+		st.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('reviews') WHERE name = 'followed_focus'`).Scan(&hasColumn)
+		st.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'matches_hero_role'`).Scan(&hasIndex)
+		st.Close()
+		if version != len(migrations) || hasColumn != 1 || hasIndex != 1 {
+			t.Fatalf("version %d of %d, followed_focus %d, index %d", version, len(migrations), hasColumn, hasIndex)
+		}
+	}
+}
+
+// Every field of a match survives being saved and read back. The sample must set every field,
+// so a new one can't be left out of the matches table unnoticed.
+func TestMatchKeepsEveryField(t *testing.T) {
+	m := MatchSummary{MatchID: "m1", HeroID: 26, Hero: "Lion", Role: "hard_support", Team: "radiant", Result: "win",
+		EndedAt: time.Date(2026, 9, 19, 20, 0, 0, 0, time.UTC), DurationSec: 2400, Kills: 3, Deaths: 4, Assists: 20,
+		LastHits: 40, Denies: 5, GPM: 300, XPM: 400, LastHitsAt: map[string]int{"10:00": 12}, DeathClocks: []int{300, 900},
+		TipCounts: map[string]int{"no_tp": 2}, RankTier: 45, Simulated: true, Ranked: true, Source: SourcePractice,
+		Parsed: true, LaneRole: 3, NetWorth: 9000, HeroDamage: 12000, TowerDamage: 500, ObsPlaced: 8, SenPlaced: 6,
+		CampsStacked: 4, TeamfightParticipation: 0.75, GPMPct: 0.4, LHPct: 0.3, HeroDamagePct: 0.2,
+		EnemyHeroes: []string{"Axe", "Lina"}}
+	v := reflect.ValueOf(m)
+	for i := range v.NumField() {
+		if name := v.Type().Field(i).Name; name != "Items" && v.Field(i).IsZero() {
+			t.Fatalf("the sample leaves %s empty; set it so its column is checked", name)
+		}
+	}
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.AppendMatch(m); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.Match("m1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.EndedAt.Equal(m.EndedAt) {
+		t.Fatalf("ended_at %v, want %v", got.EndedAt, m.EndedAt)
+	}
+	got.EndedAt = m.EndedAt
+	if !reflect.DeepEqual(got, m) {
+		t.Fatalf("read back\n%+v\nwant\n%+v", got, m)
+	}
+}
+
+// A match that isn't recorded is told apart from a database that won't answer, so the
+// dashboard can say "no such match" rather than blaming the player's request.
+func TestUnknownMatchSaysSo(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, err := st.Match("9000000009"); !errors.Is(err, ErrNoMatch) {
+		t.Errorf("Match: %v, want ErrNoMatch", err)
+	}
+	if err := st.UpdateMatch("9000000009", func(*MatchSummary) {}); !errors.Is(err, ErrNoMatch) {
+		t.Errorf("UpdateMatch: %v, want ErrNoMatch", err)
+	}
+}
+
+// Targets are built from item timings as well as matches, so saving timings counts as a
+// change to the history.
+func TestItemTimingsCountAsHistory(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	before := st.HistoryVersion()
+	if err := st.AppendItems([]ItemTiming{{MatchID: "a", Item: "bfury", Time: 1000, Source: SourceOpenDota}}); err != nil {
+		t.Fatal(err)
+	}
+	if st.HistoryVersion() == before {
+		t.Fatal("saving item timings didn't change the history version")
+	}
+}
+
+func TestMatchesWhere(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	start := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	add := func(id string, hero int, role string, day int, source string) {
+		t.Helper()
+		if err := st.AppendMatch(MatchSummary{MatchID: id, HeroID: hero, Role: role, Source: source, EndedAt: start.AddDate(0, 0, day)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := st.HistoryVersion()
+	add("a", 26, "hard_support", 0, SourceLive)
+	add("b", 26, "hard_support", 1, SourcePractice)
+	add("c", 26, "mid", 2, SourceLive)
+	add("d", 26, "hard_support", 3, SourceOpenDota)
+	add("e", 74, "hard_support", 4, SourceLive)
+	add("f", 26, "hard_support", 5, SourceLive)
+	if st.HistoryVersion() == before {
+		t.Fatal("saving matches didn't change the history version")
+	}
+	ids := func(f MatchFilter) string {
+		t.Helper()
+		ms, err := st.MatchesWhere(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := ""
+		for _, m := range ms {
+			out += m.MatchID
+		}
+		return out
+	}
+	for _, c := range []struct {
+		f    MatchFilter
+		want string
+	}{
+		{MatchFilter{}, "abcdef"},
+		{MatchFilter{HeroID: 26, Role: "hard_support"}, "abdf"},
+		{MatchFilter{HeroID: 26, Role: "hard_support", Real: true}, "adf"},
+		{MatchFilter{HeroID: 26, Role: "hard_support", Real: true, Limit: 2}, "df"},
+		{MatchFilter{Since: start.AddDate(0, 0, 3)}, "def"},
+	} {
+		if got := ids(c.f); got != c.want {
+			t.Errorf("%+v: %s, want %s", c.f, got, c.want)
+		}
+	}
+	if role, err := st.UsualRole(26, []string{"hard_support", "mid"}); err != nil || role != "hard_support" {
+		t.Errorf("usual role %q, %v", role, err)
+	}
+	st.AppendItems([]ItemTiming{{MatchID: "a", Item: "blink", Time: 900}, {MatchID: "c", Item: "bkb", Time: 1500}})
+	if items, err := st.ItemsIn([]string{"a", "f"}); err != nil || len(items) != 1 || items[0].Item != "blink" {
+		t.Errorf("items %+v, %v", items, err)
 	}
 }

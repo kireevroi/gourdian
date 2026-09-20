@@ -384,13 +384,14 @@ type CondResult struct {
 
 // CheckSpec evaluates a rule's conditions against the latest game state.
 func (e *Engine) CheckSpec(spec RuleSpec, set config.Settings) ([]CondResult, bool, error) {
+	targets := e.targetsFor(e.HeroID(), set.Role)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	s := e.last
 	if !s.InMatch() || e.match == nil {
 		return nil, false, errors.New("no match running: start a match or Demo Hero to check the conditions live")
 	}
-	c := e.newCtx(s, e.prev, set, e.now())
+	c := e.newCtx(s, e.prev, set, targets, e.now())
 	out := make([]CondResult, len(spec.If))
 	for i, cond := range spec.If {
 		if f, ok := fieldIndex[cond.Field]; ok {

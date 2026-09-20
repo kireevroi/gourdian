@@ -3,11 +3,15 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"testing"
 	"time"
 
+	"gourdian/internal/coach"
 	"gourdian/internal/config"
 	"gourdian/internal/gsi"
+	"gourdian/internal/sim"
 	"gourdian/internal/stats"
 )
 
@@ -124,5 +128,22 @@ func BenchmarkGSI(b *testing.B) {
 	for b.Loop() {
 		post(b, h, bodies[i%len(bodies)])
 		i++
+	}
+}
+
+// BenchmarkRulesOverAMatch runs every rule over a simulated 40-minute match, one state per game
+// second: what a whole match costs the rules engine.
+func BenchmarkRulesOverAMatch(b *testing.B) {
+	var states []*gsi.State
+	for _, s := range sim.States(sim.Options{From: -60, To: 2400}) {
+		states = append(states, s)
+	}
+	set := config.Default().Settings
+	set.Role = config.RoleCarry
+	for b.Loop() {
+		e := coach.New(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		for _, s := range states {
+			e.Update(s, set)
+		}
 	}
 }

@@ -20,9 +20,7 @@ import (
 // applyRules hands the stored rules to the engine.
 func (s *Server) applyRules() {
 	f := s.rules.Get()
-	s.engine.SetLanguage(s.cfg.Settings().Language)
-	s.engine.SetCustomRules(f.Custom)
-	s.engine.SetOverrides(f.Overrides)
+	s.engine.Configure(s.cfg.Settings().Language, f.Custom, f.Overrides)
 }
 
 type rulesResponse struct {

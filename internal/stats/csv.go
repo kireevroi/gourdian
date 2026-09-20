@@ -66,7 +66,7 @@ func (s *Store) importCSV() error {
 			Comparator: r["comparator"], Target: target, Label: r["label"], MatchID: r["match_id"]})
 	}
 
-	return s.tx(func(tx *sql.Tx) error {
+	err = s.tx(func(tx *sql.Tx) error {
 		for _, r := range matches {
 			if err := appendMatch(tx, matchFromRow(r)); err != nil && !errors.Is(err, ErrDuplicate) {
 				return err
@@ -100,6 +100,10 @@ func (s *Store) importCSV() error {
 		}
 		return setMeta(tx, "csv_imported", time.Now().Format(time.RFC3339))
 	})
+	if err == nil {
+		s.history.Add(1)
+	}
+	return err
 }
 
 // Export writes every table to the CSV files, for opening in a spreadsheet.

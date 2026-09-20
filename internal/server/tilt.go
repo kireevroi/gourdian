@@ -73,7 +73,8 @@ func (s *Server) tiltCheck(m stats.MatchSummary, set config.Settings) {
 	if !set.TiltCheck || !m.Real() {
 		return
 	}
-	matches, err := s.stats.Matches()
+	// tiltReason looks at the current session of games, which fits in a day.
+	matches, err := s.stats.MatchesWhere(stats.MatchFilter{Since: time.Now().Add(-24 * time.Hour), Real: true})
 	if err != nil {
 		return
 	}

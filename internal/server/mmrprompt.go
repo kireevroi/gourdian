@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sync"
 	"time"
@@ -104,12 +105,12 @@ func (s *Server) handleMatchRanked(w http.ResponseWriter, r *http.Request) {
 	}
 	matchID := r.PathValue("id")
 	if err := s.stats.UpdateMatch(matchID, func(m *stats.MatchSummary) { m.Ranked = body.Ranked }); err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		http.Error(w, err.Error(), matchErrorStatus(err))
 		return
 	}
 	m, err := s.stats.Match(matchID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		http.Error(w, err.Error(), matchErrorStatus(err))
 		return
 	}
 	switch p := s.pendingMMR(); {
@@ -223,4 +224,13 @@ func (s *Server) handleMMRChange(w http.ResponseWriter, r *http.Request) {
 	}
 	s.clearMMRPrompt()
 	writeJSON(w, entry)
+}
+
+// matchErrorStatus is the HTTP status for failing to read or change a recorded match: only a
+// match that isn't there is a 404.
+func matchErrorStatus(err error) int {
+	if errors.Is(err, stats.ErrNoMatch) {
+		return http.StatusNotFound
+	}
+	return http.StatusInternalServerError
 }

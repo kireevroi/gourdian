@@ -37,7 +37,7 @@ func TestBuildFollowsThePosition(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
-	c.base = srv.URL
+	c.SetBaseURL(srv.URL) // a fake OpenDota has no rate limit to keep to
 	c.Start(t.Context())
 
 	settle := func(hero int, role string) *Build {

@@ -14,11 +14,15 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
 // ErrDuplicate means the match was already recorded, for example by replaying a recording.
 var ErrDuplicate = errors.New("match already recorded")
+
+// ErrNoMatch means no match with that id is recorded.
+var ErrNoMatch = errors.New("match not recorded")
 
 type MatchSummary struct {
 	MatchID     string         `json:"match_id"`
@@ -138,6 +142,7 @@ type Store struct {
 	dir     string
 	db      *sql.DB
 	onError func(msg string, err error)
+	history atomic.Int64 // counts changes to the matches, for HistoryVersion
 }
 
 // Dir is the folder the CSV exports are written to.

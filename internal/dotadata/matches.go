@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -165,34 +163,8 @@ func opposes(mine, theirs int) bool {
 	return false
 }
 
-// matchLimiter spaces out per-match calls to stay inside OpenDota's free tier (60/min).
-var matchLimiter = struct {
-	sync.Mutex
-	last     time.Time
-	interval time.Duration
-}{interval: 1100 * time.Millisecond}
-
-func throttle(ctx context.Context) error {
-	matchLimiter.Lock()
-	wait := time.Until(matchLimiter.last.Add(matchLimiter.interval))
-	matchLimiter.last = time.Now().Add(max(wait, 0))
-	matchLimiter.Unlock()
-	if wait <= 0 {
-		return nil
-	}
-	select {
-	case <-time.After(wait):
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 // RequestParse asks OpenDota to download and parse the replay.
 func (c *Client) RequestParse(ctx context.Context, matchID string) error {
-	if err := throttle(ctx); err != nil {
-		return err
-	}
 	_, err := c.do(ctx, http.MethodPost, "/request/"+matchID)
 	return err
 }
@@ -202,30 +174,9 @@ func (c *Client) Match(ctx context.Context, matchID string) (*Match, error) {
 	if _, err := strconv.ParseInt(matchID, 10, 64); err != nil {
 		return nil, fmt.Errorf("not an OpenDota match id: %q", matchID)
 	}
-	cachePath := filepath.Join(c.cacheDir, "matches", matchID+".json")
-	if data, err := os.ReadFile(cachePath); err == nil {
-		var m Match
-		if json.Unmarshal(data, &m) == nil {
-			return &m, nil
-		}
-	}
-	if err := throttle(ctx); err != nil {
-		return nil, err
-	}
-	data, err := c.fetch(ctx, "/matches/"+matchID)
-	if err != nil {
-		return nil, err
-	}
-	var m Match
-	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("decode match %s: %w", matchID, err)
-	}
-	if m.Parsed() {
-		if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err == nil {
-			_ = os.WriteFile(cachePath, data, 0o644)
-		}
-	}
-	return &m, nil
+	return cached(c, filepath.Join("matches", matchID+".json"), forever,
+		func() ([]byte, error) { return c.fetch(ctx, "/matches/"+matchID) },
+		(*Match).Parsed) // an unparsed match changes once OpenDota parses it
 }
 
 // parseRetryAt is how often the parse is requested again while waiting.
@@ -284,9 +235,6 @@ type PlayerMatch struct {
 
 // PlayerMatches lists the player's most recent normal matches, newest first.
 func (c *Client) PlayerMatches(ctx context.Context, accountID string, limit int) ([]PlayerMatch, error) {
-	if err := throttle(ctx); err != nil {
-		return nil, err
-	}
 	data, err := c.fetch(ctx, fmt.Sprintf("/players/%s/matches?limit=%d&significant=1", accountID, limit))
 	if err != nil {
 		return nil, err

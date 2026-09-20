@@ -401,6 +401,28 @@ func TestRoleGuessForNewHero(t *testing.T) {
 	}
 }
 
+// Posts about two heroes at once, as during a repick, must leave the role of whichever hero
+// was handled last, never the other's.
+func TestHeroRoleFollowsTheLastHero(t *testing.T) {
+	srv, _, _ := newTestServer(t, func(s *config.Settings) {
+		s.HeroRoles = map[string]string{"1": config.RoleCarry, "26": config.RoleHardSupport}
+	})
+	for range 50 {
+		var wg sync.WaitGroup
+		for _, hero := range []int{1, 26} {
+			wg.Go(func() { srv.applyHeroRole(hero, srv.cfg.Settings()) })
+		}
+		wg.Wait()
+		srv.roleMu.Lock()
+		hero := srv.roleHero
+		srv.roleHero = 0
+		srv.roleMu.Unlock()
+		if want := srv.cfg.Settings().HeroRoles[fmt.Sprint(hero)]; srv.cfg.Settings().Role != want {
+			t.Fatalf("handled hero %d last, but the role is %s", hero, srv.cfg.Settings().Role)
+		}
+	}
+}
+
 func TestRoleFromHeroRoles(t *testing.T) {
 	cases := map[string][]string{
 		config.RoleSoftSupport: {"Support", "Disabler", "Nuker", "Initiator"},
@@ -570,7 +592,9 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 		if len(got.Items) == 2 && got.Items[0].By > 0 {
 			break
 		}
-		srv.targets.reset()
+		srv.targets.mu.Lock() // the history hasn't changed, so ask again as if nothing were cached
+		clear(srv.targets.entries)
+		srv.targets.mu.Unlock()
 		time.Sleep(20 * time.Millisecond)
 	}
 	if got.LastHits[1] != 44 || got.Usual[1] != 40 {
@@ -700,4 +724,32 @@ func TestJSONAnswersWithAStatusKeepTheirContentType(t *testing.T) {
 	if res.StatusCode != http.StatusAccepted || res.Header.Get("Content-Type") != "application/json" {
 		t.Fatalf("status %d, content type %q", res.StatusCode, res.Header.Get("Content-Type"))
 	}
+}
+
+// A dashboard that stops reading misses the events that don't fit its buffer, but stays
+// connected and gets the events after it catches up.
+func TestHubDropsEventsForAClientThatFallsBehind(t *testing.T) {
+	h := newHub(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	ch := h.subscribe()
+	for i := range cap(ch) + 5 {
+		h.publish("tip", i)
+	}
+	for i := range cap(ch) {
+		if msg := <-ch; !strings.Contains(string(msg), fmt.Sprintf("data: %d\n", i)) {
+			t.Fatalf("event %d is %q", i, msg)
+		}
+	}
+	h.publish("tip", "after")
+	select {
+	case msg := <-ch:
+		if !strings.Contains(string(msg), `"after"`) {
+			t.Fatalf("got %q after catching up", msg)
+		}
+	default:
+		t.Fatal("a client that caught up gets no events")
+	}
+	if h.mu.Lock(); !h.clients[ch] {
+		t.Error("the drop isn't noted for the client")
+	}
+	h.mu.Unlock()
 }

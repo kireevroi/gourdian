@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -119,50 +118,40 @@ func (c *Client) fetchPositionBuild(key positionKey) {
 }
 
 func (c *Client) loadPositionData(ctx context.Context, key positionKey) (positionData, error) {
-	var out positionData
-	cachePath := filepath.Join(c.cacheDir, "builds", key.file(""))
-	if fi, err := os.Stat(cachePath); err == nil && time.Since(fi.ModTime()) < buildMaxAge {
-		if raw, err := os.ReadFile(cachePath); err == nil && json.Unmarshal(raw, &out) == nil {
-			return out, nil
+	return cached[positionData](c, filepath.Join("builds", key.file("")), buildMaxAge, func() ([]byte, error) {
+		var out positionData
+		raw, err := c.fetch(ctx, "/explorer?sql="+url.QueryEscape(positionSQL(key)))
+		var resp struct {
+			Rows []struct {
+				Phase string `json:"phase"`
+				Item  string `json:"item"`
+				Games int    `json:"games"`
+				Total int    `json:"total"`
+			} `json:"rows"`
+			Err any `json:"err"`
 		}
-	}
-	raw, err := c.fetch(ctx, "/explorer?sql="+url.QueryEscape(positionSQL(key)))
-	var resp struct {
-		Rows []struct {
-			Phase string `json:"phase"`
-			Item  string `json:"item"`
-			Games int    `json:"games"`
-			Total int    `json:"total"`
-		} `json:"rows"`
-		Err any `json:"err"`
-	}
-	if err == nil {
-		err = json.Unmarshal(raw, &resp)
-	}
-	if err == nil && resp.Err != nil {
-		err = fmt.Errorf("explorer: %v", resp.Err)
-	}
-	if err != nil {
-		if raw, readErr := os.ReadFile(cachePath); readErr == nil && json.Unmarshal(raw, &out) == nil {
-			return out, nil
+		if err == nil {
+			err = json.Unmarshal(raw, &resp)
 		}
-		return out, err
-	}
-	items := c.Items()
-	out.Pop = Popularity{}
-	for _, r := range resp.Rows {
-		out.Games = r.Total
-		info, ok := items[r.Item]
-		if !ok {
-			continue
+		if err == nil && resp.Err != nil {
+			err = fmt.Errorf("explorer: %v", resp.Err)
 		}
-		if out.Pop[r.Phase] == nil {
-			out.Pop[r.Phase] = map[string]int{}
+		if err != nil {
+			return nil, err
 		}
-		out.Pop[r.Phase][strconv.Itoa(info.ID)] = r.Games
-	}
-	if saved, err := json.Marshal(out); err == nil && os.MkdirAll(filepath.Dir(cachePath), 0o755) == nil {
-		_ = os.WriteFile(cachePath, saved, 0o644)
-	}
-	return out, nil
+		items := c.Items()
+		out.Pop = Popularity{}
+		for _, r := range resp.Rows {
+			out.Games = r.Total
+			info, ok := items[r.Item]
+			if !ok {
+				continue
+			}
+			if out.Pop[r.Phase] == nil {
+				out.Pop[r.Phase] = map[string]int{}
+			}
+			out.Pop[r.Phase][strconv.Itoa(info.ID)] = r.Games
+		}
+		return json.Marshal(out)
+	}, nil)
 }

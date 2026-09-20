@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"iter"
 	"math"
 	"math/rand/v2"
 	"net/http"
@@ -58,6 +59,52 @@ type game struct {
 }
 
 func Run(ctx context.Context, o Options, progress func(clock int, status int)) error {
+	interval := time.Duration(float64(time.Second) / o.Speed)
+	client := &http.Client{Timeout: 5 * time.Second}
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	for clock, s := range States(o) {
+		status, err := post(ctx, client, o, s)
+		if err != nil {
+			return err
+		}
+		if progress != nil {
+			progress(clock, status)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
+	return nil
+}
+
+// States are the game states of the scripted match o describes, one per game second with the
+// second it stands for, as Dota would post them; Run sends them to a trainer, and benchmarks
+// feed them to the rules. The clock stops at the end of the match, as Dota's does, so the
+// last few states repeat it.
+func States(o Options) iter.Seq2[int, *gsi.State] {
+	return func(yield func(int, *gsi.State) bool) {
+		g := newGame(o)
+		for clock := o.From; clock <= o.To+3; clock++ {
+			state := gsi.StateInProgress
+			if clock < 0 {
+				state = gsi.StatePreGame
+			}
+			if clock > o.To {
+				state = gsi.StatePostGame
+			} else {
+				g.step(clock)
+			}
+			if !yield(clock, g.snapshot(state)) {
+				return
+			}
+		}
+	}
+}
+
+func newGame(o Options) *game {
 	g := &game{
 		matchID:   fmt.Sprintf("sim-%d", time.Now().UnixNano()),
 		gold:      600,
@@ -92,35 +139,7 @@ func Run(ctx context.Context, o Options, progress func(clock int, status int)) e
 		}
 		g.win = rng.IntN(2) == 0
 	}
-
-	interval := time.Duration(float64(time.Second) / o.Speed)
-	client := &http.Client{Timeout: 5 * time.Second}
-	tick := time.NewTicker(interval)
-	defer tick.Stop()
-	for clock := o.From; clock <= o.To+3; clock++ {
-		state := gsi.StateInProgress
-		if clock < 0 {
-			state = gsi.StatePreGame
-		}
-		if clock > o.To {
-			state = gsi.StatePostGame
-		} else {
-			g.step(clock)
-		}
-		status, err := post(ctx, client, o, g.snapshot(state))
-		if err != nil {
-			return err
-		}
-		if progress != nil {
-			progress(clock, status)
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-tick.C:
-		}
-	}
-	return nil
+	return g
 }
 
 func post(ctx context.Context, client *http.Client, o Options, s *gsi.State) (int, error) {

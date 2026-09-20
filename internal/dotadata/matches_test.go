@@ -13,11 +13,6 @@ import (
 	"testing"
 )
 
-func TestMain(m *testing.M) {
-	matchLimiter.interval = 0
-	os.Exit(m.Run())
-}
-
 func loadMatch(t *testing.T, name string) *Match {
 	t.Helper()
 	data, err := os.ReadFile("testdata/" + name)
@@ -91,7 +86,7 @@ func TestMatchCachesOnlyParsedMatches(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
-	c.base = srv.URL
+	c.SetBaseURL(srv.URL) // a fake OpenDota has no rate limit to keep to
 
 	for range 2 {
 		if m, err := c.Match(t.Context(), "1"); err != nil || !m.Parsed() {
