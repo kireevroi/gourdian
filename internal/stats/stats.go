@@ -121,46 +121,6 @@ func splitList(s string) []string {
 	return strings.Split(s, listSep)
 }
 
-// appendRows appends rows, rewriting the file first if the header gained columns.
-func appendRows(path string, header []string, rows []map[string]string) error {
-	existing, err := readHeader(path)
-	if err != nil {
-		return err
-	}
-	merged := slices.Clone(existing)
-	for _, col := range header {
-		if !slices.Contains(merged, col) {
-			merged = append(merged, col)
-		}
-	}
-	if len(existing) > 0 && len(merged) != len(existing) {
-		old, err := readRows(path)
-		if err != nil {
-			return err
-		}
-		if err := writeAll(path, merged, old); err != nil {
-			return err
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	w := csv.NewWriter(f)
-	if len(existing) == 0 {
-		w.Write(merged)
-	}
-	for _, r := range rows {
-		w.Write(project(merged, r))
-	}
-	w.Flush()
-	return w.Error()
-}
-
 func writeAll(path string, header []string, rows []map[string]string) error {
 	tmp := path + ".tmp"
 	f, err := os.Create(tmp)
@@ -177,22 +137,6 @@ func writeAll(path string, header []string, rows []map[string]string) error {
 		return err
 	}
 	return os.Rename(tmp, path)
-}
-
-func readHeader(path string) ([]string, error) {
-	f, err := os.Open(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	header, err := csv.NewReader(f).Read()
-	if err != nil {
-		return nil, nil
-	}
-	return header, nil
 }
 
 func readRows(path string) ([]map[string]string, error) {

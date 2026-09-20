@@ -10,7 +10,7 @@ A live coach for Dota 2, called Dota Trainer before 1.5. While you play it:
 - **Sets personal targets** from your own match history: last hits at each checkpoint, timings for your core items, goals for the week.
 - **Asks an AI coach** for advice during the game and reviews every match afterwards. The Claude Code and Codex CLIs run on your existing subscriptions; API keys and any OpenAI-compatible server work too.
 - **Runs your own rules** next to the built-in ones, built with When / If / Then cards.
-- **Records statistics as CSV files** and charts the trends.
+- **Records every match** in its own data file and charts the trends; one click exports it all as CSV.
 
 It reads Valve's official Game State Integration feed, which only describes your own hero. It never reads game memory, injects into Dota, or sees enemy information. The HUD is a separate click-through window, as safe as a second monitor.
 
@@ -48,7 +48,7 @@ Everything else lives on the dashboard at **http://127.0.0.1:4570** — the live
 - **[Using it](docs/usage.md)** — position detection, HUD widgets, personal targets, weekly goals, troubleshooting
 - **[Rules](docs/rules.md)** — retuning the built-in tips and writing your own
 - **[AI coach](docs/ai-coach.md)** — providers, what gets sent, what happens when one fails
-- **[Statistics](docs/stats.md)** — the CSV files, match import, patch timings
+- **[Statistics](docs/stats.md)** — the data file, CSV export, match import, patch timings
 - **[Linux](docs/linux.md)** — installing and what differs from Windows
 - **[Development](docs/development.md)** — building, releases, commands, code map
 

@@ -526,6 +526,8 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // errNoSystemVoice refuses system speech on a machine that has none.
+//
+//lint:ignore ST1005 the dashboard shows this as a sentence, and it starts with a name
 var errNoSystemVoice = errors.New("Windows speech isn't available on this machine; use browser voice")
 
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {

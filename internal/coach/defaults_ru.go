@@ -209,24 +209,3 @@ func translate(spec RuleSpec, lang string) RuleSpec {
 	}
 	return spec
 }
-
-// translateRule applies another language's wording to a rule that is worked out in code.
-func translateRule(r Rule, lang string) Rule {
-	if lang != "ru" {
-		return r
-	}
-	w, ok := russian[r.ID]
-	if !ok {
-		return r
-	}
-	if w.Name != "" {
-		r.Label = w.Name
-	}
-	if w.Advice != "" {
-		r.Advice = w.Advice
-	}
-	if w.Habit != "" {
-		r.Habit = w.Habit
-	}
-	return r
-}

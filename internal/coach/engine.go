@@ -55,10 +55,6 @@ type Rule struct {
 	eval    func(*Ctx)
 }
 
-func (r *Rule) appliesTo(role string) bool {
-	return len(r.Roles) == 0 || slices.Contains(r.Roles, role)
-}
-
 type Data interface {
 	Items() map[string]dotadata.ItemInfo
 	Hero(id int) (dotadata.HeroInfo, bool)
@@ -697,14 +693,6 @@ type Ctx struct {
 	override *RuleOverride
 	now      time.Time
 	out      []Tip
-}
-
-func (c *Ctx) remind(key string, cooldown int, sev Severity, text, speech string) bool {
-	return c.emit(false, key, cooldown, sev, text, speech)
-}
-
-func (c *Ctx) mistake(key string, cooldown int, sev Severity, text, speech string) bool {
-	return c.emit(true, key, cooldown, sev, text, speech)
 }
 
 func (c *Ctx) emit(habit bool, key string, cooldown int, sev Severity, text, speech string) bool {

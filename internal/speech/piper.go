@@ -150,6 +150,7 @@ func InstallPiper(ctx context.Context, home string, voices []string, progress fu
 	if PiperBinary(home) == "" {
 		a, ok := piperArchives[runtime.GOARCH]
 		if !ok {
+			//lint:ignore ST1005 the setup page shows this as a sentence, and it starts with a name
 			return fmt.Errorf("Piper has no build for %s", runtime.GOARCH)
 		}
 		files = append(files, file{what: "Piper", url: piperRelease + a.file, sha: a.sha, dest: filepath.Join(home, "bin"), size: a.size, unpack: true})

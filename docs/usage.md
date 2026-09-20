@@ -24,7 +24,7 @@ If you don't pick one, the trainer watches which lane your hero stands in from 0
 The dashboard is at http://127.0.0.1:4570 and opens in its own window. Its pages:
 
 - **Live**: the tip feed, a briefing before the horn, hero stats, farm pace against your target, core item goals, timers, inventory, the popular build with what to buy next, this week's goals, habits to fix, recent matches and the last review. Position buttons and a voice switch sit at the top.
-- **Stats**: charts and tables over your CSV statistics, weekly goals and every review.
+- **Stats**: charts and tables over your match history, weekly goals and every review.
 - **Rules**: every tip rule, built-in and your own — see [Rules](rules.md).
 - **HUD**: widgets, order, look and position, with a live preview.
 - **AI coach**: connections, who answers live tips and reviews, and what the coach knows about you — see [AI coach](ai-coach.md).
