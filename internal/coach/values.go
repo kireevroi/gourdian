@@ -132,6 +132,34 @@ func (m *match) aegisLeft(clock int) int {
 	return m.aegisExpires - clock
 }
 
+// seeChat follows the game's chat lines for what the player's own state doesn't show.
+func (m *match) seeChat(c gsi.Chat, clock int) {
+	team := gsi.TeamNumber(m.team)
+	switch c.Type {
+	case "CHAT_MESSAGE_HERO_KILL": // playerid1 is the hero killed
+		if m.aegisKnown && c.Player1 == m.aegisHolder {
+			m.aegisUsed = true
+		}
+	case "CHAT_MESSAGE_GLYPH_USED": // playerid1 is the team
+		if c.Player1 == team {
+			m.glyphUsed, m.glyphAt = true, clock
+		}
+	// Losing any tower or barracks brings the Glyph back. Value is the team that destroyed it.
+	case "CHAT_MESSAGE_TOWER_KILL", "CHAT_MESSAGE_BARRACKS_KILL":
+		if c.Value != team {
+			m.glyphUsed = false
+		}
+	case "CHAT_MESSAGE_TOWER_DENY":
+		if c.Value == team {
+			m.glyphUsed = false
+		}
+	}
+}
+
+func (m *match) glyphReady(clock, cooldown int) bool {
+	return !m.glyphUsed || clock >= m.glyphAt+cooldown
+}
+
 // reincarnated is the Aegis bringing the player back: their HP hits 0 as it leaves the inventory.
 func reincarnated(prev, s *gsi.State) bool {
 	_, had := prev.FindItem("aegis", gsi.Inventory, gsi.Backpack)
@@ -266,14 +294,16 @@ func (m *match) seeBuildings(s *gsi.State, clock int) {
 	if len(own) == 0 {
 		return
 	}
-	if n := len(m.buildings); n > 0 && m.buildings[n-1].clock == clock {
-		return
-	}
 	pct := make(map[string]int, len(own))
 	for key, b := range own {
 		if b.MaxHealth > 0 {
 			pct[key] = b.Health * 100 / b.MaxHealth
 		}
+	}
+	// A second's last update stands for it, so a building that just fell isn't still dropping.
+	if n := len(m.buildings); n > 0 && m.buildings[n-1].clock == clock {
+		m.buildings[n-1].pct = pct
+		return
 	}
 	m.buildings = append(m.buildings, buildingSample{clock: clock, pct: pct})
 	for len(m.buildings) > 0 && clock-m.buildings[0].clock > dropWindow {

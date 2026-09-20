@@ -1,6 +1,7 @@
 package coach
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -71,5 +72,40 @@ func TestGlyphRefreshedAndBuybackToDefend(t *testing.T) {
 	got := byRule(play(newEngine(nil), settings(config.RoleCarry), 1800, 1830, dead), "buyback_defend")
 	if len(got) != 1 || !strings.Contains(got[0].Text, "mid tier 3 tower is under attack") {
 		t.Fatalf("buyback tips = %+v", got)
+	}
+}
+
+func TestNoGlyphTipWhileYourGlyphCoolsDown(t *testing.T) {
+	// GSI lists the newest event first.
+	pushWith := func(events ...gsi.Event) func(*gsi.State) {
+		return func(s *gsi.State) {
+			push(s)
+			for _, ev := range events {
+				if ev.GameTime <= s.Map.GameTime {
+					s.Events = append([]gsi.Event{ev}, s.Events...)
+				}
+			}
+		}
+	}
+	glyphs := func(events ...gsi.Event) []Tip {
+		return byRule(play(newEngine(nil), settings(config.RoleMid), 585, 640, pushWith(events...)), "glyph")
+	}
+	ours := chat(590, `{"type":"CHAT_MESSAGE_GLYPH_USED","playerid1":2,"time":590.4}`)
+	if got := glyphs(ours); len(got) != 0 {
+		t.Fatalf("your team used its Glyph at 9:50: %+v", got)
+	}
+	if got := glyphs(chat(590, `{"type":"CHAT_MESSAGE_GLYPH_USED","playerid1":3,"time":590.4}`)); len(got) != 1 {
+		t.Fatalf("the enemy's Glyph isn't yours: %+v", got)
+	}
+	lost := `{"type":"CHAT_MESSAGE_TOWER_KILL","value":3,"playerid1":7,"value3":1,"time":%s}`
+	if got := glyphs(ours, chat(595, fmt.Sprintf(lost, "595.5"))); len(got) != 1 {
+		t.Fatalf("losing a tower brings the Glyph back: %+v", got)
+	}
+	if got := glyphs(chat(590, fmt.Sprintf(lost, "590.1")), ours); len(got) != 0 {
+		t.Fatalf("a tower lost just before the Glyph doesn't bring it back: %+v", got)
+	}
+	taken := chat(595, `{"type":"CHAT_MESSAGE_TOWER_KILL","value":2,"playerid1":1,"value3":1,"time":595.5}`)
+	if got := glyphs(ours, taken); len(got) != 0 {
+		t.Fatalf("taking an enemy tower doesn't bring your Glyph back: %+v", got)
 	}
 }

@@ -745,7 +745,8 @@
     "Health a building of yours lost in 5 seconds": "Сколько здоровья строение потеряло за 5 секунд",
     "Which building is dropping": "Какое строение падает",
     "Your base is under attack": "Ваша база под атакой",
-    "Melee barracks of yours destroyed": "Разрушено ваших бараков ближнего боя"
+    "Melee barracks of yours destroyed": "Разрушено ваших бараков ближнего боя",
+    "Your Glyph is ready": "Ваш глиф готов"
   },
   "patterns": [
     [
