@@ -8,14 +8,14 @@ const WIDGETS = {
   briefing: ['Briefing', 'Before the horn: your record on the hero, the last-hit target and item goals.'],
   focus: ['Focus', 'Your focus from the last match review, before the horn and while dead.'],
   death: ['While dead', 'Respawn time and gold to spend.'],
-  timers: ['Timers', 'Runes, neutral items, Roshan, Tormentor and stack pulls.'],
+  timers: ['Timers', 'Runes, neutral items, Roshan, Tormentor, stack pulls and the turn of day and night.'],
   pace: ['Last-hit pace', 'Last hits against the target pace for your position.'],
   next_item: ['Next item', 'The next item in the build, and when you can buy it.'],
   skill: ['Skill', 'With a skill point to spend: the ability pros level next, and how many pro games that order comes from.'],
   item_goal: ['Item goal', 'Your next core item and its timing goal, from five minutes before it.'],
   stats: ['Stats line', 'Kills, deaths, assists, GPM and last hits.'],
 };
-const KIND_NAMES = { rune: 'Runes', neutral: 'Neutral items', objective: 'Roshan and Tormentor', stack: 'Stacks' };
+const KIND_NAMES = { rune: 'Runes', neutral: 'Neutral items', objective: 'Roshan and Tormentor', stack: 'Stacks', daynight: 'Day and night' };
 const SLIDERS = [['width', 'hud_width', 'px'], ['scale', 'hud_scale', '%'], ['background', 'hud_background', '%'], ['opacity', 'hud_opacity', '%']];
 let hudPayload = null, widgets = [], dragIndex = -1;
 

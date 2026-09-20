@@ -41,7 +41,7 @@ The HUD shows only during a match, never takes focus and lets clicks through to 
 | Briefing | Before the horn: your record on the hero, the last-hit target, core item goals and unfinished weekly goals |
 | Focus | Your focus from the last review, before the horn and while dead |
 | While dead | Respawn time and gold to spend |
-| Timers | Runes, neutral items, Roshan and Tormentor, stack pulls; how many, which kinds, and how far ahead |
+| Timers | Runes, neutral items, Roshan and Tormentor, stack pulls, the turn of day and night; how many, which kinds, and how far ahead |
 | Last-hit pace | Your last hits against the pace to your target |
 | Next item | The next item in the popular build and whether you can buy it |
 | Item goal | The next core item and its timing goal, from five minutes before it |

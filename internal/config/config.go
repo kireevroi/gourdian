@@ -159,7 +159,7 @@ const (
 )
 
 var (
-	TimerKinds    = []string{"rune", "neutral", "objective", "stack"}
+	TimerKinds    = []string{"rune", "neutral", "objective", "stack", "daynight"}
 	TipSeverities = []string{"info", "warn", "urgent"}
 )
 

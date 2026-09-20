@@ -14,6 +14,6 @@ The Rules page on the dashboard lists every rule with how often it fired in your
 
 While a match runs, each condition shows its current value and whether it holds. **Run on recording** replays a recorded match through the rule and lists every time it would have fired.
 
-Start from templates (Save for BKB, use Magic Wand when low, low mana, Lotus pool, shop while dead, ultimate is up, unspent talent, idle in base), duplicate rules, and export or import them as JSON.
+Start from templates (Save for BKB, use Magic Wand when low, low mana, Lotus pool, night falls, shop while dead, ultimate is up, unspent talent, idle in base), duplicate rules, and export or import them as JSON.
 
 Rules are stored in `trainer.data` with everything else. Built-in defaults come with the app, so updates can improve them unless you changed that rule.
