@@ -63,9 +63,13 @@ func (v View) Empty() bool { return v.Alert == nil && len(v.Rows) == 0 }
 type Payload struct {
 	Live   View `json:"live"`
 	Sample View `json:"sample"`
-	// Draft tells the overlay that the player is choosing a hero, which is when it reads the
-	// portraits off the screen. The overlay is the part of the trainer running where the
-	// screen is, which under WSL is not where the rest of it runs.
+	// Choosing says the player is picking a hero. The overlay keeps the position keys live
+	// then, because the pick advice is worked out for a position and that is the moment to
+	// say which one.
+	Choosing bool `json:"choosing"`
+	// Draft says to read the portraits off the screen, which is Choosing and the player
+	// having asked for it. The overlay is the part of the trainer running where the screen
+	// is, which under WSL is not where the rest of it runs.
 	Draft bool `json:"draft"`
 }
 
@@ -262,6 +266,10 @@ func pickLines(p *picks.Board, l words) []Line {
 	// wrong without opening the dashboard.
 	if names := heroNames(p.Enemies); names != "" {
 		lines = append(lines, Line{l.f("Against: %s", names), KindWarn})
+	}
+	// Which heroes are worth taking depends on the position, so it asks rather than guessing.
+	if p.NeedPosition {
+		lines = append(lines, Line{l.s("Ctrl+Shift+1–5 for your position, then hero advice"), KindCoach})
 	}
 	if len(p.Best) > 0 {
 		lines = append(lines, Line{l.f("Your best %s heroes:", l.role(p.Role)), KindCoach})

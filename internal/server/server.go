@@ -90,11 +90,16 @@ type Server struct {
 	picks   pickCache
 	draft   draftBoard
 
-	roleMu    sync.Mutex
-	roleHero  int
-	roleLock  string // match in which the player picked the role themselves
-	ai        aiState
-	providers *aisvc.Service
+	roleMu   sync.Mutex
+	roleHero int
+	// roleChosen is a position the player picked while still choosing a hero, held until
+	// there is a hero to remember it against; roleChosenAt bounds how long, so an abandoned
+	// draft can't hand its choice to a game an hour later.
+	roleChosen   string
+	roleChosenAt time.Time
+	roleLock     string // match in which the player picked the role themselves
+	ai           aiState
+	providers    *aisvc.Service
 
 	matches   matchdata.Service
 	importing atomic.Bool
@@ -355,10 +360,7 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 	if st.InMatch() && st.Map.ClockTime < 0 && !strings.HasPrefix(matchID, "sim-") {
 		s.briefMatch(matchID, cfg.Settings)
 	}
-	if s.draftOpened(&st) {
-		s.speakPicks(cfg.Settings)
-		s.askDraft(cfg.Settings, false)
-	}
+	s.speakPicks(&st, cfg.Settings)
 	if res.NewMatch {
 		s.hub.publish("tips", []coach.Tip{})
 		s.tiltReminder(matchID, cfg.Settings)

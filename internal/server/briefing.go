@@ -11,6 +11,7 @@ import (
 	"gourdian/internal/config"
 	"gourdian/internal/dota"
 	"gourdian/internal/model"
+	"gourdian/internal/picks"
 	"gourdian/internal/stats"
 )
 
@@ -30,12 +31,22 @@ type briefingCache struct {
 func (s *Server) snapshot(set config.Settings) coach.Snapshot {
 	snap := s.engine.Snapshot(set)
 	switch {
-	case pickMatters(snap):
+	case pickMatters(snap) && s.rolePickedInDraft():
 		snap.Picks = s.pickBoard(set)
+	case pickMatters(snap):
+		// They haven't said which position they are playing. Which heroes are worth taking
+		// depends entirely on that, so the trainer asks rather than offering heroes for
+		// whatever they happened to play last.
+		board := s.pickBoard(set).WithoutSuggestions()
+		if board == nil {
+			board = &picks.Board{Role: set.Role}
+		}
+		board.NeedPosition = true
+		snap.Picks = board
 	case draftMatters(snap):
 		// Their own pick is made, so the advice about what to take goes; who they are up
 		// against does not.
-		snap.Picks = s.pickBoard(set).AfterYourPick()
+		snap.Picks = s.pickBoard(set).WithoutSuggestions()
 	}
 	if snap.InMatch && snap.Hero != nil && snap.Clock < 0 {
 		snap.Briefing = s.briefing(snap.Hero.ID, snap.Hero.Name, set.Role)

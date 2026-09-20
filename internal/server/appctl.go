@@ -125,10 +125,11 @@ func (s *Server) hudPayload() hud.Payload {
 	live := hud.BuildHeld(snap, tips, set.HUDWidgets, time.Now(), &s.hudQueue, set.Language)
 	s.hudMu.Unlock()
 	return hud.Payload{Live: live, Sample: hud.SampleIn(set.HUDWidgets, set.Language),
-		// The screen is read for the whole draft, not only until the player picks: the other
-		// side goes on picking after they have, and what the trainer knows of them would
-		// otherwise go stale and be dropped a few seconds later.
-		Draft: set.Screen.Draft && draftMatters(snap)}
+		// Choosing is about the player's own pick and so ends when they make it; reading the
+		// screen carries on for the whole draft, because the other side is still picking and
+		// what the trainer knows of them would otherwise go stale and be dropped.
+		Choosing: pickMatters(snap),
+		Draft:    set.Screen.Draft && draftMatters(snap)}
 }
 
 func (s *Server) handleHUD(w http.ResponseWriter, r *http.Request) {

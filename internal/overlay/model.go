@@ -145,11 +145,17 @@ func (m *model) view(now time.Time, editing bool) View {
 	return v
 }
 
-// askingPosition reports whether the position hotkeys should be active: in a match, until 2:30.
+// askingPosition reports whether the position hotkeys should be active: while the player is
+// choosing a hero, and then in the match until 2:30.
+//
+// The draft half matters as much as the match half. Pick advice is worked out for a position,
+// and until the player says which they are playing the trainer uses whatever they played
+// last, so the one moment they most need to correct it was the one moment the keys did
+// nothing.
 func (m *model) askingPosition() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.online && m.inMatch && m.clock < hud.PositionUntil
+	return m.online && (m.hud.Choosing || m.inMatch && m.clock < hud.PositionUntil)
 }
 
 // stream follows the trainer's SSE feed, reconnecting until ctx ends. Events the model doesn't

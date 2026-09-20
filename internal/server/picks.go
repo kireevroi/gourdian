@@ -29,6 +29,9 @@ type pickCache struct {
 	// when one opens. Dota doesn't always set the match id during hero selection, so the
 	// draft is spotted by the change of state rather than by the match it belongs to.
 	drafting bool
+	// spokenFor is the position the picks were last read out for. Changing position changes
+	// the advice entirely, so it is worth hearing again.
+	spokenFor string
 }
 
 // pickBoard is the heroes worth taking in this position: the player's own record, weighed
@@ -128,20 +131,27 @@ func drafting(st *gsi.State) bool {
 	return draftState(st.Map.GameState)
 }
 
-// draftOpened reports the one update on which the player enters a draft, so the trainer can
-// speak and ask about the pick once rather than twice a second.
-func (s *Server) draftOpened(st *gsi.State) bool {
+// speakPicks reads the pick advice out, once for each position the player names while they
+// are choosing. Naming a position is what makes advice possible at all, and naming a
+// different one makes it different advice, so both are worth hearing; saying the same one
+// twice is not.
+func (s *Server) speakPicks(st *gsi.State, set config.Settings) {
 	open := drafting(st)
 	c := &s.picks
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	first := open && !c.drafting
-	c.drafting = open
-	return first
-}
-
-// speakPicks reads out the top of the board.
-func (s *Server) speakPicks(set config.Settings) {
+	if !open {
+		c.drafting, c.spokenFor = false, ""
+		c.mu.Unlock()
+		return
+	}
+	c.drafting = true
+	said := c.spokenFor == set.Role
+	c.mu.Unlock()
+	// Nothing to say until they have named a position, and nothing to add once it has been
+	// said for that one. Both checks are cheap, which matters twice a second.
+	if said || !s.rolePickedInDraft() {
+		return
+	}
 	snap := s.snapshot(set)
 	if snap.Picks == nil || len(snap.Picks.Best) == 0 {
 		return
@@ -157,8 +167,12 @@ func (s *Server) speakPicks(set config.Settings) {
 		avoid := roleSay(set.Language, "Avoid %s", snap.Picks.Avoid[0].Name)
 		text, speech = text+" · "+avoid, speech+" "+avoid+"."
 	}
+	c.mu.Lock()
+	c.spokenFor = set.Role
+	c.mu.Unlock()
 	s.emitTips(snap.MatchID, []coach.Tip{{Rule: "picks", Category: "focus", Severity: coach.Info,
 		Clock: snap.Clock, At: time.Now(), Text: text, Speech: speech}}, set)
+	s.askDraft(set, false)
 }
 
 // handlePicksAsk is the dashboard's "ask the coach" button during a draft.
