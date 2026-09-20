@@ -85,3 +85,113 @@ func TestShardCostFallsBackToTheShippedPrice(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+var shardItems = map[string]dotadata.ItemInfo{
+	"aghanims_shard": {DName: "Aghanim's Shard", Cost: 1400},
+	"force_staff":    {DName: "Force Staff", Cost: 2200},
+}
+
+// shardBuild is a hero whose popular build buys a Shard, such as Crystal Maiden.
+var shardBuild = fakeData{items: shardItems, build: &dotadata.Build{Items: []dotadata.BuildItem{
+	{Name: "aghanims_shard", DName: "Aghanim's Shard", Cost: 1400, Phase: dotadata.PhaseMid},
+	{Name: "force_staff", DName: "Force Staff", Cost: 2200, Phase: dotadata.PhaseMid},
+}}}
+
+// plainBuild is a hero whose popular build has no Shard in it, such as Lion.
+var plainBuild = fakeData{items: shardItems, build: &dotadata.Build{Items: []dotadata.BuildItem{
+	{Name: "force_staff", DName: "Force Staff", Cost: 2200, Phase: dotadata.PhaseMid},
+}}}
+
+// The Shard goes on sale at 15:00, and a player who doesn't have one hears about it once.
+func TestShardSaleIsAnnouncedOnce(t *testing.T) {
+	from := dota.DefaultTimings().ShardFrom
+	got := byRule(play(newEngine(shardBuild), settings(dota.Carry), from-30, from+300, nil), "shard_sale")
+	if len(got) != 1 || got[0].Clock != from {
+		t.Fatalf("want one announcement at 15:00, got %+v", got)
+	}
+	if got[0].Text != "Aghanim's Shard is on sale (1400g). It upgrades one of your abilities for the rest of the game" {
+		t.Errorf("text = %q", got[0].Text)
+	}
+}
+
+// A Shard from a Tormentor is still a Shard, so there is nothing to announce and nothing to buy.
+func TestShardRulesAreQuietWhenYouAlreadyHaveOne(t *testing.T) {
+	from := dota.DefaultTimings().ShardFrom
+	got := play(newEngine(shardBuild), settings(dota.HardSupport), from-30, from+60, func(s *gsi.State) {
+		s.Hero.AghanimsShard = true
+		s.Player.Gold = 1500
+	})
+	for _, rule := range []string{"shard_sale", "shard"} {
+		if tips := byRule(got, rule); len(tips) > 0 {
+			t.Errorf("%s spoke to a player already holding a Shard: %+v", rule, tips)
+		}
+	}
+}
+
+// The nudge follows the build, not the position: a hero whose build buys a Shard gets it,
+// core or support, and a hero whose build has no Shard is left alone however rich they are.
+func TestShardNudgeFollowsTheBuild(t *testing.T) {
+	from := dota.DefaultTimings().ShardFrom
+	rich := func(s *gsi.State) { s.Player.Gold = 1500 }
+	for _, role := range []string{dota.HardSupport, dota.Carry} {
+		got := byRule(play(newEngine(shardBuild), settings(role), from, from+60, rich), "shard")
+		if len(got) != 1 || got[0].Clock != from+30 {
+			t.Fatalf("%s: want one nudge 30 seconds in, got %+v", role, got)
+		}
+		if got[0].Text != "You can afford Aghanim's Shard (1400g), and your build buys one" {
+			t.Errorf("%s: text = %q", role, got[0].Text)
+		}
+		if !got[0].Habit {
+			t.Errorf("%s: a Shard the build wants and nobody bought should count as a mistake", role)
+		}
+	}
+	for _, role := range []string{dota.HardSupport, dota.SoftSupport, dota.Carry} {
+		if got := byRule(play(newEngine(plainBuild), settings(role), from, from+120, rich), "shard"); len(got) > 0 {
+			t.Errorf("%s: nudged a hero whose build has no Shard: %+v", role, got)
+		}
+	}
+}
+
+// With no build to vet it against there is nothing to say either.
+func TestShardNudgeWaitsForTheBuild(t *testing.T) {
+	from := dota.DefaultTimings().ShardFrom
+	rich := func(s *gsi.State) { s.Player.Gold = 1500 }
+	if got := byRule(play(newEngine(nil), settings(dota.HardSupport), from, from+120, rich), "shard"); len(got) > 0 {
+		t.Errorf("nudged before any build had loaded: %+v", got)
+	}
+}
+
+// Short of the price, or before it goes on sale, the nudge stays out of the way.
+func TestShardNudgeWaitsForTheGoldAndTheClock(t *testing.T) {
+	from := dota.DefaultTimings().ShardFrom
+	poor := func(s *gsi.State) { s.Player.Gold = 1399 }
+	if got := byRule(play(newEngine(shardBuild), settings(dota.HardSupport), from, from+60, poor), "shard"); len(got) > 0 {
+		t.Errorf("nudged a player 1 gold short: %+v", got)
+	}
+	rich := func(s *gsi.State) { s.Player.Gold = 5000 }
+	if got := byRule(play(newEngine(shardBuild), settings(dota.HardSupport), from-120, from-1, rich), "shard"); len(got) > 0 {
+		t.Errorf("nudged a player before the Shard was on sale: %+v", got)
+	}
+}
+
+// A Shard is spent on the hero, so no slot holds it. The build has to move on all the same.
+func TestBoughtShardCountsTowardsTheBuild(t *testing.T) {
+	from := dota.DefaultTimings().ShardFrom
+	// next_item speaks when the gold arrives, so the player starts the run short of it.
+	earns := func(shard bool) func(*gsi.State) {
+		return func(s *gsi.State) {
+			s.Hero.AghanimsShard = shard
+			if s.Map.ClockTime > from {
+				s.Player.Gold = 2500
+			}
+		}
+	}
+	got := byRule(play(newEngine(shardBuild), settings(dota.HardSupport), from, from+30, earns(false)), "next_item")
+	if len(got) != 1 || got[0].Text != "You can afford Aghanim's Shard" {
+		t.Fatalf("want the Shard as the next item, got %+v", got)
+	}
+	got = byRule(play(newEngine(shardBuild), settings(dota.HardSupport), from, from+30, earns(true)), "next_item")
+	if len(got) != 1 || got[0].Text != "You can afford Force Staff" {
+		t.Fatalf("a bought Shard should move the build on to Force Staff, got %+v", got)
+	}
+}

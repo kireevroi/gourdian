@@ -288,6 +288,29 @@ func DefaultSpecs(lang string) []RuleSpec {
 			Cooldown: 90, Max: 4,
 		},
 		{
+			ID: "shard_sale", Name: "Aghanim's Shard goes on sale", Category: "items",
+			When: Trigger{Type: WhenSchedule, First: t.ShardFrom},
+			If:   []Cond{{Field: "has_shard", Op: "false"}},
+			Then: AlertSpec{Text: "Aghanim's Shard is on sale ({shard_cost}g). It upgrades one of your abilities for the rest of the game",
+				Speech: "Aghanim's Shard is on sale", Severity: "info"},
+		},
+		{
+			// Whether to buy one is the build's call, not the position's: Crystal Maiden and
+			// Bristleback buy a Shard in nearly every game, Lion and Dazzle in nearly none.
+			ID: "shard", Name: "Aghanim's Shard is affordable", Category: "items",
+			When: Trigger{Type: WhenState, For: 30},
+			If: []Cond{
+				{Field: "alive", Op: "true"},
+				{Field: "shard_on_sale", Op: "true"},
+				{Field: "shard_in_build", Op: "true"},
+				{Field: "shard_gold", Op: "eq"},
+			},
+			Then: AlertSpec{Text: "You can afford Aghanim's Shard ({shard_cost}g), and your build buys one",
+				Speech: "Buy your Aghanim's Shard", Severity: "warn", Mistake: true, Habit: "No Aghanim's Shard",
+				Advice: "Your Shard upgrades an ability for the rest of the game and costs less than most items. It is in the build most players take on this hero in your position."},
+			Cooldown: 300, Max: 3,
+		},
+		{
 			ID: "low_hp", Name: "Low HP warning", Category: "survival",
 			When: Trigger{Type: WhenState},
 			If: []Cond{
