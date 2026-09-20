@@ -20,6 +20,7 @@ import (
 	"gourdian/internal/hidewin"
 	"gourdian/internal/install"
 	"gourdian/internal/secrets"
+	"gourdian/internal/server"
 	"gourdian/internal/speech"
 )
 
@@ -69,6 +70,14 @@ func doctor() error {
 			c.ok("Dota display mode: %s (overlay can draw on top)", mode)
 		}
 	}
+	// Valve sends the draft only to spectators, so pick advice is built without it. The
+	// trainer still watches for one, and says so here if a real install ever gets it.
+	if at, err := os.ReadFile(filepath.Join(filepath.Dir(store.Path()), server.DraftSeenFile)); err == nil {
+		c.ok("Dota has sent a draft board (first seen %s); counter-pick advice can use it", strings.TrimSpace(string(at)))
+	} else {
+		c.ok("no draft board from Dota, as expected: Valve sends picks to spectators only")
+	}
+
 	if opts := install.LaunchOptions(); len(opts) > 0 {
 		for _, o := range opts {
 			if strings.Contains(o, "-gamestateintegration") {

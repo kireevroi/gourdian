@@ -30,7 +30,7 @@ type briefingCache struct {
 func (s *Server) snapshot(set config.Settings) coach.Snapshot {
 	snap := s.engine.Snapshot(set)
 	if pickMatters(snap) {
-		snap.Picks = s.pickHelp(set.Role)
+		snap.Picks = s.pickBoard(set)
 	}
 	if snap.InMatch && snap.Hero != nil && snap.Clock < 0 {
 		snap.Briefing = s.briefing(snap.Hero.ID, snap.Hero.Name, set.Role)

@@ -23,6 +23,7 @@ import (
 
 	"gourdian/internal/dota"
 	"gourdian/internal/hotkey"
+	"gourdian/internal/picks"
 	"gourdian/internal/platform"
 )
 
@@ -54,6 +55,7 @@ type AIChoice struct {
 type AISettings struct {
 	Enabled bool     `json:"enabled"` // live tips
 	Review  bool     `json:"review"`  // match reviews
+	Draft   bool     `json:"draft"`   // a word on which hero to take, as the draft opens
 	Live    AIChoice `json:"live"`
 	Reviews AIChoice `json:"reviews"`
 	// Fallback answers when the chosen provider is logged out or out of usage; empty means none.
@@ -231,12 +233,14 @@ type Settings struct {
 	DisabledRules []string `json:"disabled_rules"`
 	// RulesOffSeen records which of the rules that ship switched off this config has already
 	// had switched off, so an upgrade does it once and a player who turns one back on keeps it.
-	RulesOffSeen []string          `json:"rules_off_seen,omitempty"`
-	Timings      dota.Timings      `json:"-"` // always dota.DefaultTimings()
-	AI           AISettings        `json:"ai"`
-	Overlay      OverlaySettings   `json:"overlay"`
-	Recording    RecordingSettings `json:"recording"`
-	Hotkeys      HotkeySettings    `json:"hotkeys"`
+	RulesOffSeen []string     `json:"rules_off_seen,omitempty"`
+	Timings      dota.Timings `json:"-"` // always dota.DefaultTimings()
+	// Picks tunes how heroes are ranked while you choose one.
+	Picks     picks.Tuning      `json:"picks"`
+	AI        AISettings        `json:"ai"`
+	Overlay   OverlaySettings   `json:"overlay"`
+	Recording RecordingSettings `json:"recording"`
+	Hotkeys   HotkeySettings    `json:"hotkeys"`
 	// DashboardWindow opens the dashboard in its own app window instead of a browser tab.
 	DashboardWindow bool        `json:"dashboard_window"`
 	HUDWidgets      []HUDWidget `json:"hud_widgets"`
@@ -315,6 +319,9 @@ func (s Settings) Validate() error {
 	if !slices.Contains(HUDCorners, s.Overlay.HUDCorner) {
 		return fmt.Errorf("unknown HUD position %q", s.Overlay.HUDCorner)
 	}
+	if err := s.Picks.Validate(); err != nil {
+		return err
+	}
 	if id, err := strconv.ParseUint(s.AccountID, 10, 32); s.AccountID != "" && (err != nil || id == 0) {
 		return fmt.Errorf("account id must be your Dota Friend ID, a number like 123456789")
 	}
@@ -392,7 +399,8 @@ func Default() Config {
 			VoiceRate:     1,
 			VoiceLevel:    SpeakAll,
 			Timings:       dota.DefaultTimings(),
-			AI: AISettings{Enabled: true, Review: true, Interval: 180,
+			Picks:         picks.DefaultTuning(),
+			AI: AISettings{Enabled: true, Review: true, Draft: true, Interval: 180,
 				// Claude Code's aliases follow Anthropic's newest models, so the defaults never go stale.
 				Live:    AIChoice{Provider: "claude", Model: "sonnet", Effort: "low"},
 				Reviews: AIChoice{Provider: "claude", Model: "opus", Effort: "medium"}},

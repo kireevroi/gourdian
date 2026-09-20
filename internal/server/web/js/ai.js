@@ -15,6 +15,7 @@ function renderJobs() {
   const ai = cfg.settings.ai;
   $('live-on').checked = ai.enabled;
   $('review-on').checked = ai.review;
+  $('draft-on').checked = ai.draft;
   if (![...$('interval').options].some((o) => Number(o.value) === ai.interval)) $('interval').add(new Option(`every ${ai.interval} s`, ai.interval));
   $('interval').value = String(ai.interval);
   for (const row of document.querySelectorAll('.row[data-job]')) {
@@ -211,6 +212,7 @@ onSettings((c) => {
 });
 $('live-on').addEventListener('change', (e) => saveSettings({ ai: { enabled: e.target.checked } }));
 $('review-on').addEventListener('change', (e) => saveSettings({ ai: { review: e.target.checked } }));
+$('draft-on').addEventListener('change', (e) => saveSettings({ ai: { draft: e.target.checked } }));
 $('interval').addEventListener('change', (e) => saveSettings({ ai: { interval: Number(e.target.value) } }));
 $('ai-save').addEventListener('click', async () => {
   if (await saveSettings({ ai: { profile: $('ai-profile').value, instructions: $('ai-instructions').value } })) {

@@ -4,6 +4,9 @@ package gsi
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -37,19 +40,101 @@ type Building struct {
 	MaxHealth int `json:"max_health"`
 }
 
-// Draft is the pick and ban phase, when Dota reports it to the player.
+// Draft is the pick and ban phase. Valve fills it in for spectators and observers only, so a
+// player's feed carries an empty one and DraftBoard finds nothing; see
+// https://github.com/ValveSoftware/Dota2-Gameplay/issues/19408. It is parsed anyway so that the
+// day Valve opens it up, the trainer notices instead of us guessing.
 type Draft struct {
-	ActiveTeam        int             `json:"activeteam"`
-	Pick              bool            `json:"pick"`
-	ActiveTeamTimeRem int             `json:"activeteam_time_remaining"`
-	Team2             map[string]Slot `json:"team2"`
-	Team3             map[string]Slot `json:"team3"`
+	ActiveTeam        int        `json:"activeteam"`
+	Pick              bool       `json:"pick"`
+	ActiveTeamTimeRem int        `json:"activeteam_time_remaining"`
+	Team2             *DraftTeam `json:"team2"` // radiant
+	Team3             *DraftTeam `json:"team3"` // dire
 }
 
-// Slot is one pick or ban in the draft.
-type Slot struct {
-	Class string `json:"class"`
-	ID    int    `json:"id"`
+// DraftTeam is one side of the board. Dota names the slots flat inside the team — "pick0_id",
+// "pick0_class", "ban0_id", "home_team" — rather than as an object each, so they are gathered
+// by hand; how many slots there are changes with the game mode and the patch.
+type DraftTeam struct {
+	Home  bool
+	Picks []int
+	Bans  []int
+}
+
+func (t *DraftTeam) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	picks, bans := map[int]int{}, map[int]int{}
+	for key, value := range raw {
+		switch {
+		case key == "home_team":
+			json.Unmarshal(value, &t.Home)
+		case strings.HasPrefix(key, "pick"):
+			draftSlot(key, "pick", value, picks)
+		case strings.HasPrefix(key, "ban"):
+			draftSlot(key, "ban", value, bans)
+		}
+	}
+	t.Picks, t.Bans = inSlotOrder(picks), inSlotOrder(bans)
+	return nil
+}
+
+// draftSlot reads a "pick3_id" or "ban3_id" into into[3], ignoring the "_class" twin and an
+// empty slot, whose id is 0.
+func draftSlot(key, prefix string, value json.RawMessage, into map[int]int) {
+	n, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(key, prefix), "_id"))
+	if err != nil || !strings.HasSuffix(key, "_id") {
+		return
+	}
+	var id int
+	if json.Unmarshal(value, &id) == nil && id > 0 {
+		into[n] = id
+	}
+}
+
+// inSlotOrder lists the heroes by the slot they went in.
+func inSlotOrder(slots map[int]int) []int {
+	if len(slots) == 0 {
+		return nil
+	}
+	order := slices.Sorted(maps.Keys(slots))
+	out := make([]int, 0, len(order))
+	for _, n := range order {
+		out = append(out, slots[n])
+	}
+	return out
+}
+
+// DraftBoard is the heroes each side has taken and every ban, from the player's point of view.
+// ok is false when Dota sent no draft or nothing in it, which is what happens in a real match.
+func (s *State) DraftBoard() (ours, theirs, bans []int, ok bool) {
+	if s == nil || s.Draft == nil {
+		return nil, nil, nil, false
+	}
+	side := TeamNumber("radiant")
+	if s.Player != nil && TeamNumber(s.Player.TeamName) != 0 {
+		side = TeamNumber(s.Player.TeamName)
+	} else if s.Draft.Team3 != nil && s.Draft.Team3.Home {
+		side = TeamNumber("dire")
+	}
+	mine, other := s.Draft.Team2, s.Draft.Team3
+	if side == TeamNumber("dire") {
+		mine, other = other, mine
+	}
+	for _, t := range []*DraftTeam{mine, other} {
+		if t != nil {
+			bans = append(bans, t.Bans...)
+		}
+	}
+	if mine != nil {
+		ours = mine.Picks
+	}
+	if other != nil {
+		theirs = other.Picks
+	}
+	return ours, theirs, bans, len(ours)+len(theirs) > 0
 }
 
 // Extras names the optional blocks this payload carried, for the log.

@@ -32,12 +32,14 @@ The dashboard is at http://127.0.0.1:4570 and opens in its own window. Its pages
 
 ## HUD
 
-The HUD shows only during a match, never takes focus and lets clicks through to the game. Its content comes from widgets you order and switch on the HUD page:
+The HUD shows during a match and while you're choosing a hero, never takes focus and lets clicks through to the game. Its content comes from widgets you order and switch on the HUD page:
 
 | Widget | Shows |
 |---|---|
 | Alerts | The latest tip in large type for a few seconds; choose every tip, warnings and up, or urgent only, and whether AI tips show |
 | Position | Before 2:30, the position you're coached as |
+| Drill | The habit you're drilling, and how often it happened this game |
+| Pick help | While you choose a hero: the heroes worth taking in your position |
 | Briefing | Before the horn: your record on the hero, the last-hit target, core item goals and unfinished weekly goals |
 | Focus | Your focus from the last review, before the horn and while dead |
 | While dead | Respawn time and gold to spend |
@@ -48,6 +50,35 @@ The HUD shows only during a match, never takes focus and lets clicks through to 
 | Stats line | K/D/A, GPM and last hits (off by default) |
 
 Look settings: width, text size, background opacity (0% shows text only), whole-HUD opacity and a text shadow. The HUD is drawn with real transparency, so backgrounds fade without blurring the text.
+
+## Pick help
+
+While you're still choosing a hero, the HUD and the dashboard rank the heroes worth taking in your position, and each line says why it's there.
+
+A hero's score starts at an even game and moves with three things:
+
+- **Your own record** on it in that position over the last year, with each match counting half as much every 45 days, so a hero you've drifted away from falls behind one you play now. The window is long on purpose: the fade, not the cutoff, is what decides how much an old game counts, so by the far end a match is worth under a hundredth of a fresh one and no hero drops off a cliff the day its games turn too old. The record is also shrunk towards an even game by how few matches it rests on: four games at 100% is thin evidence and is scored as such, while the list still shows you the plain `100% of 4` so you can judge it yourself.
+- **How the hero is doing** in public games at your own rank, from OpenDota. Your medal comes from your Steam account; without it, every rank counts together.
+- **Whether the hero suits the position**, a small nudge from the roles OpenDota gives it.
+
+Heroes you've played at least three times are ranked as your own pool. Under them sit up to two heroes doing well at your rank that you *don't* play, kept in their own list so nothing ever quietly tells you to first-pick a hero you've never touched. Heroes you win under 40% on are listed as ones to avoid.
+
+All of those numbers are yours to change, on Settings › **Pick help**, because what counts as recent depends on how much you play:
+
+| Setting | Default | What it does |
+|---|---|---|
+| Look back over | 365 days | How much history is read at all |
+| A match counts half after | 45 days | How fast an old game fades. Shorter follows your current form; longer forgives a break |
+| Trust a record after | 20 games | Below this, a win rate is pulled towards an even game. 0 takes every record at face value, so a 4–0 run outranks a long steady one |
+| Rank a hero after | 3 games | Fewer games than this and a hero isn't ranked |
+| Avoid below | 40% won | The line for the list of heroes to avoid |
+| Show | 4 / 2 / 2 | How many of yours, from the meta, and to avoid. Set the meta list to 0 to only ever be shown heroes you play |
+
+**Reset** puts them all back. How much each part of the score is allowed to move a hero — your record against the patch against the hero's roles — is fixed, since that's the shape of the model rather than a matter of taste.
+
+The top of the list is read aloud once as the draft opens, and the AI coach can add a sentence on which to take (AI page › **A word on your pick**).
+
+It is all built from your history and public statistics, never from the draft in front of you: Valve sends the picks and bans to spectators only, so no tool that follows the rules can see what the enemy took. `gourdian doctor` says so, and will say otherwise if that ever changes.
 
 ## Personal targets
 

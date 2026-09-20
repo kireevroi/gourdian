@@ -123,3 +123,37 @@ func TalentDueAt(taken, level int) int {
 	}
 	return TalentLevels[taken]
 }
+
+// medalNames are the ranked medals in order, English and Russian, following the Russian
+// Dota client. Index 0 is an unranked or unknown player.
+var medalNames = [][2]string{
+	{"", ""},
+	{"Herald", "Рекрут"},
+	{"Guardian", "Страж"},
+	{"Crusader", "Рыцарь"},
+	{"Archon", "Герой"},
+	{"Legend", "Легенда"},
+	{"Ancient", "Властелин"},
+	{"Divine", "Божество"},
+	{"Immortal", "Бессмертный"},
+}
+
+// Bracket is the skill bracket of an OpenDota rank tier (tens digit the medal, ones the
+// stars): 1 for Herald up to 8 for Immortal, and 0 when the rank isn't known.
+func Bracket(rankTier int) int {
+	if b := rankTier / 10; b >= 1 && b < len(medalNames) {
+		return b
+	}
+	return 0
+}
+
+// MedalName names a bracket from Bracket, in English or Russian ("ru"); "" when unknown.
+func MedalName(bracket int, lang string) string {
+	if bracket < 1 || bracket >= len(medalNames) {
+		return ""
+	}
+	if lang == "ru" {
+		return medalNames[bracket][1]
+	}
+	return medalNames[bracket][0]
+}

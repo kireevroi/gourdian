@@ -11,6 +11,7 @@ import (
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
 	"gourdian/internal/model"
+	"gourdian/internal/picks"
 )
 
 const connectedWindow = 35 * time.Second
@@ -40,10 +41,10 @@ type Snapshot struct {
 	Focus     string         `json:"focus,omitempty"`
 	ItemGoals []ItemGoalView `json:"item_goals,omitempty"`
 	// Picks and Briefing are filled in by the trainer, before the pick and before the horn.
-	Picks    *PickHelp  `json:"picks,omitempty"`
-	Drill    *DrillView `json:"drill,omitempty"`
-	Briefing *Briefing  `json:"briefing,omitempty"`
-	Role     string     `json:"role,omitempty"`
+	Picks    *picks.Board `json:"picks,omitempty"`
+	Drill    *DrillView   `json:"drill,omitempty"`
+	Briefing *Briefing    `json:"briefing,omitempty"`
+	Role     string       `json:"role,omitempty"`
 	// RoleNote says where the role came from, such as a guess from the hero.
 	RoleNote string `json:"role_note,omitempty"`
 }
@@ -91,22 +92,6 @@ type DrillView struct {
 	Rule  string `json:"rule"`
 	Label string `json:"label"`
 	Count int    `json:"count"`
-}
-
-// PickHelp is what your own record says about picking for this position.
-type PickHelp struct {
-	Role  string       `json:"role"`
-	Best  []HeroRecord `json:"best,omitempty"`
-	Avoid []HeroRecord `json:"avoid,omitempty"`
-}
-
-type HeroRecord struct {
-	Hero      string  `json:"hero"`
-	Games     int     `json:"games"`
-	Wins      int     `json:"wins"`
-	WinPct    int     `json:"win_pct"`
-	AvgDeaths float64 `json:"avg_deaths,omitempty"`
-	AvgLH10   int     `json:"avg_lh10,omitempty"`
 }
 
 type ItemGoalView struct {

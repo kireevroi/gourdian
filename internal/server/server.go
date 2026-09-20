@@ -34,6 +34,7 @@ import (
 	"gourdian/internal/hud"
 	"gourdian/internal/matchdata"
 	"gourdian/internal/model"
+	"gourdian/internal/picks"
 	"gourdian/internal/platform"
 	"gourdian/internal/rules"
 	"gourdian/internal/secrets"
@@ -59,6 +60,7 @@ type Server struct {
 	authWarns atomic.Int32
 	typeWarns atomic.Int32
 	extras    atomic.Value // GSI blocks seen beyond the basics, logged once
+	draftSeen atomic.Bool  // Dota sent a draft board with heroes in it
 	accountID atomic.Value
 	quit      func()
 
@@ -202,6 +204,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/ai/providers/{id}/key", s.handleProviderKey)
 	mux.HandleFunc("GET /api/ai/providers/{id}/models", s.handleProviderModels)
 	mux.HandleFunc("POST /api/ai/providers/{id}/test", s.handleProviderTest)
+	mux.HandleFunc("POST /api/picks/ask", s.handlePicksAsk)
 	mux.HandleFunc("GET /api/reviews", s.handleReviews)
 	mux.HandleFunc("POST /api/matches/{id}/review", s.handleReviewMatch)
 	mux.HandleFunc("POST /api/voice/test", s.handleVoiceTest)
@@ -316,6 +319,7 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 			s.extras.Store(strings.Join(extras, ","))
 			s.log.Info("Dota also sends these game-state blocks", "blocks", extras)
 		}
+		s.noteDraft(&st)
 	}
 	cfg := s.cfg.Get()
 	if st.Auth == nil || subtle.ConstantTimeCompare([]byte(st.Auth.Token), []byte(cfg.Token)) != 1 {
@@ -346,6 +350,10 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 	cfg.Settings = s.applyDetectedRole(res, matchID, cfg.Settings)
 	if st.InMatch() && st.Map.ClockTime < 0 && !strings.HasPrefix(matchID, "sim-") {
 		s.briefMatch(matchID, cfg.Settings)
+	}
+	if s.draftOpened(&st) {
+		s.speakPicks(cfg.Settings)
+		s.askDraft(cfg.Settings, false)
 	}
 	if res.NewMatch {
 		s.hub.publish("tips", []coach.Tip{})
@@ -544,6 +552,10 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	apply := func(set *config.Settings) error {
 		if _, ok := keys["hero_roles"]; ok {
 			set.HeroRoles = nil // decoding merges into a map, so a sent map must replace it to drop heroes
+		}
+		// Decoding a null leaves a struct alone, so "picks": null is free to mean reset.
+		if raw, ok := keys["picks"]; ok && string(raw) == "null" {
+			set.Picks = picks.DefaultTuning()
 		}
 		return json.Unmarshal(body, set)
 	}

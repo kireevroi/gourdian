@@ -36,6 +36,9 @@ var simHeroes = []struct {
 
 const gameTimeOffset = 95
 
+// draftSeconds is how long the simulated hero selection lasts before the match starts.
+const draftSeconds = 10
+
 type game struct {
 	matchID string
 	clock   int
@@ -89,6 +92,13 @@ func Run(ctx context.Context, o Options, progress func(clock int, status int)) e
 func States(o Options) iter.Seq2[int, *gsi.State] {
 	return func(yield func(int, *gsi.State) bool) {
 		g := newGame(o)
+		// The draft runs first, so pick help can be seen in a simulated game.
+		for clock := o.From - draftSeconds; clock < o.From; clock++ {
+			g.clock = clock
+			if !yield(clock, g.draft()) {
+				return
+			}
+		}
 		for clock := o.From; clock <= o.To+3; clock++ {
 			state := gsi.StateInProgress
 			if clock < 0 {
@@ -342,6 +352,14 @@ func (g *game) spendPoint() bool {
 	}
 	g.abilities[best].Level++
 	return true
+}
+
+// draft is one hero-selection update: Dota sends a hero block with id 0 until the player picks.
+func (g *game) draft() *gsi.State {
+	s := g.snapshot(gsi.StateHeroSelection)
+	s.Hero = &gsi.Hero{}
+	s.Items, s.Abilities, s.Events = nil, nil, nil
+	return s
 }
 
 func (g *game) snapshot(state string) *gsi.State {

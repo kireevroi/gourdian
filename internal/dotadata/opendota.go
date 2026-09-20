@@ -55,6 +55,10 @@ type Client struct {
 	timings        map[timingsKey][]ItemTiming
 	timingsPending map[timingsKey]bool
 	timingsFailed  map[timingsKey]time.Time
+
+	meta        map[int]HeroMeta
+	metaPending bool
+	metaFailed  time.Time
 }
 
 func New(cacheDir string, log *slog.Logger) *Client {

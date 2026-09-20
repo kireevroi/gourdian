@@ -313,3 +313,43 @@ func (s *Server) handleReviews(w http.ResponseWriter, r *http.Request) {
 	slices.Reverse(reviews)
 	writeJSON(w, reviews[:min(len(reviews), 20)])
 }
+
+// askDraft asks the coach which hero to take. forced is the player pressing the button on the
+// dashboard, which ignores the setting but still needs a provider and a board to talk about.
+func (s *Server) askDraft(set config.Settings, forced bool) bool {
+	if !forced && (!set.AI.Enabled || !set.AI.Draft) {
+		return false
+	}
+	provider, choice, ok := s.providers.Pick(set.AI.Live, set.AI)
+	if !ok {
+		return false
+	}
+	snap := s.snapshot(set)
+	if snap.Picks == nil || !s.ai.busy.CompareAndSwap(false, true) {
+		return false
+	}
+	prompt := aicoach.DraftPrompt(aicoach.DraftInput{Context: s.aiContext(set), Role: set.Role, Board: snap.Picks})
+	s.hub.publish("ai_status", "thinking")
+	s.spawn(func(ctx context.Context) {
+		defer s.ai.busy.Store(false)
+		defer s.hub.publish("ai_status", "idle")
+		ctx, cancel := context.WithTimeout(ctx, aiTimeout)
+		defer cancel()
+		advice, err := aicoach.AskDraft(ctx, provider, choice, set.AI, set.Language, prompt)
+		if err != nil {
+			s.log.Warn("AI coach failed on the draft", "provider", provider.Info().ID, "err", err)
+			s.providers.Failed(provider, err)
+			return
+		}
+		// The answer is worthless once the player has picked, so it is dropped rather than
+		// shown late.
+		if now := s.snapshot(s.cfg.Settings()); !pickMatters(now) {
+			s.log.Info("AI coach answered the draft too late", "provider", provider.Info().ID)
+			return
+		}
+		s.emitTips(snap.MatchID, []coach.Tip{{Rule: "ai", Category: "ai", Severity: coach.Info,
+			Text: advice, Speech: advice, Clock: snap.Clock, At: time.Now()}}, s.cfg.Settings())
+		s.log.Info("AI coach answered the draft", "provider", provider.Info().ID)
+	})
+	return true
+}

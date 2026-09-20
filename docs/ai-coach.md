@@ -2,7 +2,11 @@
 
 [← README](../README.md)
 
-The AI coach asks for situational advice every few minutes and when you die, and reviews every match afterwards with three improvements, a focus for the next game and measurable goals for the week.
+The AI coach asks for situational advice every few minutes and when you die, and reviews every match afterwards with three improvements, a focus for the next game and measurable goals for the week. It can also say a word on your pick as the draft opens.
+
+## What it is told
+
+Live tips and reviews get your hero, position, items, abilities, timeline and recent history. **A word on your pick** gets only your position and the pick board: the heroes you play there with your own win rates, how each is doing at your rank, and the ones you keep losing on. It is told in as many words that it does not know the draft and must never mention or guess at enemy heroes, because Valve sends the picks and bans to spectators only. Turn it off with **A word on your pick** on the AI page; **Ask the coach** on the dashboard's pick card asks once on demand.
 
 ## Providers
 

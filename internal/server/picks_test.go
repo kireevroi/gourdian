@@ -1,16 +1,22 @@
 package server
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"gourdian/internal/coach"
 	"gourdian/internal/config"
 	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 	"gourdian/internal/model"
+	"gourdian/internal/picks"
 )
 
-func TestPickHelpUsesYourOwnRecord(t *testing.T) {
+func TestPickBoardUsesYourOwnRecord(t *testing.T) {
 	srv, _, _ := newTestServer(t, nil)
 	add := func(hero string, id int, role, result string, n int) {
 		for i := range n {
@@ -28,24 +34,31 @@ func TestPickHelpUsesYourOwnRecord(t *testing.T) {
 	add("Lion", 26, dota.HardSupport, "win", 3)
 	add("Puck", 13, dota.Mid, "win", 1) // too few games to say anything
 
-	p := srv.pickHelp(dota.Mid)
-	if p == nil || len(p.Best) != 1 || p.Best[0].Hero != "Storm Spirit" || p.Best[0].WinPct != 80 {
+	p := srv.pickBoard(roleSet(srv, dota.Mid))
+	if p == nil || len(p.Best) != 1 || p.Best[0].Name != "Storm Spirit" || p.Best[0].WinPct != 80 {
 		t.Fatalf("best = %+v", p)
 	}
-	if len(p.Avoid) != 1 || p.Avoid[0].Hero != "Invoker" || p.Avoid[0].WinPct != 20 {
+	if len(p.Avoid) != 1 || p.Avoid[0].Name != "Invoker" || p.Avoid[0].WinPct != 20 {
 		t.Fatalf("avoid = %+v", p.Avoid)
 	}
 	if p.Best[0].AvgLH10 != 50 {
 		t.Fatalf("last hits = %d", p.Best[0].AvgLH10)
 	}
-	if other := srv.pickHelp(dota.Carry); other != nil {
+	if other := srv.pickBoard(roleSet(srv, dota.Carry)); other != nil {
 		t.Fatalf("no carry games, so no help: %+v", other)
 	}
 }
 
+// roleSet is the player's settings with the position swapped, for asking about another one.
+func roleSet(srv *Server, role string) config.Settings {
+	set := srv.cfg.Settings()
+	set.Role = role
+	return set
+}
+
 // Pick help is for the draft: it used to wait for a match in progress without a hero, which
 // Dota never sends, so it never showed.
-func TestPickHelpShowsDuringTheDraft(t *testing.T) {
+func TestPickBoardShowsDuringTheDraft(t *testing.T) {
 	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.HardSupport })
 	seed(t, srv, 10)
 	draft := payload(-60, func(s *gsi.State) {
@@ -59,5 +72,104 @@ func TestPickHelpShowsDuringTheDraft(t *testing.T) {
 	postState(t, h, payload(10, func(s *gsi.State) { s.Hero.ID = 26 })) // picked and playing
 	if snap := srv.snapshot(srv.cfg.Settings()); snap.Picks != nil {
 		t.Fatal("pick help still shown once the hero is picked")
+	}
+}
+
+// The board is read out once as the draft opens, not twice a second for the whole draft.
+func TestPickBoardIsSpokenOnceADraft(t *testing.T) {
+	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.Mid })
+	for i := range 5 {
+		srv.stats.AppendMatch(model.MatchSummary{
+			MatchID: "storm" + string(rune('a'+i)), Hero: "Storm Spirit", HeroID: 17, Role: dota.Mid,
+			Result: "win", Source: model.SourceLive, EndedAt: time.Now().Add(-time.Duration(i+1) * time.Hour)})
+	}
+	draft := func(clock int) *gsi.State {
+		return payload(clock, func(s *gsi.State) {
+			s.Hero = &gsi.Hero{} // Dota's hero block before the pick: id 0
+			s.Map.GameState = gsi.StateHeroSelection
+		})
+	}
+	postState(t, h, draft(-90))
+	postState(t, h, draft(-89))
+	spoken := picksSpoken(srv)
+	if len(spoken) != 1 {
+		t.Fatalf("picks spoken %d times, want once: %+v", len(spoken), spoken)
+	}
+	if !strings.Contains(spoken[0].Text, "Storm Spirit") {
+		t.Errorf("spoken picks = %q", spoken[0].Text)
+	}
+
+	// Picking a hero ends the draft, and starting the match clears the tip list.
+	postState(t, h, payload(10, func(s *gsi.State) { s.Hero.ID = 17 }))
+	if got := picksSpoken(srv); len(got) != 0 {
+		t.Fatalf("starting a match left %d pick tips behind", len(got))
+	}
+	// So the next draft speaking again shows up as one fresh tip.
+	postState(t, h, draft(-90))
+	if got := picksSpoken(srv); len(got) != 1 {
+		t.Fatalf("the next draft spoke %d times, want once", len(got))
+	}
+}
+
+// picksSpoken is the pick tips the trainer has read out in this match.
+func picksSpoken(srv *Server) []coach.Tip {
+	return slices.DeleteFunc(srv.engine.RecentTips(), func(t coach.Tip) bool { return t.Rule != "picks" })
+}
+
+// The pick tuning is saved like any other setting, rejected when it makes no sense, and reset
+// by sending a null.
+func TestPickTuningIsSavedCheckedAndReset(t *testing.T) {
+	srv, _, _ := newTestServer(t, nil)
+	put := func(body string) int {
+		req := httptest.NewRequest("PUT", "/api/settings", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		srv.handlePutSettings(w, req)
+		return w.Code
+	}
+	if code := put(`{"picks":{"half_life_days":14,"show":6}}`); code != http.StatusOK {
+		t.Fatalf("saving a tuning returned %d", code)
+	}
+	if got := srv.cfg.Settings().Picks; got.HalfLifeDays != 14 || got.Show != 6 || got.Days != picks.DefaultTuning().Days {
+		t.Fatalf("tuning = %+v; the fields sent should change and the rest should stay", got)
+	}
+	if code := put(`{"picks":{"half_life_days":0}}`); code == http.StatusOK {
+		t.Error("a zero half-life was accepted")
+	}
+	if got := srv.cfg.Settings().Picks.HalfLifeDays; got != 14 {
+		t.Errorf("a rejected value changed the saved tuning to %d", got)
+	}
+	if code := put(`{"picks":null}`); code != http.StatusOK {
+		t.Fatalf("resetting returned %d", code)
+	}
+	if got := srv.cfg.Settings().Picks; got != picks.DefaultTuning() {
+		t.Errorf("after a reset the tuning is %+v", got)
+	}
+}
+
+// Changing a pick setting must change the board: the cache key has to cover everything the
+// board is made of, or a new setting looks like it did nothing.
+func TestChangingTheTuningRebuildsTheBoard(t *testing.T) {
+	srv, _, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.Mid })
+	add := func(hero string, id, n, wins int) {
+		for i := range n {
+			result := "loss"
+			if i < wins {
+				result = "win"
+			}
+			srv.stats.AppendMatch(model.MatchSummary{
+				MatchID: hero + string(rune('a'+i)), Hero: hero, HeroID: id, Role: dota.Mid,
+				Result: result, Source: model.SourceLive, EndedAt: time.Now().Add(-time.Duration(i+1) * time.Hour)})
+		}
+	}
+	add("Steady", 1, 40, 24) // 60% of 40
+	add("Lucky", 2, 8, 5)    // 62% of 8
+
+	set := roleSet(srv, dota.Mid)
+	if first := srv.pickBoard(set).Best[0].Name; first != "Steady" {
+		t.Fatalf("by default %q ranks first, want Steady", first)
+	}
+	set.Picks.TrustAfter = 0
+	if first := srv.pickBoard(set).Best[0].Name; first != "Lucky" {
+		t.Errorf("taking records at face value still ranks %q first, want Lucky", first)
 	}
 }
