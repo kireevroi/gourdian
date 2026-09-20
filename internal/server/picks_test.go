@@ -221,3 +221,49 @@ func TestTheDraftStaysOnScreenAfterYouPick(t *testing.T) {
 		t.Errorf("the draft is still shown in the match: %+v", snap.Picks)
 	}
 }
+
+// The overlay reads the screen only while the trainer asks it to, so that has to last the
+// whole draft. It used to stop the moment the player picked, and the reading it had already
+// taken was then dropped for going stale, so the other side vanished a few seconds later.
+func TestTheScreenIsReadForTheWholeDraft(t *testing.T) {
+	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Screen.Draft = true })
+	choosing := func(s *gsi.State) {
+		s.Hero = &gsi.Hero{}
+		s.Map.GameState = gsi.StateHeroSelection
+		s.Map.MatchID = "m1"
+	}
+	postState(t, h, payload(-90, choosing))
+	if !srv.hudPayload().Draft {
+		t.Fatal("not reading the screen while choosing a hero")
+	}
+	postState(t, h, payload(-60, func(s *gsi.State) { choosing(s); s.Hero.ID = 17 }))
+	if !srv.hudPayload().Draft {
+		t.Error("stopped reading the screen as soon as a hero was taken")
+	}
+	// Strategy time is still the draft; the rest of them are still picking.
+	postState(t, h, payload(-30, func(s *gsi.State) {
+		choosing(s)
+		s.Hero.ID = 17
+		s.Map.GameState = gsi.StateStrategyTime
+	}))
+	if !srv.hudPayload().Draft {
+		t.Error("stopped reading the screen during strategy time")
+	}
+	// Once the game is under way there is nothing left to read.
+	postState(t, h, payload(30, func(s *gsi.State) { s.Hero.ID = 17; s.Map.MatchID = "m1" }))
+	if srv.hudPayload().Draft {
+		t.Error("still reading the screen once the match had started")
+	}
+}
+
+// And with the setting off, the screen is never read whatever the game is doing.
+func TestTheScreenIsNotReadWhenTurnedOff(t *testing.T) {
+	srv, h, _ := newTestServer(t, nil)
+	postState(t, h, payload(-90, func(s *gsi.State) {
+		s.Hero = &gsi.Hero{}
+		s.Map.GameState = gsi.StateHeroSelection
+	}))
+	if srv.hudPayload().Draft {
+		t.Error("read the screen with the setting off")
+	}
+}
