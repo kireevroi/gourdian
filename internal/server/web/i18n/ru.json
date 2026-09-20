@@ -779,7 +779,10 @@
     " to avoid": " для избегания",
     "Read the enemy picks off your screen": "Считывать пики соперников с экрана",
     "Dota tells no player who the other side took — Valve sends the draft to spectators only — so the trainer reads the ten hero portraits along the top of the game, the same way a screenshot would. Only while you are choosing a hero, never during play, and never anything else on your screen.": "Dota не сообщает игроку, кого взяли соперники: Valve отдаёт пики только зрителям. Поэтому тренер считывает десять портретов героев вверху экрана — так же, как это сделал бы скриншот. Только пока вы выбираете героя, никогда во время игры и ничего больше с вашего экрана.",
-    "The other side has taken": "Соперники взяли"
+    "The other side has taken": "Соперники взяли",
+    "All pick and ranked": "Обычные и рейтинговые",
+    "Turbo": "Турбо",
+    "Mode": "Режим"
   },
   "patterns": [
     [

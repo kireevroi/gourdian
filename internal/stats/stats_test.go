@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"gourdian/internal/model"
 	"os"
 	"path/filepath"
@@ -326,7 +327,7 @@ func TestMatchKeepsEveryField(t *testing.T) {
 	m := model.MatchSummary{MatchID: "m1", HeroID: 26, Hero: "Lion", Role: "hard_support", Team: "radiant", Result: "win",
 		EndedAt: time.Date(2026, 9, 19, 20, 0, 0, 0, time.UTC), DurationSec: 2400, Kills: 3, Deaths: 4, Assists: 20,
 		LastHits: 40, Denies: 5, GPM: 300, XPM: 400, LastHitsAt: map[string]int{"10:00": 12}, DeathClocks: []int{300, 900},
-		TipCounts: map[string]int{"no_tp": 2}, RankTier: 45, Simulated: true, Ranked: true, Source: model.SourcePractice,
+		TipCounts: map[string]int{"no_tp": 2}, RankTier: 45, GameMode: model.GameModeTurbo, Simulated: true, Ranked: true, Source: model.SourcePractice,
 		Parsed: true, LaneRole: 3, NetWorth: 9000, HeroDamage: 12000, TowerDamage: 500, ObsPlaced: 8, SenPlaced: 6,
 		CampsStacked: 4, TeamfightParticipation: 0.75, GPMPct: 0.4, LHPct: 0.3, HeroDamagePct: 0.2,
 		EnemyHeroes: []string{"Axe", "Lina"}}
@@ -445,5 +446,136 @@ func TestMatchesWhere(t *testing.T) {
 	st.AppendItems([]model.ItemTiming{{MatchID: "a", Item: "blink", Time: 900}, {MatchID: "c", Item: "bkb", Time: 1500}})
 	if items, err := st.ItemsIn([]string{"a", "f"}); err != nil || len(items) != 1 || items[0].Item != "blink" {
 		t.Errorf("items %+v, %v", items, err)
+	}
+}
+
+// Turbo pays about twice the gold and experience, so it is left out of everything worked out
+// from history unless a caller asks for it on purpose. A caller that forgets gets the safe
+// answer rather than a quietly skewed one.
+func TestTurboIsLeftOutUnlessAskedFor(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	add := func(id string, mode, gpm int, ago time.Duration) {
+		if err := st.AppendMatch(model.MatchSummary{
+			MatchID: id, HeroID: 26, Hero: "Lion", Role: "mid", Result: "win", Source: model.SourceLive,
+			GameMode: mode, GPM: gpm, EndedAt: time.Now().Add(-ago),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("normal1", 22, 500, time.Hour)
+	add("normal2", 0, 480, 2*time.Hour) // nobody has said yet, which counts as normal
+	add("turbo1", model.GameModeTurbo, 1400, 3*time.Hour)
+	add("turbo2", model.GameModeTurbo, 1500, 4*time.Hour)
+
+	plain, err := st.MatchesWhere(MatchFilter{Real: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plain) != 2 {
+		t.Fatalf("got %d matches, want the two that weren't Turbo: %+v", len(plain), ids(plain))
+	}
+	for _, m := range plain {
+		if m.Turbo() {
+			t.Errorf("%s is Turbo and came back anyway", m.MatchID)
+		}
+	}
+	withTurbo, err := st.MatchesWhere(MatchFilter{Real: true, Turbo: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(withTurbo) != 4 {
+		t.Errorf("asked for Turbo and got %d matches: %v", len(withTurbo), ids(withTurbo))
+	}
+
+	// Recent leaves it out too, and RecentIn shows it on its own.
+	recent, err := st.Recent(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 2 {
+		t.Errorf("Recent returned %d, want the two that weren't Turbo: %v", len(recent), ids(recent))
+	}
+	// Everything is still there to be looked at when something asks for it, which is how the
+	// statistics page shows Turbo on its own.
+	all, err := st.Matches()
+	if err != nil {
+		t.Fatal(err)
+	}
+	turbo := 0
+	for _, m := range all {
+		if m.Turbo() {
+			turbo++
+		}
+	}
+	if len(all) != 4 || turbo != 2 {
+		t.Errorf("the whole history has %d matches, %d of them Turbo; want 4 and 2", len(all), turbo)
+	}
+}
+
+func ids(matches []model.MatchSummary) []string {
+	var out []string
+	for _, m := range matches {
+		out = append(out, m.MatchID)
+	}
+	return out
+}
+
+// A data file made by an older version has to open and keep working. A migration added in the
+// middle of the list rather than at the end is skipped by every file that has already passed
+// that point, and a column added without a default leaves NULL in every row already there;
+// either way the next version reads nothing but errors.
+func TestAnOlderDataFileStillOpens(t *testing.T) {
+	dir := t.TempDir()
+	st, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendMatch(model.MatchSummary{
+		MatchID: "old", HeroID: 26, Hero: "Lion", Role: "mid", Result: "win",
+		Source: model.SourceLive, GPM: 500, EndedAt: time.Now().Add(-time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Put the file back the way the version before this one left it: no game_mode, and the
+	// migration count from before it was written.
+	db, err := sql.Open("sqlite", filepath.Join(dir, DataFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`ALTER TABLE matches DROP COLUMN game_mode`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, len(migrations)-1)); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err = Open(dir)
+	if err != nil {
+		t.Fatalf("an older data file wouldn't open: %v", err)
+	}
+	defer st.Close()
+	matches, err := st.Matches()
+	if err != nil {
+		t.Fatalf("reading an upgraded data file: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("got %d matches back, want the one that was there", len(matches))
+	}
+	if matches[0].GameMode != 0 || matches[0].Turbo() {
+		t.Errorf("a match from before the mode was recorded reads as %d", matches[0].GameMode)
+	}
+	if _, err := st.MatchesWhere(MatchFilter{Real: true}); err != nil {
+		t.Errorf("filtering an upgraded data file: %v", err)
 	}
 }

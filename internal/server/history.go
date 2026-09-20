@@ -101,6 +101,8 @@ func habits(sample []model.MatchSummary, rules []coach.Rule) []Habit {
 }
 
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
+	// Recent leaves Turbo out, which is what this is for: the habits and averages it feeds
+	// describe a normal game.
 	recent, err := s.stats.Recent(50)
 	if err != nil {
 		s.failed(w, http.StatusInternalServerError, "couldn't read your recent matches", err)

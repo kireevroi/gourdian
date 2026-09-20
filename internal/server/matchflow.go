@@ -51,20 +51,26 @@ func (s *Server) checkRanked(matchID string) {
 		if err != nil {
 			continue
 		}
-		s.saveRanked(matchID, match.LobbyType)
+		s.saveMatchKind(matchID, match.LobbyType, match.GameMode)
 		return
 	}
 }
 
-// saveRanked records OpenDota's lobby type. It can only mark a match ranked: one the player
-// already marked stays ranked.
-func (s *Server) saveRanked(matchID string, lobbyType int) {
+// saveMatchKind records what OpenDota says the match was. The lobby type can only mark a
+// match ranked: one the player already marked stays ranked. The mode is kept because Turbo
+// pays about twice the gold and experience, and everything worked out from history leaves it
+// out rather than letting it drag the numbers.
+func (s *Server) saveMatchKind(matchID string, lobbyType, gameMode int) {
 	ranked := lobbyType == rankedLobby
 	if err := s.stats.UpdateMatch(matchID, func(row *model.MatchSummary) {
 		row.Ranked = row.Ranked || ranked
+		row.GameMode = gameMode
 		ranked = row.Ranked
 	}); err != nil {
-		s.log.Warn("save the match's lobby type", "err", err)
+		s.log.Warn("save what kind of match it was", "err", err)
+	}
+	if gameMode == model.GameModeTurbo {
+		s.log.Info("match was Turbo; it is kept but left out of targets and averages", "match", matchID)
 	}
 	s.confirmRanked(matchID, ranked)
 }
@@ -112,7 +118,9 @@ func (s *Server) afterMatch(m model.MatchSummary, set config.Settings) {
 // resumePending picks up matches from the last day whose parse or review was cut short by
 // quitting the trainer or by the AI coach being paused.
 func (s *Server) resumePending() {
-	matches, err := s.stats.MatchesWhere(stats.MatchFilter{Since: time.Now().Add(-resumeWithin)})
+	// Turbo counts here too: this is unfinished bookkeeping, not a number about how the
+	// player is doing, and a Turbo match has a review and an MMR prompt like any other.
+	matches, err := s.stats.MatchesWhere(stats.MatchFilter{Since: time.Now().Add(-resumeWithin), Turbo: true})
 	if err != nil {
 		return
 	}

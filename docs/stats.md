@@ -43,3 +43,25 @@ Map timings are built into each version; updating the app brings new patch timin
 | Skill points | one per level; talents have their own points at 10, 15, 20, 25 and 27–30 | 7.40 |
 
 "Keep buyback gold from 30:00" is coaching advice, not a game rule.
+
+## Turbo
+
+A Turbo game pays about twice the gold and experience of a normal one, so its GPM, XPM, last
+hits and item timings say nothing about anything else. Mixed together they describe neither:
+a median across both lands somewhere no game of either kind ever reaches.
+
+So Turbo is recorded and then left out of everything the trainer works out from history —
+personal targets, last-hit pace, item timing goals, hero win rates, the habits and averages on
+the dashboard. Two things still count it, because they aren't about how much a game pays: the
+break reminder, since a run of losses is a run of losses, and the match review and MMR prompt,
+which a Turbo game gets like any other.
+
+The statistics page offers **Mode** once you have played one, and shows the two apart rather
+than together. The CSV export carries `game_mode` and `turbo` columns so you can split it
+yourself.
+
+Which mode a match was comes from OpenDota a couple of minutes after it ends; Dota's own live
+feed doesn't say. That means the targets you are coached against *during* a Turbo game are
+still the normal-game ones — there is no way for the trainer to know what it is looking at
+until afterwards. Matches recorded before this version are looked up once, in the background,
+so an old history stops dragging the numbers.

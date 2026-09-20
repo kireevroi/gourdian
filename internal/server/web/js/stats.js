@@ -178,7 +178,10 @@ const isReal = (m) => !m.simulated && m.source !== 'practice';
 function filtered() {
   const range = Number($('f-range').value);
   const hero = $('f-hero').value;
-  let ms = data.matches.filter((m) => $('f-sim').checked || isReal(m));
+  // Turbo pays about twice the gold and experience, so it is shown on its own or not at all:
+  // a chart with both in it describes neither.
+  const turboOnly = $('f-mode').value === 'turbo';
+  let ms = data.matches.filter((m) => ($('f-sim').checked || isReal(m)) && isTurbo(m) === turboOnly);
   if (hero) ms = ms.filter((m) => m.hero === hero);
   return range ? ms.slice(-range) : ms;
 }
@@ -410,6 +413,10 @@ async function loadReviews() {
   }
 }
 
+// isTurbo says whether a match was played in Turbo, as OpenDota numbers the modes.
+const TURBO = 23;
+const isTurbo = (m) => m.game_mode === TURBO;
+
 async function load() {
   loadReviews();
   loadGoals();
@@ -421,10 +428,12 @@ async function load() {
   for (const h of heroes) sel.appendChild(new Option(h, h));
   sel.value = heroes.includes(current) ? current : '';
   if (!data.matches.some(isReal) && data.matches.length) $('f-sim').checked = true;
+  // Only offer the choice to someone who has played Turbo; for everyone else it is noise.
+  $('f-mode-row').hidden = !data.matches.some(isTurbo);
   render();
 }
 
-for (const id of ['f-range', 'f-hero', 'f-sim']) $(id).addEventListener('change', render);
+for (const id of ['f-range', 'f-hero', 'f-sim', 'f-mode']) $(id).addEventListener('change', render);
 let resizeTimer;
 window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 150); });
 $('mmr-form').addEventListener('submit', async (e) => {
