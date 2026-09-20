@@ -263,7 +263,9 @@ func pickLines(p *picks.Board, l words) []Line {
 	if names := heroNames(p.Enemies); names != "" {
 		lines = append(lines, Line{l.f("Against: %s", names), KindWarn})
 	}
-	lines = append(lines, Line{l.f("Your best %s heroes:", l.role(p.Role)), KindCoach})
+	if len(p.Best) > 0 {
+		lines = append(lines, Line{l.f("Your best %s heroes:", l.role(p.Role)), KindCoach})
+	}
 	for _, h := range p.Best {
 		lines = append(lines, Line{h.Name + why(h, l), KindText})
 	}

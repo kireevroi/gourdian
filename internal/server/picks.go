@@ -112,6 +112,13 @@ func pickMatters(snap coach.Snapshot) bool {
 	return snap.Connected && snap.Hero == nil && draftState(snap.GameState)
 }
 
+// draftMatters reports whether the draft is still going on, whether or not the player has
+// taken a hero. They usually pick early and then watch the rest of it happen, and what the
+// other side is taking matters to them the whole time even though their own pick is settled.
+func draftMatters(snap coach.Snapshot) bool {
+	return snap.Connected && draftState(snap.GameState)
+}
+
 // drafting is pickMatters for a game state straight off the wire, so the hot path can tell a
 // draft from a match without building a whole snapshot.
 func drafting(st *gsi.State) bool {

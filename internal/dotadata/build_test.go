@@ -20,6 +20,25 @@ var testItems = map[string]ItemInfo{
 	"ward_observer":    {ID: 42, DName: "Observer Ward", Cost: 0, Qual: "consumable"},
 	"recipe_bfury":     {ID: 146, DName: "Recipe", Cost: 0},
 	"occult_bracelet":  {ID: 1575, DName: "Occult Bracelet", Tier: 1},
+
+	"wind_lace":         {ID: 244, DName: "Wind Lace", Cost: 225, Qual: "component"},
+	"tranquil_boots":    {ID: 214, DName: "Tranquil Boots", Cost: 900, Qual: "rare", Created: true, Components: []string{"boots", "wind_lace"}},
+	"ancient_janggo":    {ID: 185, DName: "Drum of Endurance", Cost: 1625, Qual: "rare", Created: true},
+	"boots_of_bearing":  {ID: 596, DName: "Boots of Bearing", Cost: 4225, Qual: "epic", Created: true, Components: []string{"tranquil_boots", "ancient_janggo"}},
+	"blade_of_alacrity": {ID: 20, DName: "Blade of Alacrity", Cost: 1000, Qual: "component"},
+	"dragon_lance":      {ID: 236, DName: "Dragon Lance", Cost: 1900, Qual: "artifact", Created: true, Components: []string{"blade_of_alacrity", "belt_of_strength"}},
+	"force_staff":       {ID: 102, DName: "Force Staff", Cost: 2200, Qual: "rare", Created: true},
+	"hurricane_pike":    {ID: 263, DName: "Hurricane Pike", Cost: 4450, Qual: "epic", Created: true, Components: []string{"force_staff", "dragon_lance"}},
+	"ultimate_scepter":  {ID: 108, DName: "Aghanim's Scepter", Cost: 4200, Qual: "rare", Created: true},
+}
+
+// names lists a build as "phase:item", in order.
+func names(b *Build) []string {
+	var out []string
+	for _, it := range b.Items {
+		out = append(out, it.Phase+":"+it.Name)
+	}
+	return out
 }
 
 func TestRemainingCost(t *testing.T) {
@@ -61,14 +80,11 @@ func TestBuildFromPopularity(t *testing.T) {
 		"mid_game_items":   {"145": 95, "63": 20, "1575": 90, "146": 99},
 		"late_game_items":  {},
 	}
-	b := BuildFromPopularity(1, pop, testItems)
-	var names []string
-	for _, it := range b.Items {
-		names = append(names, it.Phase+":"+it.Name)
-	}
-	want := []string{"start:ward_observer", "start:tango", "start:quelling_blade", "early:power_treads", "mid:bfury"}
-	if !slices.Equal(names, want) {
-		t.Fatalf("build = %v, want %v", names, want)
+	b := BuildFromPopularity(1, pop, nil, testItems)
+	// Without purchase times a phase reads most bought first.
+	want := []string{"start:tango", "start:quelling_blade", "start:ward_observer", "early:power_treads", "mid:bfury"}
+	if got := names(b); !slices.Equal(got, want) {
+		t.Fatalf("build = %v, want %v", got, want)
 	}
 
 	next, ok := b.Next([]string{"power_treads"}, testItems, 300)
@@ -97,12 +113,88 @@ func TestLaterPhasesListFinishedItems(t *testing.T) {
 	b := BuildFromPopularity(17, Popularity{
 		"mid_game_items":  {"2": 50, "3": 40, "4": 30},
 		"late_game_items": {"1": 50, "5": 40},
-	}, items)
+	}, nil, items)
 	var got []string
 	for _, it := range b.Items {
 		got = append(got, it.Name)
 	}
 	if slices.Contains(got, "ultimate_orb") || slices.Contains(got, "ogre_axe") || !slices.Contains(got, "blink") || !slices.Contains(got, "skadi") {
 		t.Fatalf("after laning the build should hold finished items and Blink, got %v", got)
+	}
+}
+
+// An item carried for minutes before it is combined away is a step of the build; one bought
+// moments before is part of the step that follows it.
+func TestBuildKeepsItemsCarriedBeforeTheyAreUpgraded(t *testing.T) {
+	b := BuildFromPopularity(6, Popularity{
+		"mid_game_items": {"236": 200, "102": 150, "263": 140, "108": 70},
+	}, BuyTimes{
+		"mid_game_items": {"236": 863, "102": 1210, "263": 1251, "108": 1138},
+	}, testItems)
+	want := []string{"mid:dragon_lance", "mid:ultimate_scepter", "mid:hurricane_pike"}
+	if got := names(b); !slices.Equal(got, want) {
+		t.Fatalf("build = %v, want %v", got, want)
+	}
+}
+
+// A Scepter a third of the games buy must not lead a phase just for costing less than the
+// items most of them buy: the order is when pros buy, not what they pay.
+func TestBuildOrdersAPhaseByWhenProsBuy(t *testing.T) {
+	b := BuildFromPopularity(6, Popularity{
+		"mid_game_items": {"108": 70, "263": 140},
+	}, BuyTimes{
+		"mid_game_items": {"108": 1500, "263": 1251},
+	}, testItems)
+	want := []string{"mid:hurricane_pike", "mid:ultimate_scepter"}
+	if got := names(b); !slices.Equal(got, want) {
+		t.Fatalf("build = %v, want %v", got, want)
+	}
+}
+
+// Boots a support wears all game must survive an upgrade two of the games reached.
+func TestBuildKeepsBootsWhoseUpgradeIsRare(t *testing.T) {
+	b := BuildFromPopularity(5, Popularity{
+		"early_game_items": {"29": 25, "244": 21, "214": 17},
+		"late_game_items":  {"596": 2},
+	}, BuyTimes{
+		"early_game_items": {"29": 327, "244": 392, "214": 482},
+		"late_game_items":  {"596": 1700},
+	}, testItems)
+	want := []string{"early:tranquil_boots", "late:boots_of_bearing"}
+	if got := names(b); !slices.Equal(got, want) {
+		t.Fatalf("build = %v, want %v", got, want)
+	}
+}
+
+// The parts of an item take no room from the phase that holds it, so the items further down
+// the list are reached instead of being cut for components that are dropped anyway.
+func TestBuildSpendsAPhaseOnItemsThatSurviveIt(t *testing.T) {
+	b := BuildFromPopularity(1, Popularity{
+		"early_game_items": {"29": 100, "25": 95, "13": 90, "63": 85, "11": 80, "56": 75, "57": 70, "69": 65},
+	}, nil, testItems)
+	want := []string{"early:power_treads", "early:quelling_blade", "early:pers"}
+	if got := names(b); !slices.Equal(got, want) {
+		t.Fatalf("build = %v, want %v", got, want)
+	}
+}
+
+// A Ghost Scepter is sold finished, so it belongs in a build even though an Ethereal Blade is
+// made of one. Only the buyers who went on to the Blade right away were on their way to it.
+func TestBuildKeepsAGhostScepterBoughtForItself(t *testing.T) {
+	items := map[string]ItemInfo{
+		"ghost":          {ID: 37, DName: "Ghost Scepter", Cost: 1500, Qual: "component"},
+		"cyclone":        {ID: 100, DName: "Eul's Scepter", Cost: 2725, Qual: "rare", Created: true},
+		"ethereal_blade": {ID: 176, DName: "Ethereal Blade", Cost: 5200, Qual: "epic", Created: true, Components: []string{"ghost"}},
+	}
+	b := BuildFromPopularity(26, Popularity{
+		"mid_game_items":  {"37": 50, "100": 40},
+		"late_game_items": {"176": 30},
+	}, BuyTimes{
+		"mid_game_items":  {"37": 1000, "100": 1100},
+		"late_game_items": {"176": 2000},
+	}, items)
+	want := []string{"mid:ghost", "mid:cyclone", "late:ethereal_blade"}
+	if got := names(b); !slices.Equal(got, want) {
+		t.Fatalf("build = %v, want %v", got, want)
 	}
 }

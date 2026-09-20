@@ -29,8 +29,13 @@ type briefingCache struct {
 // snapshot is the engine's snapshot plus what only the trainer knows, like the briefing.
 func (s *Server) snapshot(set config.Settings) coach.Snapshot {
 	snap := s.engine.Snapshot(set)
-	if pickMatters(snap) {
+	switch {
+	case pickMatters(snap):
 		snap.Picks = s.pickBoard(set)
+	case draftMatters(snap):
+		// Their own pick is made, so the advice about what to take goes; who they are up
+		// against does not.
+		snap.Picks = s.pickBoard(set).AfterYourPick()
 	}
 	if snap.InMatch && snap.Hero != nil && snap.Clock < 0 {
 		snap.Briefing = s.briefing(snap.Hero.ID, snap.Hero.Name, set.Role)

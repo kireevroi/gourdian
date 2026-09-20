@@ -3,6 +3,7 @@ package dotadata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -45,6 +46,8 @@ func (k positionKey) file(kind string) string {
 type positionData struct {
 	Games int        `json:"games"`
 	Pop   Popularity `json:"popularity"`
+	// At is when each item in Pop was bought, and is what tells a build step from a part of one.
+	At BuyTimes `json:"at"`
 }
 
 // positionSQL: explorer rows don't say the position, so the three richest players on a team
@@ -64,7 +67,8 @@ func positionSQL(key positionKey) string {
 )
 SELECT CASE WHEN (e->>'time')::int <= 0 THEN 'start_game_items' WHEN (e->>'time')::int < 600 THEN 'early_game_items'
     WHEN (e->>'time')::int < 1500 THEN 'mid_game_items' ELSE 'late_game_items' END AS phase,
-  e->>'key' AS item, count(DISTINCT match_id)::int AS games, (SELECT count(*) FROM q)::int AS total
+  e->>'key' AS item, count(DISTINCT match_id)::int AS games, (SELECT count(*) FROM q)::int AS total,
+  percentile_disc(0.5) WITHIN GROUP (ORDER BY (e->>'time')::int)::int AS at
 FROM q, unnest(purchase_log) e GROUP BY 1, 2`, ProDays, hero, hero, key.filter(), pos, pos)
 }
 
@@ -110,7 +114,7 @@ func (c *Client) fetchPositionBuild(key positionKey) {
 	}
 	var b *Build
 	if data.Games >= MinProGames {
-		b = BuildFromPopularity(key.hero, data.Pop, c.items)
+		b = BuildFromPopularity(key.hero, data.Pop, data.At, c.items)
 		b.Position, b.Games, b.Won = key.pos, data.Games, key.won
 	}
 	c.posBuilds[key] = b
@@ -118,8 +122,9 @@ func (c *Client) fetchPositionBuild(key positionKey) {
 }
 
 func (c *Client) loadPositionData(ctx context.Context, key positionKey) (positionData, error) {
-	return cached[positionData](c, filepath.Join("builds", key.file("")), buildMaxAge, func() ([]byte, error) {
-		var out positionData
+	var out positionData
+	err := c.cachedBytes(filepath.Join("builds", key.file("")), buildMaxAge, func() ([]byte, error) {
+		var fresh positionData
 		raw, err := c.fetch(ctx, "/explorer?sql="+url.QueryEscape(positionSQL(key)))
 		var resp struct {
 			Rows []struct {
@@ -127,6 +132,7 @@ func (c *Client) loadPositionData(ctx context.Context, key positionKey) (positio
 				Item  string `json:"item"`
 				Games int    `json:"games"`
 				Total int    `json:"total"`
+				At    int    `json:"at"`
 			} `json:"rows"`
 			Err any `json:"err"`
 		}
@@ -140,18 +146,30 @@ func (c *Client) loadPositionData(ctx context.Context, key positionKey) (positio
 			return nil, err
 		}
 		items := c.Items()
-		out.Pop = Popularity{}
+		fresh.Pop, fresh.At = Popularity{}, BuyTimes{}
 		for _, r := range resp.Rows {
-			out.Games = r.Total
+			fresh.Games = r.Total
 			info, ok := items[r.Item]
 			if !ok {
 				continue
 			}
-			if out.Pop[r.Phase] == nil {
-				out.Pop[r.Phase] = map[string]int{}
+			if fresh.Pop[r.Phase] == nil {
+				fresh.Pop[r.Phase], fresh.At[r.Phase] = map[string]int{}, map[string]int{}
 			}
-			out.Pop[r.Phase][strconv.Itoa(info.ID)] = r.Games
+			id := strconv.Itoa(info.ID)
+			fresh.Pop[r.Phase][id], fresh.At[r.Phase][id] = r.Games, r.At
 		}
-		return json.Marshal(out)
+		return json.Marshal(fresh)
+	}, func(data []byte) error {
+		var fresh positionData
+		if err := json.Unmarshal(data, &fresh); err != nil {
+			return err
+		}
+		if fresh.Games > 0 && fresh.At == nil {
+			return errors.New("cached before purchase times were kept")
+		}
+		out = fresh
+		return nil
 	}, nil)
+	return out, err
 }

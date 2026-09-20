@@ -252,13 +252,53 @@ func TestTheListSizesComeFromTheSettings(t *testing.T) {
 	in.History = append(games(1, "A", 5, 4, time.Hour), games(2, "B", 5, 3, time.Hour)...)
 
 	in.Tuning.Show, in.Tuning.Fresh = 1, 1
-	b := Rank(in, now)
-	if len(b.Best) != 1 || len(b.Fresh) != 1 {
-		t.Errorf("lists = %d best, %d fresh, want one each", len(b.Best), len(b.Fresh))
+	if b := Rank(in, now); len(b.Best) != 1 {
+		t.Errorf("best = %d, want one", len(b.Best))
+	}
+	in.Tuning.Show = 4 // room for two more beside the two heroes played
+	if b := Rank(in, now); len(b.Best) != 2 || len(b.Fresh) != 1 {
+		t.Errorf("lists = %d best, %d fresh, want two and one", len(b.Best), len(b.Fresh))
 	}
 	in.Tuning.Fresh = 0
 	if b := Rank(in, now); len(b.Fresh) != 0 {
 		t.Errorf("meta suggestions were turned off but %d came back", len(b.Fresh))
+	}
+}
+
+// Heroes the player has never played are there to fill a thin pool, not to crowd out the
+// heroes they do play.
+func TestStrangersOnlyFillTheRoomLeftOver(t *testing.T) {
+	in := Input{Role: dota.Mid, Rank: 43, Tuning: DefaultTuning(),
+		Heroes: []dotadata.HeroInfo{{ID: 5, LocalizedName: "Stranger"}},
+		Meta:   map[int]dotadata.HeroMeta{5: bracketMeta(4, 1000, 560)}}
+	// With nothing played, there is nothing else to offer.
+	if b := Rank(in, now); len(b.Fresh) != 1 {
+		t.Fatalf("with an empty pool, fresh = %d, want one", len(b.Fresh))
+	}
+	// With the list already full of heroes they play, a stranger has no business there.
+	for i, name := range []string{"A", "B", "C", "D"} {
+		in.History = append(in.History, games(10+i, name, 6, 4, time.Hour)...)
+	}
+	b := Rank(in, now)
+	if len(b.Best) != DefaultTuning().Show {
+		t.Fatalf("best = %d, want the list full", len(b.Best))
+	}
+	if len(b.Fresh) != 0 {
+		t.Errorf("a stranger was offered beside a full pool: %+v", b.Fresh)
+	}
+}
+
+// An average hero is not a reason to try something new: half the roster is above average.
+func TestAnAverageHeroIsNotSuggested(t *testing.T) {
+	in := Input{Role: dota.Mid, Rank: 43, Tuning: DefaultTuning(),
+		Heroes: []dotadata.HeroInfo{{ID: 5, LocalizedName: "Average"}},
+		Meta:   map[int]dotadata.HeroMeta{5: bracketMeta(4, 100000, 50500)}} // 50.5%, near the median
+	if b := Rank(in, now); b != nil && len(b.Fresh) != 0 {
+		t.Errorf("a 50.5%% hero was offered as one to try: %+v", b.Fresh)
+	}
+	in.Meta[5] = bracketMeta(4, 100000, 53000) // 53%, the top of the roster
+	if b := Rank(in, now); b == nil || len(b.Fresh) != 1 {
+		t.Errorf("a 53%% hero wasn't offered: %+v", b)
 	}
 }
 

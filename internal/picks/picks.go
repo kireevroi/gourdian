@@ -78,8 +78,11 @@ func (t Tuning) Validate() error {
 }
 
 const (
-	// freshPct is the meta win rate a hero the player doesn't play must beat to be suggested.
-	freshPct = 50
+	// freshPct is the win rate a hero the player has never played has to be doing to be worth
+	// mentioning at all. Half of everything is above average by definition -- measured over
+	// the whole roster the median is 49.7% and 56 of 127 heroes clear 50% -- so an average
+	// hero is not a reason to try something new. 52% is the top sixth of the roster.
+	freshPct = 52
 
 	// The score caps: what the player's own record is worth against the patch and against the
 	// hero's roles. These are the shape of the model rather than a matter of taste, so they
@@ -117,9 +120,23 @@ type Board struct {
 	Notes []string `json:"notes,omitempty"`
 }
 
+// AfterYourPick is what is left of the board once the player has taken a hero: which hero to
+// take is settled, but who the other side took and what the two line-ups are short of is only
+// getting clearer, and is what tells them what to buy and what to expect.
+func (b *Board) AfterYourPick() *Board {
+	if b == nil {
+		return nil
+	}
+	left := &Board{Role: b.Role, Enemies: b.Enemies, Notes: b.Notes}
+	if left.Empty() {
+		return nil
+	}
+	return left
+}
+
 // Empty reports whether the board has nothing to show.
 func (b *Board) Empty() bool {
-	return b == nil || len(b.Best)+len(b.Fresh)+len(b.Avoid) == 0
+	return b == nil || len(b.Best)+len(b.Fresh)+len(b.Avoid)+len(b.Enemies)+len(b.Notes) == 0
 }
 
 type Hero struct {
@@ -237,7 +254,10 @@ func Rank(in Input, now time.Time) *Board {
 	slices.SortFunc(b.Avoid, func(a, c Hero) int { return byScore(c, a) })
 	b.Best = b.Best[:min(len(b.Best), t.Show)]
 	b.Avoid = b.Avoid[:min(len(b.Avoid), t.Avoid)]
-	b.Fresh = fresh(in, t, byHero, bracket, w)
+	// Heroes the player has never touched only fill the room their own leave. Being shown a
+	// stranger is worth something when there is nothing else to say and nothing at all when
+	// there are heroes they actually play.
+	b.Fresh = fresh(in, t, byHero, bracket, w, max(0, t.Show-len(b.Best)))
 	for _, id := range in.Enemies {
 		b.Enemies = append(b.Enemies, Hero{ID: id, Name: info[id].LocalizedName, Img: info[id].Img,
 			Roles: in.Meta[id].Roles})
@@ -430,8 +450,8 @@ func fit(roles []string, role string) int {
 
 // fresh is the heroes the player doesn't play that are doing well at their bracket. They are
 // kept in their own list, never mixed into the ranked pool.
-func fresh(in Input, t Tuning, played map[int]*record, bracket int, w words) []Hero {
-	if len(in.Meta) == 0 || t.Fresh == 0 {
+func fresh(in Input, t Tuning, played map[int]*record, bracket int, w words, room int) []Hero {
+	if len(in.Meta) == 0 || t.Fresh == 0 || room == 0 {
 		return nil
 	}
 	var out []Hero
@@ -452,7 +472,7 @@ func fresh(in Input, t Tuning, played map[int]*record, bracket int, w words) []H
 		out = append(out, h)
 	}
 	slices.SortFunc(out, byScore)
-	return out[:min(len(out), t.Fresh)]
+	return out[:min(len(out), t.Fresh, room)]
 }
 
 func clamp(v, limit int) int { return max(-limit, min(limit, v)) }

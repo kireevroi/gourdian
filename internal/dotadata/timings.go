@@ -95,13 +95,15 @@ func GoodTiming(buckets []ItemTiming) (int, bool) {
 	return 0, false
 }
 
-// CoreItemTimes keeps the timings of finished items costing at least minCost, dropping
-// components that were combined into a bigger item bought at the same time or later.
+// CoreItemTimes keeps the timings of finished items costing at least minCost, dropping the
+// components that were combined away soon after they were bought. An item carried for minutes
+// before it became something bigger was a timing of its own, the way the pro builds read it,
+// so the trainer can hold a player to their usual Yasha and not only their usual Manta.
 func CoreItemTimes(times map[string]int, items map[string]ItemInfo, minCost int) map[string]int {
 	upgraded := map[string]bool{}
 	for name, t := range times {
 		for _, part := range items[name].Components {
-			if bought, ok := times[part]; ok && bought <= t {
+			if bought, ok := times[part]; ok && bought <= t && mergedInto(part, bought, t, items) {
 				upgraded[part] = true
 			}
 		}
