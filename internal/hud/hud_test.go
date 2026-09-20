@@ -130,7 +130,7 @@ func TestPositionDeathAndItemRows(t *testing.T) {
 func TestSampleShowsEnabledWidgets(t *testing.T) {
 	w := widgets(func(w []config.HUDWidget) { find(w, config.WidgetDeath).On = false })
 	v := Sample(w)
-	if v.Alert == nil || len(v.Rows) != 18 {
+	if v.Alert == nil || len(v.Rows) != 19 {
 		t.Fatalf("sample = %+v", v)
 	}
 	for _, r := range v.Rows {
@@ -283,5 +283,27 @@ func TestTheHUDIsEmptyOutsideAMatchAndADraft(t *testing.T) {
 	snap.Picks = nil
 	if v := BuildHeld(snap, nil, widgets(nil), time.Now(), nil, "en"); v.Alert != nil || len(v.Rows) != 0 {
 		t.Errorf("HUD = %+v", v)
+	}
+}
+
+// What the trainer made of the other side's portraits shows on the HUD, so a wrong reading is
+// visible in the game rather than only on the dashboard.
+func TestTheHeroesReadOffTheScreenAreShown(t *testing.T) {
+	snap := draftSnap()
+	snap.Picks.Enemies = []picks.Hero{{Name: "Sniper"}, {Name: "Lina"}}
+	v := BuildHeld(snap, nil, widgets(nil), time.Now(), nil, "en")
+	var got []string
+	for _, r := range v.Rows {
+		got = append(got, r.Text)
+	}
+	if !slices.Contains(got, "Against: Sniper · Lina") {
+		t.Errorf("the heroes read off the screen aren't shown: %q", got)
+	}
+	// With nothing read, which is the usual case, the line isn't there at all.
+	snap.Picks.Enemies = nil
+	for _, r := range BuildHeld(snap, nil, widgets(nil), time.Now(), nil, "en").Rows {
+		if strings.HasPrefix(r.Text, "Against:") {
+			t.Errorf("an empty line was shown: %q", r.Text)
+		}
 	}
 }

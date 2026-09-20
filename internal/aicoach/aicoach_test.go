@@ -10,10 +10,12 @@ import (
 	"gourdian/internal/ai"
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
 	"gourdian/internal/matchdata"
 	"gourdian/internal/model"
+	"gourdian/internal/picks"
 )
 
 func TestPromptIncludesLiveStateAndHistory(t *testing.T) {
@@ -213,5 +215,23 @@ func TestPromptCarriesTheMatchFacts(t *testing.T) {
 	set := config.Default().Settings.AI
 	if tips, err := Suggest(t.Context(), &fakeProvider{answer: `{"tips":[]}`}, set.Live, set, "en", p); err != nil || len(tips) != 0 {
 		t.Fatalf("nothing new to say is a fine answer: %q, %v", tips, err)
+	}
+}
+
+// The coach must not be told it is blind to the draft when the player has turned on reading
+// it off their screen, nor told it can see one when it can't.
+func TestTheDraftPromptSaysWhetherTheEnemyIsKnown(t *testing.T) {
+	board := &picks.Board{Role: dota.Mid, Best: []picks.Hero{{Name: "Puck", Games: 9, WinPct: 60}}}
+	blind := DraftPrompt(DraftInput{Role: dota.Mid, Board: board})
+	if strings.Contains(blind, "has taken") {
+		t.Errorf("the prompt talks about enemy picks with none known:\n%s", blind)
+	}
+	board.Enemies = []picks.Hero{{Name: "Sniper"}, {Name: "Lina"}}
+	seeing := DraftPrompt(DraftInput{Role: dota.Mid, Board: board})
+	if !strings.Contains(seeing, "The other team has taken: Sniper, Lina.") {
+		t.Errorf("the prompt doesn't name the enemy picks:\n%s", seeing)
+	}
+	if !strings.Contains(blindToTheDraft, "NOT given") || strings.Contains(seesTheDraft, "NOT given") {
+		t.Error("the two sets of instructions say the same thing about the draft")
 	}
 }

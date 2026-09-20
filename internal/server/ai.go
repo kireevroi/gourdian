@@ -335,7 +335,7 @@ func (s *Server) askDraft(set config.Settings, forced bool) bool {
 		defer s.hub.publish("ai_status", "idle")
 		ctx, cancel := context.WithTimeout(ctx, aiTimeout)
 		defer cancel()
-		advice, err := aicoach.AskDraft(ctx, provider, choice, set.AI, set.Language, prompt)
+		advice, err := aicoach.AskDraft(ctx, provider, choice, set.AI, set.Language, prompt, len(snap.Picks.Enemies) > 0)
 		if err != nil {
 			s.log.Warn("AI coach failed on the draft", "provider", provider.Info().ID, "err", err)
 			s.providers.Failed(provider, err)

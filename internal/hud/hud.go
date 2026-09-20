@@ -257,7 +257,13 @@ func pickLines(p *picks.Board, l words) []Line {
 	if p.Empty() {
 		return nil
 	}
-	lines := []Line{{l.f("Your best %s heroes:", l.role(p.Role)), KindCoach}}
+	var lines []Line
+	// What the trainer made of the other side's portraits, so it can be seen to be right or
+	// wrong without opening the dashboard.
+	if names := heroNames(p.Enemies); names != "" {
+		lines = append(lines, Line{l.f("Against: %s", names), KindWarn})
+	}
+	lines = append(lines, Line{l.f("Your best %s heroes:", l.role(p.Role)), KindCoach})
 	for _, h := range p.Best {
 		lines = append(lines, Line{h.Name + why(h, l), KindText})
 	}
@@ -268,6 +274,17 @@ func pickLines(p *picks.Board, l words) []Line {
 		lines = append(lines, Line{l.f("Avoid %s · %d%% of %d", h.Name, h.WinPct, h.Games), KindWarn})
 	}
 	return lines
+}
+
+// heroNames lists heroes for one line of the HUD.
+func heroNames(heroes []picks.Hero) string {
+	var names []string
+	for _, h := range heroes {
+		if h.Name != "" {
+			names = append(names, h.Name)
+		}
+	}
+	return strings.Join(names, " · ")
 }
 
 // why is the first couple of reasons a hero is on the list, as a tail for its line.
@@ -425,8 +442,9 @@ func SampleIn(widgets []config.HUDWidget, lang string) View {
 				Best: []picks.Hero{
 					{Name: "Storm Spirit", Games: 11, Wins: 7, WinPct: 63, Score: 61, Why: []string{l.s("your 11 games 63%")}},
 					{Name: "Puck", Games: 8, Wins: 5, WinPct: 62, Score: 58, Why: []string{l.s("your 8 games 62%")}}},
-				Fresh: []picks.Hero{{Name: "Death Prophet", Score: 55, Why: []string{l.s("meta 54% at Archon")}}},
-				Avoid: []picks.Hero{{Name: "Invoker", Games: 6, Wins: 2, WinPct: 33}}}, l)...)
+				Fresh:   []picks.Hero{{Name: "Death Prophet", Score: 55, Why: []string{l.s("meta 54% at Archon")}}},
+				Avoid:   []picks.Hero{{Name: "Invoker", Games: 6, Wins: 2, WinPct: 33}},
+				Enemies: []picks.Hero{{Name: "Sniper"}, {Name: "Lina"}}}, l)...)
 		case config.WidgetBriefing:
 			v.Rows = append(v.Rows, briefingLines(&coach.Briefing{Hero: "Shadow Fiend", Games: 12, Wins: 7, Target10: 66, Usual10: 60,
 				Items: []coach.ItemGoal{{Name: "Black King Bar", By: 1170}}}, l)...)
