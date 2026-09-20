@@ -98,3 +98,28 @@ const (
 	// CoreItemCost is the least an item costs for its purchase time to be kept with a match.
 	CoreItemCost = 1500
 )
+
+// TalentLevels are the levels that hand out a talent point, in order. Since 7.40 talents
+// spend their own points rather than the level's skill point: one at 10, 15, 20 and 25, then
+// one at every level from 27 to 30, which is enough to take both sides of every tier.
+var TalentLevels = []int{10, 15, 20, 25, 27, 28, 29, 30}
+
+// TalentsAtLevel is how many talents a hero may have taken by a level.
+func TalentsAtLevel(level int) int {
+	n := 0
+	for _, l := range TalentLevels {
+		if level >= l {
+			n++
+		}
+	}
+	return n
+}
+
+// TalentDueAt is the level whose talent is waiting when taken of them have been picked, or 0
+// when none is: the talent after the ones already taken.
+func TalentDueAt(taken, level int) int {
+	if taken < 0 || taken >= TalentsAtLevel(level) {
+		return 0
+	}
+	return TalentLevels[taken]
+}
