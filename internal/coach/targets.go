@@ -7,7 +7,7 @@ import (
 
 	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 var paceCheckpoints = []int{300, 600, 900, 1200, 1800}
@@ -53,7 +53,7 @@ const (
 
 // PersonalLastHits sets each checkpoint's target 10% above the player's median over their
 // last 10 matches on the hero and position (newest first), where they have at least 3.
-func PersonalLastHits(role string, history []stats.MatchSummary) Targets {
+func PersonalLastHits(role string, history []model.MatchSummary) Targets {
 	t := RoleTargets(role)
 	if t.LastHits == nil {
 		return t

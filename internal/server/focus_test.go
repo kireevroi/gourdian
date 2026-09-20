@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"gourdian/internal/dota"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 func TestFocusFollowsPositionAndHero(t *testing.T) {
 	srv, _, _ := newTestServer(t, nil)
 	day := time.Now().Add(-72 * time.Hour)
-	for i, r := range []stats.Review{
+	for i, r := range []model.Review{
 		{MatchID: "1", Hero: "Lion", HeroID: 26, Role: dota.HardSupport, NextGameFocus: "Stack the ancient camp every minute"},
 		{MatchID: "2", Hero: "Puck", HeroID: 13, Role: dota.Mid, NextGameFocus: "Hit 60 last hits by 10:00"},
 		{MatchID: "3", Hero: "Storm Spirit", HeroID: 17, Role: dota.Mid, NextGameFocus: "Leave lane with a bottle full"},

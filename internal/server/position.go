@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"slices"
 	"strings"
@@ -63,7 +62,7 @@ func (s *Server) handleRole(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Role string `json:"role"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body); err != nil || !slices.Contains(dota.Roles, body.Role) {
+	if err := readJSON(w, r, 1<<10, &body); err != nil || !slices.Contains(dota.Roles, body.Role) {
 		http.Error(w, `send {"role": "carry"}, or mid, offlane, soft_support, hard_support`, http.StatusBadRequest)
 		return
 	}

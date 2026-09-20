@@ -2,6 +2,7 @@ package autostart
 
 import (
 	"errors"
+	"gourdian/internal/platform"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +31,7 @@ func autostartPath(name string) (string, error) {
 
 // Exe is the trainer to start at login; under WSL there is none, since Windows runs it.
 func Exe() string {
-	if os.Getenv("WSL_DISTRO_NAME") != "" {
+	if platform.WSL() {
 		return ""
 	}
 	self, err := os.Executable()

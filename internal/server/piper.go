@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gourdian/internal/config"
+	"gourdian/internal/platform"
 	"gourdian/internal/speech"
 )
 
@@ -60,7 +61,7 @@ func installedVoice(home, id string) bool {
 // usePiper hands the speaker whichever of the chosen voices are downloaded, English and the
 // trainer's language.
 func (s *Server) usePiper() {
-	if !nativeLinux() || s.speaker == nil {
+	if !platform.LinuxDesktop() || s.speaker == nil {
 		return
 	}
 	set, home := s.cfg.Settings(), s.piperHome()
@@ -92,7 +93,7 @@ func (s *Server) usePiper() {
 // it's missing, the first time it's needed.
 func (s *Server) ensurePiper() {
 	set := s.cfg.Settings()
-	if !nativeLinux() || s.speaker == nil || set.Voice != config.VoiceSystem || speech.Player() == nil {
+	if !platform.LinuxDesktop() || s.speaker == nil || set.Voice != config.VoiceSystem || speech.Player() == nil {
 		return
 	}
 	home := s.piperHome()
@@ -123,7 +124,7 @@ func (s *Server) installPiper() bool {
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
 		s.log.Info("downloading Piper voice", "voices", voices, "into", s.piperHome())
-		s.hub.publish("settings", s.settingsResponse())
+		s.publishSettings()
 		last := time.Time{}
 		err := speech.InstallPiper(ctx, s.piperHome(), voices, func(p speech.Progress) {
 			if time.Since(last) < time.Second && p.Done < p.Total {
@@ -148,13 +149,13 @@ func (s *Server) installPiper() bool {
 			s.usePiper()
 			s.hub.publish("voice_install", voiceStatus{State: "done", Text: "The natural voice is ready."})
 		}
-		s.hub.publish("settings", s.settingsResponse())
+		s.publishSettings()
 	})
 	return true
 }
 
 func (s *Server) naturalVoiceStatus() *naturalVoice {
-	if !nativeLinux() {
+	if !platform.LinuxDesktop() {
 		return nil
 	}
 	set, home := s.cfg.Settings(), s.piperHome()

@@ -11,6 +11,7 @@ import (
 	"gourdian/internal/coach"
 	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
+	"gourdian/internal/model"
 	"gourdian/internal/stats"
 )
 
@@ -73,7 +74,7 @@ func (tc *targetCache) build(heroID int, role string) (coach.Targets, bool) {
 
 // itemGoals picks two core items, the player's usual ones if they have enough history on the
 // hero and otherwise the popular build's, and sets a timing goal for each.
-func (tc *targetCache) itemGoals(heroID int, role string, history []stats.MatchSummary) ([]coach.ItemGoal, int, bool) {
+func (tc *targetCache) itemGoals(heroID int, role string, history []model.MatchSummary) ([]coach.ItemGoal, int, bool) {
 	s := tc.s
 	items := s.data.Items()
 	if items == nil {

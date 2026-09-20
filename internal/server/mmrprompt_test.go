@@ -2,28 +2,27 @@ package server
 
 import (
 	"encoding/json"
+	"gourdian/internal/model"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"gourdian/internal/stats"
 )
 
 func TestMMRPromptAfterARealMatch(t *testing.T) {
 	srv, _, _ := newTestServer(t, nil)
-	if err := srv.stats.AppendMMR(stats.MMREntry{Date: time.Now().Add(-time.Hour), MMR: 3000}); err != nil {
+	if err := srv.stats.AppendMMR(model.MMREntry{Date: time.Now().Add(-time.Hour), MMR: 3000}); err != nil {
 		t.Fatal(err)
 	}
-	srv.askForMMR(&stats.MatchSummary{MatchID: "123", Hero: "Lion", Result: "win", Source: stats.SourceLive})
+	srv.askForMMR(&model.MatchSummary{MatchID: "123", Hero: "Lion", Result: "win", Source: model.SourceLive})
 	p := srv.pendingMMR()
 	if p == nil || p.Last != 3000 || p.MatchID != "123" {
 		t.Fatalf("prompt = %+v", p)
 	}
 
-	srv.askForMMR(&stats.MatchSummary{MatchID: "local-1", Hero: "Lion", Source: stats.SourcePractice})
+	srv.askForMMR(&model.MatchSummary{MatchID: "local-1", Hero: "Lion", Source: model.SourcePractice})
 	if srv.pendingMMR().MatchID != "123" {
 		t.Fatal("a practice game replaced the prompt")
 	}
@@ -36,10 +35,10 @@ func TestMMRPromptAfterARealMatch(t *testing.T) {
 
 func TestMMRChangeCountsEachMatchOnce(t *testing.T) {
 	srv, _, _ := newTestServer(t, nil)
-	if err := srv.stats.AppendMMR(stats.MMREntry{Date: time.Now().Add(-time.Hour), MMR: 3000}); err != nil {
+	if err := srv.stats.AppendMMR(model.MMREntry{Date: time.Now().Add(-time.Hour), MMR: 3000}); err != nil {
 		t.Fatal(err)
 	}
-	if err := srv.stats.AppendMatch(stats.MatchSummary{MatchID: "123", Hero: "Lion", Result: "win", Source: stats.SourceLive, EndedAt: time.Now()}); err != nil {
+	if err := srv.stats.AppendMatch(model.MatchSummary{MatchID: "123", Hero: "Lion", Result: "win", Source: model.SourceLive, EndedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
 	post := func(path, body string) int {
@@ -51,7 +50,7 @@ func TestMMRChangeCountsEachMatchOnce(t *testing.T) {
 		entries, _ := srv.stats.MMR()
 		return entries[len(entries)-1].MMR
 	}
-	srv.askForMMR(&stats.MatchSummary{MatchID: "123", Hero: "Lion", Result: "win", Source: stats.SourceLive})
+	srv.askForMMR(&model.MatchSummary{MatchID: "123", Hero: "Lion", Result: "win", Source: model.SourceLive})
 	if code := post("/api/mmr/change", `{"change":25,"note":"win"}`); code != http.StatusOK || last() != 3025 {
 		t.Fatalf("first press: status %d, mmr %d", code, last())
 	}
@@ -66,7 +65,7 @@ func TestMMRChangeCountsEachMatchOnce(t *testing.T) {
 	if last() != 3025 {
 		t.Fatalf("logging a match again stepped from its own entry: %d", last())
 	}
-	srv.askForMMR(&stats.MatchSummary{MatchID: "123", Hero: "Lion", Result: "win", Source: stats.SourceLive})
+	srv.askForMMR(&model.MatchSummary{MatchID: "123", Hero: "Lion", Result: "win", Source: model.SourceLive})
 	if p := srv.pendingMMR(); p.Last != 3000 {
 		t.Fatalf("the prompt should step from the MMR before this match, not %d", p.Last)
 	}
@@ -74,7 +73,7 @@ func TestMMRChangeCountsEachMatchOnce(t *testing.T) {
 
 func TestAMatchMarkedRankedStaysRanked(t *testing.T) {
 	srv, _, _ := newTestServer(t, nil)
-	if err := srv.stats.AppendMatch(stats.MatchSummary{MatchID: "123", Hero: "Lion", Source: stats.SourceLive, EndedAt: time.Now()}); err != nil {
+	if err := srv.stats.AppendMatch(model.MatchSummary{MatchID: "123", Hero: "Lion", Source: model.SourceLive, EndedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()

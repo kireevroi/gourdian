@@ -11,7 +11,7 @@ import (
 	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 type fakeData struct {
@@ -389,7 +389,7 @@ func TestLobbyGamesAreRecordedAsPractice(t *testing.T) {
 	end := state(321)
 	end.Map.MatchID, end.Map.GameState, end.Map.WinTeam = "0", gsi.StatePostGame, "dire"
 	sum := e.Update(end, set).Finished
-	if sum == nil || sum.MatchID != res.MatchID || sum.Source != stats.SourcePractice || sum.Real() || sum.Result != "loss" {
+	if sum == nil || sum.MatchID != res.MatchID || sum.Source != model.SourcePractice || sum.Real() || sum.Result != "loss" {
 		t.Fatalf("summary = %+v", sum)
 	}
 }

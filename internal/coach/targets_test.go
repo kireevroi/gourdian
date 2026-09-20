@@ -9,12 +9,12 @@ import (
 	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 func TestPersonalLastHits(t *testing.T) {
-	lh := func(v map[string]int) stats.MatchSummary { return stats.MatchSummary{LastHitsAt: v} }
-	history := []stats.MatchSummary{
+	lh := func(v map[string]int) model.MatchSummary { return model.MatchSummary{LastHitsAt: v} }
+	history := []model.MatchSummary{
 		lh(map[string]int{"5:00": 20, "10:00": 40}), lh(map[string]int{"10:00": 44}),
 		lh(map[string]int{"10:00": 38}), lh(map[string]int{"5:00": 25, "10:00": 50}),
 	}
@@ -23,7 +23,7 @@ func TestPersonalLastHits(t *testing.T) {
 	if !slices.Equal(got.LastHits, []int{30, 46, 110, 160, 270}) || got.Usual[1] != 42 || got.Games != 4 {
 		t.Fatalf("targets = %+v", got)
 	}
-	high := PersonalLastHits(dota.Carry, []stats.MatchSummary{
+	high := PersonalLastHits(dota.Carry, []model.MatchSummary{
 		lh(map[string]int{"5:00": 40}), lh(map[string]int{"5:00": 40}), lh(map[string]int{"5:00": 40}),
 	})
 	if high.LastHits[0] != 44 || high.LastHits[1] != 65 {

@@ -138,7 +138,7 @@ func (s *Server) refreshModels(ctx context.Context, id string) {
 		s.log.Warn("save the picked AI models", "err", err)
 		return
 	}
-	s.hub.publish("settings", s.settingsResponse())
+	s.publishSettings()
 }
 
 // recommendations are the models the trainer would pick for each job, for the AI page.

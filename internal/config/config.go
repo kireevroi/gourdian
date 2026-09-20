@@ -23,6 +23,7 @@ import (
 
 	"gourdian/internal/dota"
 	"gourdian/internal/hotkey"
+	"gourdian/internal/platform"
 )
 
 const (
@@ -466,7 +467,7 @@ func isAppDir(dir string) bool {
 
 // wslFolders returns %LOCALAPPDATA% and %APPDATA% as /mnt/... paths when running under WSL.
 func wslFolders() (string, string) {
-	if os.Getenv("WSL_DISTRO_NAME") == "" {
+	if !platform.WSL() {
 		return "", ""
 	}
 	cmdExe, err := exec.LookPath("cmd.exe")

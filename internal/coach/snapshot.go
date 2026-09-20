@@ -10,7 +10,7 @@ import (
 	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 const connectedWindow = 35 * time.Second
@@ -79,7 +79,7 @@ type Briefing struct {
 	Target10   int                  `json:"target_10,omitempty"`
 	Usual10    int                  `json:"usual_10,omitempty"`
 	Items      []ItemGoal           `json:"items,omitempty"`
-	Goals      []stats.GoalProgress `json:"goals,omitempty"`
+	Goals      []model.GoalProgress `json:"goals,omitempty"`
 	LastReview string               `json:"last_review,omitempty"` // focus from the last review on this hero
 }
 

@@ -205,7 +205,7 @@ func (s *Server) handleRecording(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		On bool `json:"on"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body); err != nil {
+	if err := readJSON(w, r, 1<<10, &body); err != nil {
 		http.Error(w, `send {"on": true} or {"on": false}`, http.StatusBadRequest)
 		return
 	}

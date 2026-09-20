@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
@@ -196,7 +195,7 @@ func (s *Server) handleProviderKey(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Key string `json:"key"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil || p.Info().Kind != "api" {
+	if err := readJSON(w, r, 8<<10, &body); err != nil || p.Info().Kind != "api" {
 		http.Error(w, `send {"key": "..."} for an API provider`, http.StatusBadRequest)
 		return
 	}
@@ -232,7 +231,10 @@ func (s *Server) handleProviderTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var choice config.AIChoice
-	json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&choice)
+	if err := readOptionalJSON(w, r, 4<<10, &choice); err != nil {
+		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	choice.Provider = p.Info().ID
 	set := s.cfg.Settings()
 	snap := coach.Snapshot{InMatch: true, Clock: 610, Team: "radiant", Role: dota.Mid,

@@ -10,7 +10,7 @@ import (
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
 	"gourdian/internal/dota"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 // Line kinds, which pick the colour.
@@ -283,7 +283,7 @@ func briefingLines(b *coach.Briefing, l words) []Line {
 		lines = append(lines, Line{strings.Join(items, " · "), KindText})
 	}
 	for _, g := range b.Goals[:min(len(b.Goals), 2)] {
-		lines = append(lines, Line{l.f("Goal: %s · %d/%d this week", g.Label, g.Met, stats.GoalsDone), KindCoach})
+		lines = append(lines, Line{l.f("Goal: %s · %d/%d this week", g.Label, g.Met, model.GoalsDone), KindCoach})
 	}
 	return lines
 }

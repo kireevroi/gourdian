@@ -17,7 +17,7 @@ import (
 	"gourdian/internal/config"
 	"gourdian/internal/gsi"
 	"gourdian/internal/matchdata"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 const (
@@ -150,12 +150,12 @@ func (s *Server) heroFacts(heroID int, role string, owned []string) *aicoach.Her
 	return h
 }
 
-func (s *Server) matchTimeline(matchID string) []stats.Sample {
+func (s *Server) matchTimeline(matchID string) []model.Sample {
 	timeline, err := s.stats.Timeline()
 	if err != nil {
 		return nil
 	}
-	return slices.DeleteFunc(timeline, func(x stats.Sample) bool { return x.MatchID != matchID })
+	return slices.DeleteFunc(timeline, func(x model.Sample) bool { return x.MatchID != matchID })
 }
 
 func (s *Server) aiInput(reason, matchID string, set config.Settings) aicoach.Input {
@@ -185,7 +185,7 @@ func (s *Server) aiInput(reason, matchID string, set config.Settings) aicoach.In
 }
 
 // reviewMatch skips simulated and practice matches unless forced, so they don't spend subscription usage.
-func (s *Server) reviewMatch(m stats.MatchSummary, set config.Settings, force bool, detail *matchdata.Detail) bool {
+func (s *Server) reviewMatch(m model.MatchSummary, set config.Settings, force bool, detail *matchdata.Detail) bool {
 	provider, choice, ok := s.pick(set.AI.Reviews, set.AI)
 	if !ok || !force && (!set.AI.Review || !m.Real()) {
 		return false
@@ -229,7 +229,7 @@ func (s *Server) reviewMatch(m stats.MatchSummary, set config.Settings, force bo
 			}
 			return
 		}
-		review := stats.Review{Date: time.Now(), MatchID: m.MatchID, Hero: m.Hero, HeroID: m.HeroID,
+		review := model.Review{Date: time.Now(), MatchID: m.MatchID, Hero: m.Hero, HeroID: m.HeroID,
 			Role: reviewRole(m, set), Result: m.Result, Summary: r.Summary, FollowedFocus: r.FollowedFocus,
 			Strengths: r.Strengths, Improve: r.Improve, NextGameFocus: r.NextGameFocus}
 		if err := s.stats.AppendReview(review); err != nil {

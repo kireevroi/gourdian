@@ -3,7 +3,7 @@
 package config
 
 import (
-	"os"
+	"gourdian/internal/platform"
 	"os/exec"
 	"strings"
 )
@@ -11,7 +11,7 @@ import (
 // registeredInstallDir is the folder the Windows installer put the app in, read through
 // reg.exe when running under WSL, or "" elsewhere.
 func registeredInstallDir() string {
-	if os.Getenv("WSL_DISTRO_NAME") == "" {
+	if !platform.WSL() {
 		return ""
 	}
 	regExe, err := exec.LookPath("reg.exe")

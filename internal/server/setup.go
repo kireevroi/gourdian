@@ -3,12 +3,12 @@ package server
 import (
 	"net/http"
 	"os"
-	"runtime"
 	"slices"
 	"strings"
 
 	"gourdian/internal/config"
 	"gourdian/internal/install"
+	"gourdian/internal/platform"
 )
 
 // setupCheck is one line of the dashboard's setup card, shown until Dota sends data.
@@ -44,13 +44,13 @@ func (s *Server) setupChecks() []setupCheck {
 			checks = append(checks, setupCheck{Label: "Dota's display mode lets the HUD show (" + string(mode) + ")", OK: true})
 		}
 	}
-	if s.speaker != nil && !nativeLinux() && cfg.Settings.Language != "en" && cfg.Settings.Voice == config.VoiceSystem {
+	if s.speaker != nil && !platform.LinuxDesktop() && cfg.Settings.Language != "en" && cfg.Settings.Voice == config.VoiceSystem {
 		if langs := s.speaker.Languages(); langs != nil && !slices.Contains(langs, cfg.Settings.Language) {
 			checks = append(checks, setupCheck{Label: "Windows has no Russian voice, so tips are spoken in English",
 				Detail: "Install it here (Windows asks for permission), or in Windows Settings › Time & language › Speech › Add voices › Russian.", Fix: "install_voice"})
 		}
 	}
-	if nativeLinux() {
+	if platform.LinuxDesktop() {
 		steam := "Or show the HUD in the Steam overlay: press Shift+Tab, open the web browser, go to " + config.DashboardHost(cfg.Listen) + "/overlay.html and pin it."
 		switch reported, hudErr := s.hudStatus(); {
 		case hudErr != "":
@@ -77,11 +77,6 @@ func (s *Server) setupChecks() []setupCheck {
 		}
 	}
 	return checks
-}
-
-// nativeLinux is a Linux desktop playing Dota itself, as opposed to WSL coaching Windows.
-func nativeLinux() bool {
-	return runtime.GOOS == "linux" && os.Getenv("WSL_DISTRO_NAME") == ""
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {

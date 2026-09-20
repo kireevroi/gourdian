@@ -33,6 +33,8 @@ import (
 	"gourdian/internal/gsi"
 	"gourdian/internal/hud"
 	"gourdian/internal/matchdata"
+	"gourdian/internal/model"
+	"gourdian/internal/platform"
 	"gourdian/internal/rules"
 	"gourdian/internal/secrets"
 	"gourdian/internal/speech"
@@ -363,7 +365,7 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 
 const matchIdleTimeout = 3 * time.Minute
 
-func (s *Server) recordMatch(m *stats.MatchSummary, set config.Settings) {
+func (s *Server) recordMatch(m *model.MatchSummary, set config.Settings) {
 	s.stopAutoRecording(set.Recording.Keep)
 	if acct, _ := s.accountID.Load().(string); acct != "" {
 		m.RankTier = s.data.RankTier(acct)
@@ -443,9 +445,7 @@ func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings 
 
 // publishSettingsLater sends the dashboard the new settings without holding up the
 // game-state post, since settingsResponse asks Windows about autostart and voices.
-func (s *Server) publishSettingsLater() {
-	s.spawn(func(context.Context) { s.hub.publish("settings", s.settingsResponse()) })
-}
+func (s *Server) publishSettingsLater() { s.spawn(func(context.Context) { s.publishSettings() }) }
 
 // roleFor tries the role last played on the hero, then the player's most common role on it
 // (imported matches count), then the hero's own roles from OpenDota.
@@ -510,14 +510,14 @@ func (s *Server) emitTips(matchID string, tips []coach.Tip, set config.Settings)
 
 // deliver sends tips to the dashboard, the voice and tips.csv.
 func (s *Server) deliver(matchID string, tips []coach.Tip, set config.Settings) {
-	records := make([]stats.TipRecord, 0, len(tips))
+	records := make([]model.TipRecord, 0, len(tips))
 	for _, tip := range tips {
 		s.hub.publish("tip", tip)
 		if !tip.Quiet && set.Voice == config.VoiceSystem && s.speaker != nil && speakable(tip, set.VoiceLevel) {
 			s.speaker.SayIn(set.Language, tip.Speech, tip.SpeechEN, tip.Severity == coach.Urgent)
 		}
 		s.log.Info("tip", "clock", tip.Clock, "rule", tip.Rule, "text", tip.Text)
-		records = append(records, stats.TipRecord{At: tip.At, MatchID: matchID, Clock: tip.Clock, Rule: tip.Rule,
+		records = append(records, model.TipRecord{At: tip.At, MatchID: matchID, Clock: tip.Clock, Rule: tip.Rule,
 			Category: tip.Category, Severity: string(tip.Severity), Habit: tip.Habit, Text: tip.Text})
 	}
 	if err := s.stats.AppendTips(records); err != nil {
@@ -600,12 +600,15 @@ func (s *Server) settingsResponse() settingsResponse {
 		AIEfforts:      config.AIEfforts,
 		HeroNames:      s.heroNames(),
 		Autostart:      autostart.Enabled(),
-		CanAutostart:   runtime.GOOS == "windows" || nativeLinux(),
+		CanAutostart:   runtime.GOOS == "windows" || platform.LinuxDesktop(),
 		HotkeyProblems: s.hotkeyProblemsCopy(),
 		VoiceLangs:     s.voiceLangs(),
 		NaturalVoice:   s.naturalVoiceStatus(),
 	}
 }
+
+// publishSettings sends every open dashboard the settings as they are now.
+func (s *Server) publishSettings() { s.hub.publish("settings", s.settingsResponse()) }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.settingsResponse())
@@ -736,6 +739,21 @@ func (s *Server) handleVoiceTest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, map[string]string{"voice": set.Voice})
+}
+
+// readJSON decodes a request body of at most limit bytes into v. A body that is missing or
+// empty is an error: taken as v's zero value, it would quietly mean "clear everything".
+func readJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) error {
+	return json.NewDecoder(http.MaxBytesReader(w, r.Body, limit)).Decode(v)
+}
+
+// readOptionalJSON is readJSON for the few requests whose fields are all optional, where a
+// button in the dashboard sends no body at all and the defaults are meant.
+func readOptionalJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) error {
+	if err := readJSON(w, r, limit, v); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
 }
 
 func writeJSON(w http.ResponseWriter, v any) { writeJSONStatus(w, http.StatusOK, v) }

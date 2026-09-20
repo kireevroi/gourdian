@@ -26,6 +26,7 @@ import (
 	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
+	"gourdian/internal/model"
 	"gourdian/internal/stats"
 )
 
@@ -128,7 +129,7 @@ func TestGSIRecordsMatch(t *testing.T) {
 		t.Fatalf("want samples at minutes 5, 6 and 7, got %+v", timeline)
 	}
 	tips, _ := st.Tips()
-	if !slices.ContainsFunc(tips, func(t stats.TipRecord) bool { return strings.Contains(t.Text, "No TP scroll") }) {
+	if !slices.ContainsFunc(tips, func(t model.TipRecord) bool { return strings.Contains(t.Text, "No TP scroll") }) {
 		t.Fatalf("the TP warning was not recorded: %+v", tips)
 	}
 }
@@ -389,9 +390,9 @@ func TestRoleGuessForNewHero(t *testing.T) {
 	srv, h, dir := newTestServer(t, func(s *config.Settings) { s.Role = dota.Carry })
 	st := openStats(t, dir)
 	for _, id := range []string{"1", "2"} {
-		st.AppendMatch(stats.MatchSummary{MatchID: id, HeroID: 74, Hero: "Invoker", Role: dota.Mid, Source: stats.SourceOpenDota})
+		st.AppendMatch(model.MatchSummary{MatchID: id, HeroID: 74, Hero: "Invoker", Role: dota.Mid, Source: model.SourceOpenDota})
 	}
-	st.AppendMatch(stats.MatchSummary{MatchID: "3", HeroID: 74, Hero: "Invoker", Role: dota.Carry, Source: stats.SourceOpenDota})
+	st.AppendMatch(model.MatchSummary{MatchID: "3", HeroID: 74, Hero: "Invoker", Role: dota.Carry, Source: model.SourceOpenDota})
 	postState(t, h, payload(-60, func(s *gsi.State) { s.Map.GameState = gsi.StatePreGame }))
 	if got := srv.cfg.Settings().Role; got != dota.Mid {
 		t.Fatalf("role = %s, want the most common role on this hero", got)
@@ -553,6 +554,12 @@ func TestRulesAPISaveApplyAndTestOnRecording(t *testing.T) {
 	if rec := do(http.MethodPut, "/api/rules/builtin/low_hp", `{"severity":"urgent"}`); rec.Code != http.StatusOK {
 		t.Fatalf("changing a built-in rule's severity: %d %s", rec.Code, rec.Body)
 	}
+	if rec := do(http.MethodPut, "/api/rules/builtin/low_hp", ""); rec.Code != http.StatusBadRequest {
+		t.Fatalf("an edit that says nothing must be refused, not clear the rule: %d", rec.Code)
+	}
+	if o := srv.rules.Get().Overrides["low_hp"]; o.Severity != string(coach.Urgent) {
+		t.Fatalf("the earlier edit was lost: %+v", o)
+	}
 	if rec := do(http.MethodDelete, "/api/rules/custom/"+custom[0].ID, ""); rec.Code != http.StatusOK || len(srv.rules.Get().Custom) != 0 {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
 	}
@@ -580,11 +587,11 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 	st := openStats(t, dir)
 	for i, lh := range []int{40, 44, 38} {
 		id := fmt.Sprint(900 + i)
-		st.AppendMatch(stats.MatchSummary{MatchID: id, HeroID: 1, Hero: "Anti-Mage", Role: dota.Carry, Source: stats.SourceOpenDota,
+		st.AppendMatch(model.MatchSummary{MatchID: id, HeroID: 1, Hero: "Anti-Mage", Role: dota.Carry, Source: model.SourceOpenDota,
 			LastHitsAt: map[string]int{"10:00": lh}})
-		st.AppendItems([]stats.ItemTiming{
-			{MatchID: id, Item: "bfury", Time: 1000 + 60*i, Source: stats.SourceOpenDota},
-			{MatchID: id, Item: "manta", Time: 1500 + 60*i, Source: stats.SourceOpenDota},
+		st.AppendItems([]model.ItemTiming{
+			{MatchID: id, Item: "bfury", Time: 1000 + 60*i, Source: model.SourceOpenDota},
+			{MatchID: id, Item: "manta", Time: 1500 + 60*i, Source: model.SourceOpenDota},
 		})
 	}
 	var got coach.Targets
@@ -610,21 +617,21 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 
 func TestTiltReason(t *testing.T) {
 	base := time.Date(2026, 9, 17, 18, 0, 0, 0, time.UTC)
-	game := func(minutes int, result string) stats.MatchSummary {
-		return stats.MatchSummary{MatchID: fmt.Sprint(minutes), Result: result, Source: stats.SourceLive, EndedAt: base.Add(time.Duration(minutes) * time.Minute)}
+	game := func(minutes int, result string) model.MatchSummary {
+		return model.MatchSummary{MatchID: fmt.Sprint(minutes), Result: result, Source: model.SourceLive, EndedAt: base.Add(time.Duration(minutes) * time.Minute)}
 	}
 	cases := []struct {
 		name    string
-		matches []stats.MatchSummary
-		mmr     []stats.MMREntry
+		matches []model.MatchSummary
+		mmr     []model.MMREntry
 		want    string
 	}{
-		{"two losses", []stats.MatchSummary{game(0, "win"), game(45, "loss"), game(90, "loss")}, nil, "Two losses in a row"},
-		{"gap ends the session", []stats.MatchSummary{game(0, "loss"), game(300, "loss")}, nil, ""},
-		{"three of four", []stats.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win"), game(120, "loss")}, nil, "Three of your last four"},
-		{"win breaks it", []stats.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win")}, nil, ""},
-		{"mmr drop", []stats.MatchSummary{game(0, "win"), game(40, "loss")},
-			[]stats.MMREntry{{Date: base, MMR: 3000}, {Date: base.Add(50 * time.Minute), MMR: 2940}}, "down 60 MMR"},
+		{"two losses", []model.MatchSummary{game(0, "win"), game(45, "loss"), game(90, "loss")}, nil, "Two losses in a row"},
+		{"gap ends the session", []model.MatchSummary{game(0, "loss"), game(300, "loss")}, nil, ""},
+		{"three of four", []model.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win"), game(120, "loss")}, nil, "Three of your last four"},
+		{"win breaks it", []model.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win")}, nil, ""},
+		{"mmr drop", []model.MatchSummary{game(0, "win"), game(40, "loss")},
+			[]model.MMREntry{{Date: base, MMR: 3000}, {Date: base.Add(50 * time.Minute), MMR: 2940}}, "down 60 MMR"},
 	}
 	for _, c := range cases {
 		if got := tiltReason(c.matches, c.mmr); c.want == "" && got != "" || !strings.Contains(got, c.want) {
@@ -640,8 +647,8 @@ func TestBriefingBeforeHorn(t *testing.T) {
 	})
 	st := openStats(t, dir)
 	for i, result := range []string{"win", "loss", "win"} {
-		st.AppendMatch(stats.MatchSummary{MatchID: fmt.Sprint(i + 1), HeroID: 74, Hero: "invoker", Role: dota.Mid, Result: result,
-			Source: stats.SourceOpenDota, LastHitsAt: map[string]int{"10:00": 50 + i*5}})
+		st.AppendMatch(model.MatchSummary{MatchID: fmt.Sprint(i + 1), HeroID: 74, Hero: "invoker", Role: dota.Mid, Result: result,
+			Source: model.SourceOpenDota, LastHitsAt: map[string]int{"10:00": 50 + i*5}})
 	}
 	postState(t, h, payload(-30, func(s *gsi.State) { s.Map.GameState = gsi.StatePreGame }))
 	snap := srv.snapshot(srv.cfg.Settings())
@@ -753,4 +760,25 @@ func TestHubDropsEventsForAClientThatFallsBehind(t *testing.T) {
 		t.Error("the drop isn't noted for the client")
 	}
 	h.mu.Unlock()
+}
+
+// A request that says nothing is refused, so a mistake never reads as "change everything to
+// nothing"; only the handlers whose fields are all optional take an empty body.
+func TestReadJSONRefusesAnEmptyBody(t *testing.T) {
+	var v struct{ N int }
+	read := func(f func(http.ResponseWriter, *http.Request, int64, any) error, body string) error {
+		return f(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)), 1<<10, &v)
+	}
+	if err := read(readJSON, ""); err == nil {
+		t.Fatal("an empty body was accepted")
+	}
+	if err := read(readJSON, `{"N": 3}`); err != nil || v.N != 3 {
+		t.Fatalf("good body: %v, %+v", err, v)
+	}
+	if err := read(readOptionalJSON, ""); err != nil {
+		t.Fatalf("empty optional body: %v", err)
+	}
+	if err := read(readOptionalJSON, `{"N": `); err == nil {
+		t.Fatal("a broken body was accepted")
+	}
 }

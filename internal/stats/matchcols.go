@@ -2,6 +2,7 @@ package stats
 
 import (
 	"fmt"
+	"gourdian/internal/model"
 	"strings"
 	"time"
 )
@@ -10,49 +11,49 @@ import (
 // stored value is read back into.
 type matchCol struct {
 	name, typ string
-	value     func(m *MatchSummary) any
-	dest      func(m *MatchSummary) any
+	value     func(m *model.MatchSummary) any
+	dest      func(m *model.MatchSummary) any
 }
 
 // matchCols are the matches table's columns, in order. The table's schema, inserts and reads
 // all come from here, so a new field is one line here plus a migration adding its column to
 // older files.
 var matchCols = []matchCol{
-	{"match_id", "TEXT PRIMARY KEY", func(m *MatchSummary) any { return m.MatchID }, func(m *MatchSummary) any { return &m.MatchID }},
-	{"ended_at", "TEXT", func(m *MatchSummary) any { return timeValue(m.EndedAt) }, func(m *MatchSummary) any { return timeCol{&m.EndedAt} }},
-	{"source", "TEXT", func(m *MatchSummary) any { return m.Source }, func(m *MatchSummary) any { return &m.Source }},
-	{"hero_id", "INTEGER", func(m *MatchSummary) any { return m.HeroID }, func(m *MatchSummary) any { return &m.HeroID }},
-	{"hero", "TEXT", func(m *MatchSummary) any { return m.Hero }, func(m *MatchSummary) any { return &m.Hero }},
-	{"role", "TEXT", func(m *MatchSummary) any { return m.Role }, func(m *MatchSummary) any { return &m.Role }},
-	{"team", "TEXT", func(m *MatchSummary) any { return m.Team }, func(m *MatchSummary) any { return &m.Team }},
-	{"result", "TEXT", func(m *MatchSummary) any { return m.Result }, func(m *MatchSummary) any { return &m.Result }},
-	{"duration_sec", "INTEGER", func(m *MatchSummary) any { return m.DurationSec }, func(m *MatchSummary) any { return &m.DurationSec }},
-	{"kills", "INTEGER", func(m *MatchSummary) any { return m.Kills }, func(m *MatchSummary) any { return &m.Kills }},
-	{"deaths", "INTEGER", func(m *MatchSummary) any { return m.Deaths }, func(m *MatchSummary) any { return &m.Deaths }},
-	{"assists", "INTEGER", func(m *MatchSummary) any { return m.Assists }, func(m *MatchSummary) any { return &m.Assists }},
-	{"last_hits", "INTEGER", func(m *MatchSummary) any { return m.LastHits }, func(m *MatchSummary) any { return &m.LastHits }},
-	{"denies", "INTEGER", func(m *MatchSummary) any { return m.Denies }, func(m *MatchSummary) any { return &m.Denies }},
-	{"gpm", "INTEGER", func(m *MatchSummary) any { return m.GPM }, func(m *MatchSummary) any { return &m.GPM }},
-	{"xpm", "INTEGER", func(m *MatchSummary) any { return m.XPM }, func(m *MatchSummary) any { return &m.XPM }},
-	{"rank_tier", "INTEGER", func(m *MatchSummary) any { return m.RankTier }, func(m *MatchSummary) any { return &m.RankTier }},
-	{"simulated", "INTEGER", func(m *MatchSummary) any { return boolInt(m.Simulated) }, func(m *MatchSummary) any { return boolCol{&m.Simulated} }},
-	{"ranked", "INTEGER", func(m *MatchSummary) any { return boolInt(m.Ranked) }, func(m *MatchSummary) any { return boolCol{&m.Ranked} }},
-	{"parsed", "INTEGER", func(m *MatchSummary) any { return boolInt(m.Parsed) }, func(m *MatchSummary) any { return boolCol{&m.Parsed} }},
-	{"lane_role", "INTEGER", func(m *MatchSummary) any { return m.LaneRole }, func(m *MatchSummary) any { return &m.LaneRole }},
-	{"net_worth", "INTEGER", func(m *MatchSummary) any { return m.NetWorth }, func(m *MatchSummary) any { return &m.NetWorth }},
-	{"hero_damage", "INTEGER", func(m *MatchSummary) any { return m.HeroDamage }, func(m *MatchSummary) any { return &m.HeroDamage }},
-	{"tower_damage", "INTEGER", func(m *MatchSummary) any { return m.TowerDamage }, func(m *MatchSummary) any { return &m.TowerDamage }},
-	{"obs_placed", "INTEGER", func(m *MatchSummary) any { return m.ObsPlaced }, func(m *MatchSummary) any { return &m.ObsPlaced }},
-	{"sen_placed", "INTEGER", func(m *MatchSummary) any { return m.SenPlaced }, func(m *MatchSummary) any { return &m.SenPlaced }},
-	{"camps_stacked", "INTEGER", func(m *MatchSummary) any { return m.CampsStacked }, func(m *MatchSummary) any { return &m.CampsStacked }},
-	{"teamfight", "REAL", func(m *MatchSummary) any { return m.TeamfightParticipation }, func(m *MatchSummary) any { return &m.TeamfightParticipation }},
-	{"gpm_pct", "REAL", func(m *MatchSummary) any { return m.GPMPct }, func(m *MatchSummary) any { return &m.GPMPct }},
-	{"lh_pct", "REAL", func(m *MatchSummary) any { return m.LHPct }, func(m *MatchSummary) any { return &m.LHPct }},
-	{"hero_damage_pct", "REAL", func(m *MatchSummary) any { return m.HeroDamagePct }, func(m *MatchSummary) any { return &m.HeroDamagePct }},
-	{"enemy_heroes", "TEXT", func(m *MatchSummary) any { return jsonValue(m.EnemyHeroes) }, func(m *MatchSummary) any { return stringsCol{&m.EnemyHeroes} }},
-	{"last_hits_at", "TEXT", func(m *MatchSummary) any { return jsonValue(m.LastHitsAt) }, func(m *MatchSummary) any { return countsCol{&m.LastHitsAt} }},
-	{"death_clocks", "TEXT", func(m *MatchSummary) any { return jsonValue(m.DeathClocks) }, func(m *MatchSummary) any { return intsCol{&m.DeathClocks} }},
-	{"tip_counts", "TEXT", func(m *MatchSummary) any { return jsonValue(m.TipCounts) }, func(m *MatchSummary) any { return countsCol{&m.TipCounts} }},
+	{"match_id", "TEXT PRIMARY KEY", func(m *model.MatchSummary) any { return m.MatchID }, func(m *model.MatchSummary) any { return &m.MatchID }},
+	{"ended_at", "TEXT", func(m *model.MatchSummary) any { return timeValue(m.EndedAt) }, func(m *model.MatchSummary) any { return timeCol{&m.EndedAt} }},
+	{"source", "TEXT", func(m *model.MatchSummary) any { return m.Source }, func(m *model.MatchSummary) any { return &m.Source }},
+	{"hero_id", "INTEGER", func(m *model.MatchSummary) any { return m.HeroID }, func(m *model.MatchSummary) any { return &m.HeroID }},
+	{"hero", "TEXT", func(m *model.MatchSummary) any { return m.Hero }, func(m *model.MatchSummary) any { return &m.Hero }},
+	{"role", "TEXT", func(m *model.MatchSummary) any { return m.Role }, func(m *model.MatchSummary) any { return &m.Role }},
+	{"team", "TEXT", func(m *model.MatchSummary) any { return m.Team }, func(m *model.MatchSummary) any { return &m.Team }},
+	{"result", "TEXT", func(m *model.MatchSummary) any { return m.Result }, func(m *model.MatchSummary) any { return &m.Result }},
+	{"duration_sec", "INTEGER", func(m *model.MatchSummary) any { return m.DurationSec }, func(m *model.MatchSummary) any { return &m.DurationSec }},
+	{"kills", "INTEGER", func(m *model.MatchSummary) any { return m.Kills }, func(m *model.MatchSummary) any { return &m.Kills }},
+	{"deaths", "INTEGER", func(m *model.MatchSummary) any { return m.Deaths }, func(m *model.MatchSummary) any { return &m.Deaths }},
+	{"assists", "INTEGER", func(m *model.MatchSummary) any { return m.Assists }, func(m *model.MatchSummary) any { return &m.Assists }},
+	{"last_hits", "INTEGER", func(m *model.MatchSummary) any { return m.LastHits }, func(m *model.MatchSummary) any { return &m.LastHits }},
+	{"denies", "INTEGER", func(m *model.MatchSummary) any { return m.Denies }, func(m *model.MatchSummary) any { return &m.Denies }},
+	{"gpm", "INTEGER", func(m *model.MatchSummary) any { return m.GPM }, func(m *model.MatchSummary) any { return &m.GPM }},
+	{"xpm", "INTEGER", func(m *model.MatchSummary) any { return m.XPM }, func(m *model.MatchSummary) any { return &m.XPM }},
+	{"rank_tier", "INTEGER", func(m *model.MatchSummary) any { return m.RankTier }, func(m *model.MatchSummary) any { return &m.RankTier }},
+	{"simulated", "INTEGER", func(m *model.MatchSummary) any { return boolInt(m.Simulated) }, func(m *model.MatchSummary) any { return boolCol{&m.Simulated} }},
+	{"ranked", "INTEGER", func(m *model.MatchSummary) any { return boolInt(m.Ranked) }, func(m *model.MatchSummary) any { return boolCol{&m.Ranked} }},
+	{"parsed", "INTEGER", func(m *model.MatchSummary) any { return boolInt(m.Parsed) }, func(m *model.MatchSummary) any { return boolCol{&m.Parsed} }},
+	{"lane_role", "INTEGER", func(m *model.MatchSummary) any { return m.LaneRole }, func(m *model.MatchSummary) any { return &m.LaneRole }},
+	{"net_worth", "INTEGER", func(m *model.MatchSummary) any { return m.NetWorth }, func(m *model.MatchSummary) any { return &m.NetWorth }},
+	{"hero_damage", "INTEGER", func(m *model.MatchSummary) any { return m.HeroDamage }, func(m *model.MatchSummary) any { return &m.HeroDamage }},
+	{"tower_damage", "INTEGER", func(m *model.MatchSummary) any { return m.TowerDamage }, func(m *model.MatchSummary) any { return &m.TowerDamage }},
+	{"obs_placed", "INTEGER", func(m *model.MatchSummary) any { return m.ObsPlaced }, func(m *model.MatchSummary) any { return &m.ObsPlaced }},
+	{"sen_placed", "INTEGER", func(m *model.MatchSummary) any { return m.SenPlaced }, func(m *model.MatchSummary) any { return &m.SenPlaced }},
+	{"camps_stacked", "INTEGER", func(m *model.MatchSummary) any { return m.CampsStacked }, func(m *model.MatchSummary) any { return &m.CampsStacked }},
+	{"teamfight", "REAL", func(m *model.MatchSummary) any { return m.TeamfightParticipation }, func(m *model.MatchSummary) any { return &m.TeamfightParticipation }},
+	{"gpm_pct", "REAL", func(m *model.MatchSummary) any { return m.GPMPct }, func(m *model.MatchSummary) any { return &m.GPMPct }},
+	{"lh_pct", "REAL", func(m *model.MatchSummary) any { return m.LHPct }, func(m *model.MatchSummary) any { return &m.LHPct }},
+	{"hero_damage_pct", "REAL", func(m *model.MatchSummary) any { return m.HeroDamagePct }, func(m *model.MatchSummary) any { return &m.HeroDamagePct }},
+	{"enemy_heroes", "TEXT", func(m *model.MatchSummary) any { return jsonValue(m.EnemyHeroes) }, func(m *model.MatchSummary) any { return stringsCol{&m.EnemyHeroes} }},
+	{"last_hits_at", "TEXT", func(m *model.MatchSummary) any { return jsonValue(m.LastHitsAt) }, func(m *model.MatchSummary) any { return countsCol{&m.LastHitsAt} }},
+	{"death_clocks", "TEXT", func(m *model.MatchSummary) any { return jsonValue(m.DeathClocks) }, func(m *model.MatchSummary) any { return intsCol{&m.DeathClocks} }},
+	{"tip_counts", "TEXT", func(m *model.MatchSummary) any { return jsonValue(m.TipCounts) }, func(m *model.MatchSummary) any { return countsCol{&m.TipCounts} }},
 }
 
 var (
@@ -69,7 +70,7 @@ func joinCols(f func(matchCol) string) string {
 	return strings.Join(parts, ", ")
 }
 
-func matchValues(m MatchSummary) []any {
+func matchValues(m model.MatchSummary) []any {
 	out := make([]any, len(matchCols))
 	for i, c := range matchCols {
 		out[i] = c.value(&m)
@@ -80,8 +81,8 @@ func matchValues(m MatchSummary) []any {
 // scanner is *sql.Rows or *sql.Row.
 type scanner interface{ Scan(dest ...any) error }
 
-func scanMatch(rows scanner) (MatchSummary, error) {
-	var m MatchSummary
+func scanMatch(rows scanner) (model.MatchSummary, error) {
+	var m model.MatchSummary
 	dest := make([]any, len(matchCols))
 	for i, c := range matchCols {
 		dest[i] = c.dest(&m)
@@ -90,9 +91,9 @@ func scanMatch(rows scanner) (MatchSummary, error) {
 		return m, err
 	}
 	if m.Source == "" {
-		m.Source = SourceLive
+		m.Source = model.SourceLive
 		if m.Simulated {
-			m.Source = SourceSim
+			m.Source = model.SourceSim
 		}
 	}
 	return m, nil
