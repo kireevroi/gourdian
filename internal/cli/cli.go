@@ -26,6 +26,7 @@ Usage:
   gourdian stats                         summarize your recorded matches and show where the CSVs are
   gourdian mmr 2450 [note]               log your current MMR for the trend charts
   gourdian import [-n 50] [-account ID]  add your recent matches from OpenDota to the statistics
+  gourdian draft [-for 30s]              photograph the screen during a draft and say which heroes it can make out
 `
 
 // Main runs the command named by argv and reports the process exit code: 0 when it worked,
@@ -56,6 +57,8 @@ func Main(argv []string) int {
 		err = overlayCmd(args)
 	case "stats":
 		err = statsCmd()
+	case "draft":
+		err = draftCmd(args)
 	case "doctor":
 		err = doctor()
 	case "setup":

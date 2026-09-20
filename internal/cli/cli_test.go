@@ -62,7 +62,7 @@ func TestEveryListedCommandIsDispatched(t *testing.T) {
 // commands is the list Main switches on, kept beside it so the test above can check the usage.
 func commands() []string {
 	return []string{"run", "install", "uninstall", "simulate", "overlay", "stats", "doctor",
-		"setup", "quit", "version", "replay", "mmr", "import", "help"}
+		"setup", "quit", "version", "replay", "mmr", "import", "draft", "help"}
 }
 
 func mainIs(t *testing.T, want int, args ...string) {

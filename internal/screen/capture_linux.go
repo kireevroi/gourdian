@@ -11,14 +11,24 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
-// Size is how big the screen is.
+// Size is how big the screen is. The root window's own geometry is asked for rather than the
+// size the display announces: with more than one monitor, or under a compositor, the second
+// can cover ground the server won't hand back pixels for.
 func Size() (image.Rectangle, error) {
 	conn, screen, err := connect()
 	if err != nil {
 		return image.Rectangle{}, err
 	}
 	defer conn.Close()
-	return image.Rect(0, 0, int(screen.WidthInPixels), int(screen.HeightInPixels)), nil
+	return rootSize(conn, screen)
+}
+
+func rootSize(conn *xgb.Conn, screen *xproto.ScreenInfo) (image.Rectangle, error) {
+	geom, err := xproto.GetGeometry(conn, xproto.Drawable(screen.Root)).Reply()
+	if err != nil {
+		return image.Rect(0, 0, int(screen.WidthInPixels), int(screen.HeightInPixels)), nil
+	}
+	return image.Rect(0, 0, int(geom.Width), int(geom.Height)), nil
 }
 
 // Grab copies the part of the screen inside r. Under Wayland the root window is not the
@@ -32,7 +42,10 @@ func Grab(r image.Rectangle) (image.Image, error) {
 		return nil, err
 	}
 	defer conn.Close()
-	whole := image.Rect(0, 0, int(screen.WidthInPixels), int(screen.HeightInPixels))
+	whole, err := rootSize(conn, screen)
+	if err != nil {
+		return nil, err
+	}
 	r = r.Intersect(whole)
 	if r.Empty() {
 		return nil, fmt.Errorf("that part of the screen is off it")
@@ -40,7 +53,10 @@ func Grab(r image.Rectangle) (image.Image, error) {
 	reply, err := xproto.GetImage(conn, xproto.ImageFormatZPixmap, xproto.Drawable(screen.Root),
 		int16(r.Min.X), int16(r.Min.Y), uint16(r.Dx()), uint16(r.Dy()), 0xffffffff).Reply()
 	if err != nil {
-		return nil, fmt.Errorf("couldn't read the screen: %w", err)
+		// The usual cause is a root window the server won't hand pixels back for: Wayland
+		// through XWayland, or WSLg, where the Linux root isn't the desktop you can see.
+		return nil, fmt.Errorf("the X server wouldn't hand back the screen (%w). "+
+			"Under WSL or Wayland the desktop isn't the X root window, so it can't be read from here", err)
 	}
 	if len(reply.Data) < r.Dx()*r.Dy()*4 {
 		return nil, fmt.Errorf("the X server returned %d bytes for a %dx%d picture", len(reply.Data), r.Dx(), r.Dy())

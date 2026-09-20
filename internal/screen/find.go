@@ -175,3 +175,66 @@ func findRun(shot image.Image, t Table, like Box, toTheRight bool) (Box, int) {
 	}
 	return best, bestRead
 }
+
+// Spotted is one portrait found on the screen, and which hero it is.
+type Spotted struct {
+	Cell image.Rectangle
+	Hero int
+}
+
+// FindAny sweeps the top of the screen for any portrait it knows, without being told which to
+// look for. Every probe is compared against every hero rather than against one, so it takes
+// seconds rather than milliseconds — but it needs nothing from the game, which means it can
+// work out where the bar is during the draft itself.
+func FindAny(shot image.Image, t Table) []Spotted {
+	b := shot.Bounds()
+	if b.Dx() < 40 || b.Dy() < 40 || len(t) == 0 {
+		return nil
+	}
+	top := b.Min.Y + int(float64(b.Dy())*TopFraction)
+	minH, maxH := max(8, int(float64(b.Dy())*MinCellH)), int(float64(b.Dy())*MaxCellH)
+	var found []Spotted
+	for h := minH; h <= maxH; h += max(1, (maxH-minH)/8) {
+		for _, aspect := range []float64{AspectMin, 1.3, 1.6, AspectMax} {
+			w := int(float64(h) * aspect)
+			if w < 8 {
+				continue
+			}
+			for y := b.Min.Y; y+h <= top; y += max(2, h/4) {
+				for x := b.Min.X; x+w <= b.Max.X; x += max(4, w/4) {
+					cell := image.Rect(x, y, x+w, y+h)
+					if id, ok := t.Match(Of(shot, cell)); ok {
+						found = append(found, Spotted{Cell: cell, Hero: id})
+					}
+				}
+			}
+		}
+	}
+	return strongest(found)
+}
+
+// strongest keeps one sighting per place on the screen: the sweep tries overlapping shapes,
+// so the same portrait is found many times over.
+func strongest(found []Spotted) []Spotted {
+	var out []Spotted
+	for _, s := range found {
+		overlap := false
+		for i, kept := range out {
+			if s.Cell.Intersect(kept.Cell).Empty() {
+				continue
+			}
+			overlap = true
+			// Prefer the bigger reading of the same place: it has more of the portrait in it.
+			if area(s.Cell) > area(kept.Cell) {
+				out[i] = s
+			}
+			break
+		}
+		if !overlap {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func area(r image.Rectangle) int { return r.Dx() * r.Dy() }
