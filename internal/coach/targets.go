@@ -1,7 +1,6 @@
 package coach
 
 import (
-	"fmt"
 	"math"
 	"slices"
 
@@ -104,17 +103,6 @@ func expectedLastHits(targets []int, clock int) (int, bool) {
 	return targets[last] + int(perSec*float64(clock-paceCheckpoints[last])), true
 }
 
-func (c *Ctx) heroName() string {
-	if c.data != nil {
-		if info, ok := c.data.Hero(c.S.Hero.ID); ok {
-			return info.LocalizedName
-		}
-	}
-	return "this hero"
-}
-
-// itemTiming warns before each core item goal, when it's late, and says how the timing went.
-
 // switchedFrom reports whether the player finished another item worth at least 80% of the
 // goal instead, which means they changed the build rather than fell behind on it.
 func (c *Ctx) switchedFrom(g ItemGoal, items map[string]dotadata.ItemInfo) bool {
@@ -127,13 +115,6 @@ func (c *Ctx) switchedFrom(g ItemGoal, items map[string]dotadata.ItemInfo) bool 
 		}
 	}
 	return false
-}
-
-func duration(sec int) string {
-	if sec < 60 {
-		return fmt.Sprintf("%ds", sec)
-	}
-	return dota.Clock(sec)
 }
 
 // seeItems records when each item first appears. Items already held when the trainer first

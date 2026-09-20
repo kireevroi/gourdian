@@ -43,10 +43,6 @@ func nextPeriodic(clock, first, period int) (int, bool) {
 	return first + (clock-first+period-1)/period*period, true
 }
 
-func upcoming(clock, at, lead int) bool { return clock >= at-lead && clock < at }
-
-func within(clock, at, window int) bool { return clock >= at && clock < at+window }
-
 // backpackActive is the first item in the backpack that does nothing there, or "".
 func backpackActive(s *gsi.State) string {
 	for _, it := range s.ItemsIn(gsi.Backpack) {
@@ -115,10 +111,3 @@ func init() {
 // SkillPointsAtLevel is how many skill points a hero has had by a level. Since 7.40 talents
 // have their own points, so every level gives one skill point (checked on a 7.41 match).
 func SkillPointsAtLevel(level int) int { return level }
-
-func capitalize(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}

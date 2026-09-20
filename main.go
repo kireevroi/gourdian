@@ -288,6 +288,7 @@ func installCmd(args []string, remove bool) error {
 		dirs = []string{install.WSLPath(*dota)}
 	}
 	if len(dirs) == 0 {
+		//lint:ignore ST1005 printed to the player as a sentence, and it starts with a name
 		return errors.New(`Dota 2 not found; pass -dota "<Steam library>/steamapps/common/dota 2 beta"`)
 	}
 	for _, d := range dirs {
