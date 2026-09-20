@@ -54,6 +54,14 @@ func backpackActive(s *gsi.State) string {
 }
 
 // teamSuffix names whose Roshan kill or Aegis an event was, when GSI reports the team.
+// shardCost is what Aghanim's Shard costs, from OpenDota's item prices when they have loaded.
+func shardCost(c *Ctx) float64 {
+	if info, ok := c.items()["aghanims_shard"]; ok && info.Cost > 0 {
+		return f64(info.Cost)
+	}
+	return dota.ShardCost
+}
+
 func teamSuffix(team, mine, preposition string) string {
 	switch {
 	case team == "" || mine == "":
@@ -111,11 +119,3 @@ func init() {
 // SkillPointsAtLevel is how many skill points a hero has had by a level. Since 7.40 talents
 // have their own points, so every level gives one skill point (checked on a 7.41 match).
 func SkillPointsAtLevel(level int) int { return level }
-
-// shardCost is what Aghanim's Shard costs, from OpenDota's item prices when they have loaded.
-func shardCost(c *Ctx) float64 {
-	if info, ok := c.items()["aghanims_shard"]; ok && info.Cost > 0 {
-		return f64(info.Cost)
-	}
-	return dota.ShardCost
-}
