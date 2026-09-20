@@ -269,6 +269,16 @@ var Fields = []Field{
 			}
 			return 100
 		})},
+	{ID: "shard_cost", Label: "Aghanim's Shard cost", Group: "Items", Type: "number", Unit: "gold",
+		num: num(shardCost)},
+	{ID: "shard_on_sale", Label: "Aghanim's Shard is on sale", Group: "Items", Type: "bool",
+		Help: "From 15:00, and only while you don't have one; a Tormentor's Shard counts.",
+		flag: flag(func(c *Ctx) bool { return c.Clock >= c.T.ShardFrom && !c.S.Hero.AghanimsShard })},
+	{ID: "shard_gold", Label: "Gold still needed for Aghanim's Shard", Group: "Items", Type: "number", Unit: "gold",
+		Help: "0 once you can afford it.",
+		num: num(func(c *Ctx) float64 {
+			return math.Max(shardCost(c)-f64(c.S.Player.Gold), 0)
+		})},
 	{ID: "backpack_active", Label: "An active item is in the backpack", Group: "Items", Type: "bool",
 		Help: "Wand, BKB, blink and the like do nothing from the backpack.",
 		flag: flag(func(c *Ctx) bool { return backpackActive(c.S) != "" })},

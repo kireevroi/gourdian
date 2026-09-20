@@ -4,7 +4,7 @@
 
 A live coach for Dota 2, called Dota Trainer before 1.5. While you play it:
 
-- **Speaks tips**: rune timings, a missing TP scroll, low HP, unspent gold, items stuck in the stash or backpack, unspent skill points, farm pace, item timing goals, Roshan and Aegis timers, and more.
+- **Speaks tips**: rune timings, a missing TP scroll, low HP, unspent gold, items stuck in the stash or backpack, unspent skill points, farm pace, item timing goals, an Aghanim's Shard you can afford, Roshan and Aegis timers, and more.
 - **Draws a transparent HUD** over the game — you choose where it sits, how big and see-through it is, and which lines it shows.
 - **Coaches for the position you actually play**, picked with Ctrl+Shift+1…5 or worked out from the lane you stand in.
 - **Sets personal targets** from your own match history: last hits at each checkpoint, timings for your core items, goals for the week.

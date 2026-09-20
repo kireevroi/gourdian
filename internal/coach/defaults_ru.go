@@ -176,6 +176,16 @@ var russian = map[string]wording{
 		Name: "Носите обзорные варды", Text: "Вы давно носите обзорные варды. Поставьте их", Speech: "Поставьте варды",
 		Habit: "Носит варды", Advice: "Варды в инвентаре не дают обзора. Ставьте их сразу после покупки.",
 	},
+	"shard_sale": {
+		Name:   "Aghanim's Shard поступил в продажу",
+		Text:   "Aghanim's Shard в продаже ({shard_cost} з.). Он усиливает одну из ваших способностей до конца игры",
+		Speech: "Aghanim's Shard в продаже",
+	},
+	"shard": {
+		Name: "Хватает на Aghanim's Shard", Text: "Хватает на Aghanim's Shard ({shard_cost} з.). Купите его до следующего предмета",
+		Speech: "Купите Aghanim's Shard", Habit: "Нет Aghanim's Shard",
+		Advice: "Шард усиливает способность до конца игры и стоит дешевле большинства предметов. Саппортам стоит взять его вскоре после 15:00.",
+	},
 	"skill_points": {
 		Name: "Нераспределённое очко умений", Text: "У вас есть нераспределённое очко умений. {skill_tip} ({skill_source})",
 		Speech: "{skill_tip}", Habit: "Нераспределённое очко умений",

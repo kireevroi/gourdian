@@ -10,6 +10,7 @@ type Timings struct {
 	WisdomRuneEvery  int   `json:"wisdom_rune_every"`
 	LotusEvery       int   `json:"lotus_every"`
 	TormentorSpawn   int   `json:"tormentor_spawn"`
+	ShardFrom        int   `json:"shard_from"`
 	NeutralTiers     []int `json:"neutral_tiers"`
 	RoshanRespawnMin int   `json:"roshan_respawn_min"`
 	RoshanRespawnMax int   `json:"roshan_respawn_max"`
@@ -29,6 +30,7 @@ func DefaultTimings() Timings {
 		WisdomRuneEvery:  420,                               // Shrines of Wisdom every 7:00 since 7.38
 		LotusEvery:       180,                               // a lotus every 3:00, six at most
 		TormentorSpawn:   1200,                              // 20:00 since 7.39, then 10:00 after it dies
+		ShardFrom:        900,                               // Aghanim's Shard goes on sale at 15:00
 		NeutralTiers:     []int{300, 900, 1500, 2100, 3600}, // Madstone cap rises at 5/15/25/35/60 min
 		RoshanRespawnMin: 480,                               // 8 to 11 minutes after he dies
 		RoshanRespawnMax: 660,
@@ -37,3 +39,6 @@ func DefaultTimings() Timings {
 		BuybackFrom:      1800, // coaching choice, not a game rule: keep buyback gold from 30:00
 	}
 }
+
+// ShardCost is what Aghanim's Shard costs when OpenDota's item prices haven't loaded yet.
+const ShardCost = 1400
