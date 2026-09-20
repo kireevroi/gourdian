@@ -3,7 +3,7 @@ GOFLAGS := -buildvcs=false
 VERSION := $(shell cat VERSION)
 LDFLAGS := -X gourdian/internal/buildinfo.Version=$(VERSION)
 
-.PHONY: all linux windows test lint notices release install winres cert cert-github installer app clean linux-dist linux-install linux-uninstall
+.PHONY: all linux windows test version-check lint notices release install winres cert cert-github installer app clean linux-dist linux-install linux-uninstall
 
 all: linux windows
 
@@ -34,8 +34,13 @@ installer: winres all
 app: installer
 	cd /mnt/c && "$(CURDIR)/dist/Gourdian-Setup-$(VERSION).exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 
+# The version lives in VERSION; PKGBUILD repeats it for makepkg, so they have to agree.
+version-check:
+	@v=$$(tr -d '[:space:]' < VERSION); p=$$(sed -n 's/^pkgver=//p' packaging/arch/PKGBUILD); \
+	[ "$$v" = "$$p" ] || { echo "VERSION is $$v but PKGBUILD says $$p" >&2; exit 1; }
+
 # Formatting, vet for Linux and Windows, then the tests with the race detector.
-test:
+test: version-check
 	@files=$$(gofmt -l $$(git ls-files '*.go')); if [ -n "$$files" ]; then echo "not gofmt'ed:" $$files >&2; exit 1; fi
 	go vet ./... && GOOS=windows go vet ./... && go test -race ./...
 
@@ -50,7 +55,9 @@ notices:
 lint:
 	go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
 
-# Publishes VERSION: tags the current main commit v$(VERSION) and pushes it. GitHub then
+# Publishes VERSION: tags the current main commit v$(VERSION) and pushes it. The tag is what
+# decides the version built and published, so tagging in the GitHub UI works the same way.
+# GitHub then
 # builds the installer and the Linux tarball and attaches them to a release.
 release: test
 	@git diff --quiet HEAD || { echo "commit your changes first" >&2; exit 1; }
