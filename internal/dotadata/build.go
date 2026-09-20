@@ -20,7 +20,7 @@ type ItemInfo struct {
 }
 
 // standalone are uncrafted items pros buy for their own use, not as parts.
-var standalone = map[string]bool{"blink": true, "gem": true}
+var standalone = map[string]bool{"blink": true, "gem": true, "ghost": true}
 
 // isPart is an item bought only to become part of another, such as an Ultimate Orb.
 func isPart(name string, info ItemInfo) bool {
@@ -76,6 +76,12 @@ type BuyTimes map[string]map[string]int
 // a step of the build in its own right. A Force Staff bought 40 seconds before it turns into a
 // Hurricane Pike was never the plan; a Dragon Lance carried for six minutes was.
 const mergeGap = 240
+
+// mergedInto reports whether holding an item was only a step toward the bigger one it became:
+// a part nobody buys for its own sake, or an upgrade that followed within mergeGap.
+func mergedInto(part string, partAt, intoAt int, items map[string]ItemInfo) bool {
+	return isPart(part, items[part]) || intoAt-partAt <= mergeGap
+}
 
 // minShare is the percentage of the phase's most bought item an item has to match to count as
 // part of the build. The phase limits used to do this work by accident, spending their slots on
@@ -186,7 +192,7 @@ func stepToward(c cand, phases [][]cand, items map[string]ItemInfo) bool {
 			if into.name == c.name || !Contains(into.name, c.name, items) {
 				continue
 			}
-			if isPart(c.name, items[c.name]) || !c.timed || !into.timed || into.at-c.at <= mergeGap {
+			if !c.timed || !into.timed || mergedInto(c.name, c.at, into.at, items) {
 				return true
 			}
 		}

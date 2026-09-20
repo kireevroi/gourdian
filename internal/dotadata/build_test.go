@@ -177,3 +177,24 @@ func TestBuildSpendsAPhaseOnItemsThatSurviveIt(t *testing.T) {
 		t.Fatalf("build = %v, want %v", got, want)
 	}
 }
+
+// A Ghost Scepter is sold finished, so it belongs in a build even though an Ethereal Blade is
+// made of one. Only the buyers who went on to the Blade right away were on their way to it.
+func TestBuildKeepsAGhostScepterBoughtForItself(t *testing.T) {
+	items := map[string]ItemInfo{
+		"ghost":          {ID: 37, DName: "Ghost Scepter", Cost: 1500, Qual: "component"},
+		"cyclone":        {ID: 100, DName: "Eul's Scepter", Cost: 2725, Qual: "rare", Created: true},
+		"ethereal_blade": {ID: 176, DName: "Ethereal Blade", Cost: 5200, Qual: "epic", Created: true, Components: []string{"ghost"}},
+	}
+	b := BuildFromPopularity(26, Popularity{
+		"mid_game_items":  {"37": 50, "100": 40},
+		"late_game_items": {"176": 30},
+	}, BuyTimes{
+		"mid_game_items":  {"37": 1000, "100": 1100},
+		"late_game_items": {"176": 2000},
+	}, items)
+	want := []string{"mid:ghost", "mid:cyclone", "late:ethereal_blade"}
+	if got := names(b); !slices.Equal(got, want) {
+		t.Fatalf("build = %v, want %v", got, want)
+	}
+}

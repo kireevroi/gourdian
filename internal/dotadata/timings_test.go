@@ -66,3 +66,26 @@ func TestFetchesStopWithTheStartContext(t *testing.T) {
 		t.Fatal("the fetch kept going after the app's context ended")
 	}
 }
+
+// An item carried for minutes before it became something bigger is a timing of its own, so the
+// trainer can hold a player to their usual Dragon Lance and not only their usual Pike.
+func TestCoreItemTimesKeepsAnItemCarriedBeforeItsUpgrade(t *testing.T) {
+	items := map[string]ItemInfo{
+		"force_staff":    {Cost: 2200, Qual: "rare", Created: true},
+		"dragon_lance":   {Cost: 1900, Qual: "artifact", Created: true},
+		"mithril_hammer": {Cost: 1600, Qual: "component"},
+		"hurricane_pike": {Cost: 4450, Qual: "epic", Created: true, Components: []string{"force_staff", "dragon_lance", "mithril_hammer"}},
+	}
+	got := CoreItemTimes(map[string]int{
+		"dragon_lance": 860, "mithril_hammer": 1200, "force_staff": 1220, "hurricane_pike": 1260,
+	}, items, 1500)
+	want := map[string]int{"dragon_lance": 860, "hurricane_pike": 1260}
+	if len(got) != len(want) {
+		t.Fatalf("core items = %v, want %v", got, want)
+	}
+	for n, at := range want {
+		if got[n] != at {
+			t.Fatalf("core items = %v, want %v", got, want)
+		}
+	}
+}
