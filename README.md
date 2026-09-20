@@ -12,7 +12,7 @@ A live coach for Dota 2, called Dota Trainer before 1.5. While you play it:
 - **Asks an AI coach** for situational advice every few minutes and when you die. The Claude Code and Codex CLIs run on your existing subscriptions; API keys and any OpenAI-compatible server work too.
 - **Reviews every match** with the AI afterwards: three improvements, a focus for the next game and measurable goals for the week.
 - **Runs your own rules**: switch built-in tips off, retune them, or build new ones with When / If / Then cards.
-- **Records statistics as CSV files** and charts the trends.
+- **Records every match** in its own data file and charts the trends; one click exports it all as CSV.
 
 It reads Valve's official Game State Integration feed, which only describes your own hero. It never reads game memory, injects into Dota, or sees enemy information. The HUD is a separate click-through window, as safe as a second monitor.
 
@@ -70,7 +70,7 @@ Tips, targets and the AI coach depend on your position. When a match starts on a
 The dashboard is at http://127.0.0.1:4570 and opens in its own window. Its pages:
 
 - **Live**: the tip feed, a briefing before the horn, hero stats, farm pace against your target, core item goals, timers, inventory, the popular build with what to buy next, this week's goals, habits to fix, recent matches and the last review. Position buttons and a voice switch sit at the top.
-- **Stats**: charts and tables over your CSV statistics, weekly goals and every review.
+- **Stats**: charts and tables over your match history, weekly goals and every review.
 - **Rules**: every tip rule, built-in and your own.
 - **HUD**: widgets, order, look and position, with a live preview.
 - **AI coach**: connections, who answers live tips and reviews, and what the coach knows about you.
@@ -231,25 +231,44 @@ Bump `VERSION` (and `pkgver` in `packaging/arch/PKGBUILD`), commit, then `make r
 | `gourdian simulate [-from -60] [-to 1590] [-speed N] [-random]` | Play a fake match into a running trainer |
 | `gourdian replay FILE [-speed N]` | Replay a recording into a running trainer |
 
+### How a game-state post becomes a tip
+
+Dota posts the game state about twice a second. One request runs the whole pipeline:
+
+1. **`POST /gsi` → `handleGSI`** (`internal/server/server.go`) parses the payload into a `gsi.State`, keeping every field it understands even if a new Dota version sends one it doesn't, and checks the token.
+2. **The position** is chosen when a match starts on a different hero (`applyHeroRole`): what you played on that hero last, else your usual position on it, else a guess from OpenDota's hero roles.
+3. **`engine.Update`** (`internal/coach`) runs every rule against the state and the one before it, and returns the tips that fired, the timeline samples, and a finished match when the game ends. Rules are data (`RuleSpec`: when, if, then), each wrapped in `recover`, so one bad rule can't stop the rest.
+4. **Lane detection** may switch the position once the lanes are clear (`applyDetectedRole`), and says so in a tip.
+5. **`deliver`** sends each tip to the dashboard's event stream, speaks it if the voice is on and the tip is important enough, and saves it. `emitTips` is the same thing for tips the trainer makes outside the engine, like the drill line.
+6. **`recordMatch`**, when the game is over, saves the match and its item timings, then runs what depends on a finished game: the drill result, the MMR prompt, weekly-goal feedback, the tilt check, remembering the hero's position, and the AI review.
+
+Everything slow hangs off that path rather than sitting in it: OpenDota lookups, the AI coach and the settings broadcast run as background work the server waits for when it shuts down (`Server.spawn`).
+
 ### Code map
 
 | Path | Contents |
 |---|---|
 | `internal/gsi` | GSI payload types |
-| `internal/coach` | Rules engine, built-in rules, custom rule specs and fields, lane detection, targets, snapshot |
-| `internal/rules` | `rules.json` storage and rule templates |
+| `internal/dota` | The game's vocabulary: positions, lanes, clock formatting, map timings, shared thresholds |
+| `internal/model` | The record of play: matches, timeline samples, tips, item timings, MMR, reviews, weekly goals |
+| `internal/coach` | Rules engine, built-in rules, custom rule specs and fields, lane detection, personal targets |
+| `internal/rules` | Rule storage (custom rules and edits to built-in ones) and templates |
 | `internal/hud` | What the HUD shows, per widget |
+| `internal/i18n` | Russian for the phrases the trainer builds, and a glossary of game terms |
 | `internal/ai` | AI providers: Claude Code and Codex CLIs (with their installers), Anthropic API, OpenAI-compatible APIs |
 | `internal/aicoach` | Coach prompts and answer schemas |
+| `internal/aisvc` | Provider health, model lists and the setup wizard |
 | `internal/secrets` | API keys encrypted with DPAPI |
-| `internal/dotadata` | OpenDota items, heroes, builds, item timings, matches and rank, with disk cache |
-| `internal/matchdata` | Parsed OpenDota matches into stats; history import |
-| `internal/stats` | CSV storage, weekly goals |
-| `internal/server` | HTTP API, event stream, dashboard pages, AI health, briefing, tilt check |
-| `internal/overlay` | Win32 HUD (per-pixel alpha), hotkeys, tray icon, dashboard window |
+| `internal/dotadata` | OpenDota items, heroes, builds, item timings, matches and rank, with a disk cache and rate limit |
+| `internal/matchdata` | Parsed OpenDota matches folded into the statistics; history import |
+| `internal/stats` | The data file (pure-Go SQLite), its migrations, queries and CSV export |
+| `internal/server` | HTTP API, event stream, dashboard pages, the match pipeline, briefing, tilt check |
+| `internal/overlay` | The HUD on Windows (Win32, per-pixel alpha) and Linux (X11), hotkeys, tray icon, dashboard window |
+| `internal/platform` | WSL and Linux-desktop checks in one place |
 | `internal/hotkey` | Shortcut parsing |
-| `internal/config` | Settings, built-in patch timings |
-| `internal/speech` | Windows speech |
+| `internal/autostart` | Starting with Windows or the Linux desktop |
+| `internal/config` | Settings and where the app keeps its folder |
+| `internal/speech` | Windows speech and Piper voices |
 | `internal/install` | Steam and Dota discovery, GSI config |
 | `internal/sim` | Simulator and recordings |
 | `app.go`, `doctor.go`, `main.go` | App startup, commands and checks |
