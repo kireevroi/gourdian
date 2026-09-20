@@ -53,7 +53,6 @@ func backpackActive(s *gsi.State) string {
 	return ""
 }
 
-// teamSuffix names whose Roshan kill or Aegis an event was, when GSI reports the team.
 // shardItem is Aghanim's Shard under OpenDota's item names.
 const shardItem = "aghanims_shard"
 
@@ -69,6 +68,7 @@ func shardCost(c *Ctx) float64 {
 // most players there take, includes a Shard. Plenty of heroes never buy one.
 func shardInBuild(c *Ctx) bool { return c.build().Has(shardItem) }
 
+// teamSuffix names whose Roshan kill or Aegis an event was, when GSI reports the team.
 func teamSuffix(team, mine, preposition string) string {
 	switch {
 	case team == "" || mine == "":
