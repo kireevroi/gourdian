@@ -1,4 +1,4 @@
-import { $, esc, api, t, tp, events, onSettings } from './app.js';
+import { $, esc, api, toast, t, tp, events, onSettings } from './app.js';
 
 const LH_TARGET_10 = { carry: 65, mid: 60, offlane: 40 };
 const NS = 'http://www.w3.org/2000/svg';
@@ -389,7 +389,7 @@ async function loadGoals() {
 
 async function loadReviews() {
   const box = $('reviews');
-  const reviews = await (await fetch('/api/reviews')).json();
+  const reviews = await api('/api/reviews');
   box.replaceChildren();
   if (!reviews || !reviews.length) { box.innerHTML = '<div class="empty">No reviews yet. They appear after each match when the Claude coach is on.</div>'; return; }
   for (const r of reviews) {
@@ -413,8 +413,7 @@ async function loadReviews() {
 async function load() {
   loadReviews();
   loadGoals();
-  const res = await fetch('/api/stats');
-  data = await res.json();
+  data = await api('/api/stats');
   data.matches = data.matches || [];
   const heroes = [...new Set(data.matches.map((m) => m.hero))].sort();
   const sel = $('f-hero'), current = sel.value;
@@ -430,9 +429,12 @@ let resizeTimer;
 window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 150); });
 $('mmr-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const res = await fetch('/api/mmr', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mmr: Number($('mmr-value').value), note: $('mmr-note').value }) });
-  if (!res.ok) { alert(await res.text()); return; }
+  try {
+    await api('/api/mmr', { method: 'POST', body: { mmr: Number($('mmr-value').value), note: $('mmr-note').value } });
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
   $('mmr-value').value = ''; $('mmr-note').value = '';
   load();
 });
