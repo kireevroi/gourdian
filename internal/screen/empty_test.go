@@ -15,7 +15,8 @@ func TestEmptySlots(t *testing.T) {
 	fmt.Println("at the geometry worked out from the screen's height:")
 	read := 0
 	for slot := range 2 * Slots {
-		s := Of(img, bar.Cell(slot))
+		raw := Of(img, bar.Cell(slot))
+		s := raw.Level()
 		best, second, hero := -1, -1, ""
 		for id, arts := range table {
 			near := -1
@@ -31,7 +32,7 @@ func TestEmptySlots(t *testing.T) {
 				second = near
 			}
 		}
-		_, taken := table.Match(s)
+		_, taken := table.Match(raw)
 		if taken {
 			read++
 		}

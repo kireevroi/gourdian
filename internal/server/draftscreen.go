@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -73,9 +74,17 @@ func (s *Server) handleDraftSeen(w http.ResponseWriter, r *http.Request) {
 		b.ours, b.theirs = nil, nil
 	}
 	b.matchID, b.at = snap.MatchID, time.Now()
+	was := slices.Concat(b.ours, b.theirs)
 	b.ours, b.theirs = keepHeroes(seen.Ours), keepHeroes(seen.Theirs)
-	found := len(b.theirs)
+	ours, theirs := slices.Clone(b.ours), slices.Clone(b.theirs)
+	found := len(theirs)
 	b.mu.Unlock()
+
+	// A hero read off the screen is the one thing the trainer says that nothing can check
+	// against Dota, so write down what it was: a wrong one only ever comes to light later.
+	if !slices.Equal(was, slices.Concat(ours, theirs)) {
+		s.log.Info("read the draft off the screen", "ours", s.named(ours), "theirs", s.named(theirs))
+	}
 
 	// Where the portraits turned out to be is worth keeping: the next draft on this screen
 	// then costs nothing to find.
@@ -98,6 +107,18 @@ func keepHeroes(ids []int) []int {
 		}
 	}
 	return out[:min(len(out), screen.Slots)]
+}
+
+func (s *Server) named(ids []int) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if s.data == nil {
+			out = append(out, strconv.Itoa(id))
+			continue
+		}
+		out = append(out, s.data.HeroName(id))
+	}
+	return out
 }
 
 func (s *Server) rememberBar(size string, bar screen.Bar) {

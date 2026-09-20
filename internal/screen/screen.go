@@ -48,8 +48,28 @@ const Ratio = 0.85
 // darkest hero there is.
 const LeastContrast = 600
 
+const levelTo = 96
+
 // Signature is one portrait's thumbnail, red, green and blue for each block in turn.
 type Signature [sigLen]uint8
+
+// Level scales a signature to a fixed average brightness. Dimming a portrait moves it nearer
+// the darkest heroes in the game than itself, so brightness is taken out before comparing.
+func (s Signature) Level() Signature {
+	sum := 0
+	for _, v := range s {
+		sum += int(v)
+	}
+	mean := sum / len(s)
+	if mean == 0 {
+		return s
+	}
+	var out Signature
+	for i, v := range s {
+		out[i] = uint8(min(int(v)*levelTo/mean, 255))
+	}
+	return out
+}
 
 // Of reads the signature of the part of img inside r.
 func Of(img image.Image, r image.Rectangle) Signature {
@@ -114,7 +134,8 @@ type Table map[int][]Signature
 // Add reads a hero's portrait into the table.
 func (t Table) Add(heroID int, portrait image.Image) { t.add(heroID, Of(portrait, portrait.Bounds())) }
 
-func (t Table) add(heroID int, s Signature) { t[heroID] = append(t[heroID], s) }
+// The table holds levelled signatures, because that is how Match compares them.
+func (t Table) add(heroID int, s Signature) { t[heroID] = append(t[heroID], s.Level()) }
 
 // Match is the hero whose portrait is closest, or nothing when no hero stands clearly apart
 // from the next one. Answering "don't know" costs a frame; answering wrongly costs trust.
@@ -125,6 +146,7 @@ func (t Table) Match(s Signature) (heroID int, ok bool) {
 	if s.Contrast() < LeastContrast {
 		return 0, false
 	}
+	s = s.Level()
 	best, second := -1, -1
 	for id, arts := range t {
 		near := -1
