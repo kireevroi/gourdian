@@ -36,6 +36,7 @@ var matchCols = []matchCol{
 	{"gpm", "INTEGER", func(m *model.MatchSummary) any { return m.GPM }, func(m *model.MatchSummary) any { return &m.GPM }},
 	{"xpm", "INTEGER", func(m *model.MatchSummary) any { return m.XPM }, func(m *model.MatchSummary) any { return &m.XPM }},
 	{"rank_tier", "INTEGER", func(m *model.MatchSummary) any { return m.RankTier }, func(m *model.MatchSummary) any { return &m.RankTier }},
+	{"game_mode", "INTEGER", func(m *model.MatchSummary) any { return m.GameMode }, func(m *model.MatchSummary) any { return &m.GameMode }},
 	{"simulated", "INTEGER", func(m *model.MatchSummary) any { return boolInt(m.Simulated) }, func(m *model.MatchSummary) any { return boolCol{&m.Simulated} }},
 	{"ranked", "INTEGER", func(m *model.MatchSummary) any { return boolInt(m.Ranked) }, func(m *model.MatchSummary) any { return boolCol{&m.Ranked} }},
 	{"parsed", "INTEGER", func(m *model.MatchSummary) any { return boolInt(m.Parsed) }, func(m *model.MatchSummary) any { return boolCol{&m.Parsed} }},

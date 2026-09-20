@@ -90,6 +90,12 @@ var migrations = []func(tx *sql.Tx) error{
 			CREATE INDEX IF NOT EXISTS matches_role ON matches(role)`)
 		return err
 	},
+	// 3 (1.8): which mode a match was played in, so Turbo can be kept out of the numbers.
+	// The default matters: a column added without one leaves NULL in every row already
+	// there, and a match reads its numbers straight into ints.
+	func(tx *sql.Tx) error {
+		return addColumn(tx, "matches", "game_mode", "INTEGER NOT NULL DEFAULT 0")
+	},
 }
 
 func migrate(db *sql.DB) error {

@@ -92,8 +92,11 @@ func (s *Store) Matches() ([]model.MatchSummary, error) {
 }
 
 // Recent returns up to n matches, newest first.
+// Recent is the newest n matches, newest first, leaving out Turbo for the same reason
+// MatchFilter does.
 func (s *Store) Recent(n int) ([]model.MatchSummary, error) {
-	return s.queryMatches(`ORDER BY julianday(ended_at) DESC, rowid DESC LIMIT ?`, n)
+	return s.queryMatches(`WHERE IFNULL(game_mode, 0) != ? ORDER BY julianday(ended_at) DESC, rowid DESC LIMIT ?`,
+		model.GameModeTurbo, n)
 }
 
 // Match returns one match by id.
@@ -443,13 +446,20 @@ func (s *Store) RulesImported() bool {
 // MarkRulesImported records that the old rules file has been read.
 func (s *Store) MarkRulesImported() error { return setMeta(s.db, "rules_imported", "yes") }
 
-// MatchFilter says which matches MatchesWhere returns; the zero value means all of them.
+// MatchFilter says which matches MatchesWhere returns; the zero value means all of them
+// except Turbo, which has to be asked for.
 type MatchFilter struct {
 	HeroID int       // 0: any hero
 	Role   string    // "": any position
 	Since  time.Time // zero: any time
 	Real   bool      // only matches the player really played, as model.MatchSummary.Real says
 	Limit  int       // 0: all; otherwise only the newest this many
+	// Turbo brings back the Turbo matches, which are otherwise left out. A Turbo game pays
+	// about twice the gold and experience, so its numbers would drag every average, median
+	// and target towards something no normal game will ever reach. Only a caller showing
+	// Turbo on its own terms wants them, so they are out unless asked for, and a new caller
+	// can't let them back in by forgetting.
+	Turbo bool
 }
 
 // MatchesWhere returns the matches f describes, oldest first, asking the data file for only
@@ -468,6 +478,9 @@ func (s *Store) MatchesWhere(f MatchFilter) ([]model.MatchSummary, error) {
 	}
 	if f.Real {
 		where, args = append(where, "simulated = 0 AND IFNULL(source, '') != ?"), append(args, model.SourcePractice)
+	}
+	if !f.Turbo {
+		where, args = append(where, "IFNULL(game_mode, 0) != ?"), append(args, model.GameModeTurbo)
 	}
 	q := ""
 	if len(where) > 0 {

@@ -81,7 +81,7 @@ func TestAMatchMarkedRankedStaysRanked(t *testing.T) {
 	if rec.Code != http.StatusOK || srv.pendingMMR() == nil {
 		t.Fatalf("status %d, prompt %+v", rec.Code, srv.pendingMMR())
 	}
-	srv.saveRanked("123", 0)
+	srv.saveMatchKind("123", 0, 0)
 	if m, _ := srv.stats.Match("123"); !m.Ranked {
 		t.Fatal("OpenDota's lobby type undid the player's own mark")
 	}

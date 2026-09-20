@@ -251,6 +251,7 @@ func matchRow(m model.MatchSummary) ([]string, map[string]string) {
 		"hero": m.Hero, "role": m.Role, "team": m.Team, "result": m.Result, "duration_sec": itoa(m.DurationSec),
 		"kills": itoa(m.Kills), "deaths": itoa(m.Deaths), "assists": itoa(m.Assists), "last_hits": itoa(m.LastHits),
 		"denies": itoa(m.Denies), "gpm": itoa(m.GPM), "xpm": itoa(m.XPM), "rank_tier": itoa(m.RankTier),
+		"game_mode": itoa(m.GameMode), "turbo": strconv.FormatBool(m.Turbo()),
 		"simulated": strconv.FormatBool(m.Simulated), "ranked": strconv.FormatBool(m.Ranked),
 		"parsed": strconv.FormatBool(m.Parsed),
 	}

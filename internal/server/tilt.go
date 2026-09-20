@@ -75,7 +75,9 @@ func (s *Server) tiltCheck(m model.MatchSummary, set config.Settings) {
 		return
 	}
 	// tiltReason looks at the current session of games, which fits in a day.
-	matches, err := s.stats.MatchesWhere(stats.MatchFilter{Since: time.Now().Add(-24 * time.Hour), Real: true})
+	// Turbo counts here. It is left out of averages and targets because it pays differently,
+	// but a run of losses is a run of losses whatever the mode, and that is what this is for.
+	matches, err := s.stats.MatchesWhere(stats.MatchFilter{Since: time.Now().Add(-24 * time.Hour), Real: true, Turbo: true})
 	if err != nil {
 		return
 	}

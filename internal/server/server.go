@@ -271,6 +271,7 @@ func (s *Server) Run(ctx context.Context) {
 	}
 	defer s.tasks.Done()
 	s.spawn(func(context.Context) { s.resumePending() })
+	s.spawn(s.learnGameModes)
 	s.spawn(func(context.Context) { s.providers.StartupCheck() })
 	s.spawn(func(context.Context) { s.ensurePiper() })
 	tick := time.NewTicker(400 * time.Millisecond)
