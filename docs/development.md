@@ -24,7 +24,7 @@ For experiments, start a trainer with `GOURDIAN_HOME=/some/folder` and its own `
 
 **The tag is the version.** Pushing a tag `vX.Y.Z` releases X.Y.Z: the Release workflow in `.github/workflows` writes that version into `VERSION` before building, so the exe, the installer, the tarball and `gourdian version` all say the same thing no matter what the file in the tree says. Tagging in the GitHub UI therefore works as well as `make release`.
 
-The usual way: bump `VERSION` and `pkgver` in `packaging/arch/PKGBUILD` (they have to agree, and `make test` checks it), commit, then `make release`. It runs the tests, tags the commit `v<VERSION>` and pushes it. The workflow tests that commit again, builds the installer on Windows (signed with the certificate that `make cert-github` stored in the `release` environment, which only `v*` tags can use) and the tarball on Linux, and publishes them with checksums and attestations as a GitHub release. The CI workflow runs the tests and staticcheck on Linux and Windows for every push to `main`.
+The usual way: bump `VERSION` and `pkgver` in `packaging/arch/PKGBUILD` (they have to agree, and `make test` checks it), commit, then `make release`. It runs the tests, tags the commit `v<VERSION>` and pushes it. The workflow tests that commit again, builds the installer on Windows (signed with the certificate that `make cert-github` stored in the `release` environment, which only `v*` tags can use) and the tarball and the `.deb` on Linux, and publishes them with checksums and attestations as a GitHub release. The CI workflow runs the tests and staticcheck on Linux and Windows for every push to `main`.
 
 ## Commands
 

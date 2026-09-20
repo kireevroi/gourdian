@@ -131,3 +131,8 @@ func init() {
 // SkillPointsAtLevel is how many skill points a hero has had by a level. Since 7.40 talents
 // have their own points, so every level gives one skill point (checked on a 7.41 match).
 func SkillPointsAtLevel(level int) int { return level }
+
+// talentSpare is how many talents the hero's level has handed out and the player hasn't taken.
+func talentSpare(s *gsi.State) int {
+	return max(dota.TalentsAtLevel(s.Hero.Level)-s.Hero.TalentsTaken(), 0)
+}

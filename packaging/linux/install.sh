@@ -31,7 +31,7 @@ command -v update-desktop-database >/dev/null && update-desktop-database "$apps"
 echo "Installed Gourdian to $bin/gourdian."
 case ":$PATH:" in *":$bin:"*) ;; *) echo "Note: $bin is not on your PATH; the application menu entry works regardless." ;; esac
 if ! command -v pw-play >/dev/null && ! command -v paplay >/dev/null && ! command -v aplay >/dev/null; then
-	echo "For spoken tips install something to play sound with: sudo pacman -S pipewire (or alsa-utils)."
+	echo "For spoken tips install something to play sound with: PipeWire or alsa-utils, from your package manager."
 	echo "The trainer downloads its natural voice (Piper, about 90 MB) the first time it runs."
 fi
 echo "Start it from your application menu, then add -gamestateintegration to Dota 2's launch options in Steam."

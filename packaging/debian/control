@@ -1,0 +1,20 @@
+Package: gourdian
+Version: @VERSION@
+Architecture: @ARCH@
+Installed-Size: @SIZE@
+Maintainer: Roman Kireev <50318432+kireevroi@users.noreply.github.com>
+Homepage: https://github.com/kireevroi/gourdian
+Section: games
+Priority: optional
+Depends: xdg-utils
+Recommends: espeak-ng | speech-dispatcher, libnotify-bin, pipewire-bin | pulseaudio-utils | alsa-utils
+Suggests: steam
+Description: Live coaching for Dota 2: rules, voice, AI reviews and statistics
+ Gourdian reads Valve's Game State Integration feed while you play Dota 2 and
+ coaches on it: it speaks tips about rune timings, a missing TP scroll, low HP,
+ unspent gold and skill points, farm pace and item timings, shows the same lines
+ in a view you can pin over the game, sets targets from your own match history,
+ records every match, and asks an AI coach for advice and match reviews.
+ .
+ The feed describes your own hero only. Gourdian never reads game memory,
+ injects into Dota, or sees enemy information.

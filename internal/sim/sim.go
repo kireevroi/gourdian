@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"gourdian/internal/coach"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
 
@@ -53,6 +54,7 @@ type game struct {
 	respawnAt                                int
 	x, y                                     int
 	abilities                                []gsi.Ability
+	attributes                               int
 	talents                                  [8]bool
 	items                                    map[string]gsi.Item
 	events                                   []gsi.Event
@@ -267,26 +269,45 @@ func (g *game) step(clock int) {
 	}
 
 	g.level = min(25, 1+max(clock, 0)/75)
-	levelSixDelay := g.level == 6 && clock < 375+30
-	for !levelSixDelay && g.spent() < coach.SkillPointsAtLevel(g.level) {
-		if !g.spendPoint() {
-			break
+	// A deliberate mistake: the level 6 skill point sits unspent for half a minute, so that
+	// reminder can be seen in a simulated match.
+	if !(g.level == 6 && clock < levelAt(6)+30) {
+		for g.spent() < coach.SkillPointsAtLevel(g.level) {
+			if !g.spendPoint() {
+				break
+			}
 		}
 	}
+	g.takeTalents()
 }
+
+// levelAt is the clock the scripted player reaches a level at.
+func levelAt(level int) int { return (level - 1) * 75 }
 
 func (g *game) die(clock int) {
 	g.alive, g.respawnAt, g.deaths = false, clock+26, g.deaths+1
 	g.gold = max(g.gold-250, 0)
 }
 
+// spent is the skill points the player has put into abilities and attribute bonuses. Talents
+// are left out: since 7.40 they have their own points, so one doesn't use a skill point.
 func (g *game) spent() int {
-	n := 0
+	n := g.attributes
 	for _, a := range g.abilities {
 		if a.Name != "antimage_persectur" {
 			n += a.Level
 		}
 	}
+	return n
+}
+
+// talentOrder is the talent slot the scripted player picks each time, left to right within a
+// tier: the left talent of every tier first, then the right ones, which the levels after 25
+// hand out the points for.
+var talentOrder = [8]int{0, 2, 4, 6, 1, 3, 5, 7}
+
+func (g *game) talentsTaken() int {
+	n := 0
 	for _, t := range g.talents {
 		if t {
 			n++
@@ -295,23 +316,14 @@ func (g *game) spent() int {
 	return n
 }
 
+// takeTalents picks every talent the hero's level has handed out a point for.
+func (g *game) takeTalents() {
+	for taken := g.talentsTaken(); taken < dota.TalentsAtLevel(g.level); taken++ {
+		g.talents[talentOrder[taken]] = true
+	}
+}
+
 func (g *game) spendPoint() bool {
-	due := 0
-	for _, l := range []int{10, 15, 20, 25} {
-		if g.level >= l {
-			due++
-		}
-	}
-	taken := 0
-	for _, t := range g.talents {
-		if t {
-			taken++
-		}
-	}
-	if taken < due {
-		g.talents[taken*2] = true
-		return true
-	}
 	ult := &g.abilities[4]
 	if ult.Level < min(3, g.level/6) {
 		ult.Level++
@@ -324,7 +336,9 @@ func (g *game) spendPoint() bool {
 		}
 	}
 	if best < 0 {
-		return false
+		// Every ability is maxed, so the point goes into the attribute bonus, as it does in game.
+		g.attributes++
+		return true
 	}
 	g.abilities[best].Level++
 	return true
@@ -381,7 +395,8 @@ func (g *game) snapshot(state string) *gsi.State {
 			Alive: g.alive, RespawnSeconds: respawn, BuybackCost: 200 + g.level*60, BuybackCooldown: 0,
 			Health: maxHP * hpPct / 100, MaxHealth: maxHP, HealthPercent: hpPct,
 			Mana: maxMana * manaPct / 100, MaxMana: maxMana, ManaPercent: manaPct,
-			Talent1: g.talents[0], Talent2: g.talents[1], Talent3: g.talents[2], Talent4: g.talents[3],
+			AttributesLevel: g.attributes,
+			Talent1:         g.talents[0], Talent2: g.talents[1], Talent3: g.talents[2], Talent4: g.talents[3],
 			Talent5: g.talents[4], Talent6: g.talents[5], Talent7: g.talents[6], Talent8: g.talents[7],
 		},
 		Abilities: map[string]gsi.Ability{},
