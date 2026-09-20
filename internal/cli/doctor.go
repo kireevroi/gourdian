@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -36,7 +36,7 @@ func (c *checker) fail(format string, args ...any) {
 
 func doctor() error {
 	var c checker
-	store, _, err := openStore()
+	store, _, err := config.OpenDefault()
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func doctor() error {
 		resp.Body.Close()
 		c.ok("trainer answering at %s", base)
 		if curl, err := exec.LookPath("curl.exe"); err == nil && runtime.GOOS != "windows" {
-			out, err := windowsCommand(curl, "-s", "-o", "NUL", "-w", "%{http_code}", base+"/api/state").Output()
+			out, err := hidewin.WindowsCommand(curl, "-s", "-o", "NUL", "-w", "%{http_code}", base+"/api/state").Output()
 			if err == nil && strings.TrimSpace(string(out)) == "200" {
 				c.ok("Windows (where Dota runs) can reach the trainer")
 			} else {
@@ -143,7 +143,7 @@ func doctor() error {
 		c.warn("AI coach is turned off")
 		return c.finishOpenDota(set)
 	}
-	_, dir, _ := openStore()
+	_, dir, _ := config.OpenDefault()
 	keys := secrets.Open(dir)
 	env := ai.Env{WorkDir: dir, CLIPath: func(id string) string { return set.AI.CLIPaths[id] },
 		Key: func(id string) string { k, _ := keys.Get(id); return k }, CustomURL: func() string { return set.AI.CustomURL }}
@@ -189,15 +189,4 @@ func (c *checker) finishOpenDota(set config.Settings) error {
 	}
 	fmt.Println("Everything needed is in place.")
 	return nil
-}
-
-// windowsCommand runs a Windows binary from a Windows directory, since Windows tools
-// launched from WSL can't start in a Linux working directory.
-func windowsCommand(name string, args ...string) *exec.Cmd {
-	cmd := exec.Command(name, args...)
-	hidewin.Apply(cmd)
-	if _, err := os.Stat("/mnt/c"); err == nil {
-		cmd.Dir = "/mnt/c"
-	}
-	return cmd
 }
