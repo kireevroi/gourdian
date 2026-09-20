@@ -1,29 +1,18 @@
 // Shared by every dashboard page: navigation, the event stream, settings and small helpers.
 
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const clockStr = (sec) => { const s = Math.abs(sec); return `${sec < 0 ? '-' : ''}${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-const imgURL = (p) => `/img${String(p).split('?')[0]}`;
-const ROLE_NAMES = { carry: 'Carry (1)', mid: 'Mid (2)', offlane: 'Offlane (3)', soft_support: 'Soft support (4)', hard_support: 'Hard support (5)' };
-const CATEGORY_NAMES = { timing: 'Timings', survival: 'Survival', economy: 'Economy', items: 'Items', skills: 'Skills', map: 'Map movement', ai: 'AI coach', system: 'Trainer', focus: 'Your focus' };
+import { $, api } from './api.js';
+
+// The helpers live in api.js; pages get them from here, so they have one place to import from.
+export * from './api.js';
+
+export const ROLE_NAMES = { carry: 'Carry (1)', mid: 'Mid (2)', offlane: 'Offlane (3)', soft_support: 'Soft support (4)', hard_support: 'Hard support (5)' };
+export const CATEGORY_NAMES = { timing: 'Timings', survival: 'Survival', economy: 'Economy', items: 'Items', skills: 'Skills', map: 'Map movement', ai: 'AI coach', system: 'Trainer', focus: 'Your focus' };
 
 const PAGES = [
   ['/', 'Live'], ['/stats.html', 'Stats'], ['/rules.html', 'Rules'], ['/hud.html', 'HUD'], ['/ai.html', 'AI coach'], ['/settings.html', 'Settings'],
 ];
 
-// api calls the trainer and returns parsed JSON, throwing the server's message on failure.
-async function api(path, { method = 'GET', body } = {}) {
-  const res = await fetch(path, {
-    method,
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(text.trim() || res.statusText);
-  return text ? JSON.parse(text) : null;
-}
-
-function toast(text, bad = false) {
+export function toast(text, bad = false) {
   let box = document.querySelector('.toasts');
   if (!box) { box = document.createElement('div'); box.className = 'toasts'; document.body.appendChild(box); }
   const el = document.createElement('div');
@@ -88,11 +77,11 @@ const i18n = (() => {
 
   return { use, t: (text) => (code === 'en' ? text : swap(text)) };
 })();
-const t = (text) => i18n.t(text);
+export const t = (text) => i18n.t(text);
 
 // sayInBrowser speaks in the trainer's language, preferring the browser's natural voices;
 // Edge has Russian ones built in.
-function sayInBrowser(text, lang, rate, urgent) {
+export function sayInBrowser(text, lang, rate, urgent) {
   if (!('speechSynthesis' in window)) return;
   if (urgent) speechSynthesis.cancel();
   const code = lang === 'ru' ? 'ru' : 'en';
@@ -104,12 +93,12 @@ function sayInBrowser(text, lang, rate, urgent) {
   speechSynthesis.speak(u);
 }
 // tp translates a sentence that has values in it: tp('{n} of {m} done', { n, m }).
-const tp = (template, vars) => t(template).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
+export const tp = (template, vars) => t(template).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
 
 // Events: every dashboard page in the browser shares one stream through events-worker.js,
 // since a browser allows only six connections to the trainer and each stream keeps one.
 // Where there are no shared workers, the page opens its own stream.
-const events = (() => {
+export const events = (() => {
   const handlers = {}, openers = [];
   let port = null, es = null;
   const dispatch = (type, raw) => { for (const fn of handlers[type] || []) fn(JSON.parse(raw), raw); };
@@ -134,7 +123,7 @@ const events = (() => {
   const join = () => {
     if (port) port.postMessage({ bye: true });
     try {
-      const worker = new SharedWorker('/events-worker.js');
+      const worker = new SharedWorker('/js/events-worker.js');
       port = worker.port;
       worker.onerror = () => { if (!es) direct(); };
       port.onmessage = (m) => {
@@ -162,19 +151,19 @@ const events = (() => {
 })();
 
 // Settings: cfg is the latest GET /api/settings response; pages subscribe with onSettings.
-let cfg = null;
+export let cfg = null;
 const settingsListeners = [];
 let lastSettingsJSON = '';
-function onSettings(fn) { settingsListeners.push(fn); if (cfg) fn(cfg); }
-function setSettings(next) { cfg = next; settingsListeners.forEach((fn) => fn(cfg)); }
+export function onSettings(fn) { settingsListeners.push(fn); if (cfg) fn(cfg); }
+export function setSettings(next) { cfg = next; settingsListeners.forEach((fn) => fn(cfg)); }
 // The language is loaded before anything renders, so the first paint is already translated.
-async function loadSettings() {
+export async function loadSettings() {
   const c = await api('/api/settings');
   await i18n.use(c.settings.language || 'en');
   setSettings(c);
 }
 // saveSettings sends only the changed keys; the server merges them into the current settings.
-async function saveSettings(patch) {
+export async function saveSettings(patch) {
   try {
     setSettings(await api('/api/settings', { method: 'PUT', body: patch }));
     return true;
@@ -184,11 +173,11 @@ async function saveSettings(patch) {
     return false;
   }
 }
-async function setRole(role) {
+export async function setRole(role) {
   try { setSettings(await api('/api/role', { method: 'POST', body: { role } })); } catch (e) { toast(e.message, true); }
 }
 
-function positionButtons(el) {
+export function positionButtons(el) {
   el.addEventListener('click', (e) => { if (e.target.dataset.role) setRole(e.target.dataset.role); });
   onSettings((c) => {
     el.innerHTML = c.roles.map((r, i) => `<button data-role="${r}" class="${r === c.settings.role ? 'on' : ''}" title="${ROLE_NAMES[r] || r}">${i + 1}</button>`).join('');
