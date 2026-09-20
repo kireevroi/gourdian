@@ -49,23 +49,52 @@ func TestUsedAegisIsNeitherADeathNorAnExpiry(t *testing.T) {
 	}
 }
 
-func TestAegisAlertSaysWhoseItIs(t *testing.T) {
-	tips := play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(4, nil))
-	got := byRule(tips, "aegis")
-	if len(got) != 1 || !strings.HasPrefix(got[0].Text, "Your team's Aegis expires at 21:20") || !strings.Contains(got[0].Text, "if it wasn't used") {
-		t.Fatalf("a teammate's Aegis: %+v", got)
+// The trainer speaks about the Aegis it can watch and no other. Its own leaves the player's
+// inventory where it is seen to go; Dota never says when anyone else's is spent, so a
+// team-mate who quietly survives their five minutes looks exactly like one who was brought
+// back. A coach once told this player the team's Aegis had 48 seconds while it was spent.
+func TestAegisAlertIsOnlyForYourOwn(t *testing.T) {
+	for _, holder := range []struct {
+		id   int
+		name string
+	}{{4, "a team-mate's"}, {7, "the enemy's"}} {
+		tips := play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(holder.id, nil))
+		if got := byRule(tips, "aegis"); len(got) != 0 {
+			t.Errorf("%s Aegis is a guess and should go unmentioned: %+v", holder.name, got)
+		}
 	}
-	tips = play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(7, nil))
-	if got := byRule(tips, "aegis"); len(got) != 1 || !strings.HasPrefix(got[0].Text, "The enemy's Aegis") {
-		t.Fatalf("the enemy's Aegis: %+v", got)
-	}
-	tips = play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(2, func(s *gsi.State) {
+	tips := play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(2, func(s *gsi.State) {
 		if s.Map.ClockTime >= 980 {
 			s.Items["slot2"] = gsi.Item{Name: "item_aegis"}
 		}
 	}))
 	if got := byRule(tips, "aegis"); len(got) != 1 || got[0].Text != "Your Aegis expires at 21:20" {
 		t.Fatalf("the player's own Aegis: %+v", got)
+	}
+}
+
+// The countdown the HUD and the AI coach read comes from the same place, so it appears for the
+// player's own Aegis and for nobody else's.
+func TestOnlyYourOwnAegisGetsATimer(t *testing.T) {
+	timerAt := func(holder int, carried bool) bool {
+		e := newEngine(nil)
+		play(e, settings(dota.Carry), 970, 1100, withAegis(holder, func(s *gsi.State) {
+			if carried && s.Map.ClockTime >= 980 {
+				s.Items["slot2"] = gsi.Item{Name: "item_aegis"}
+			}
+		}))
+		for _, timer := range e.Snapshot(settings(dota.Carry)).Timers {
+			if strings.Contains(timer.Label, "Aegis") {
+				return true
+			}
+		}
+		return false
+	}
+	if timerAt(4, false) {
+		t.Error("a team-mate's Aegis should have no timer")
+	}
+	if !timerAt(2, true) {
+		t.Error("the player's own Aegis should have one")
 	}
 }
 
@@ -86,22 +115,27 @@ func chat(clock int, data string) gsi.Event {
 }
 
 func TestAKilledHolderHasUsedTheirAegis(t *testing.T) {
-	killed := func(victim int) func(*gsi.State) {
+	// The player is player 2 and carries the Aegis from 16:20; a chat line naming them as the
+	// hero killed says it brought them back, whatever their inventory was seen to do.
+	carrying := func(victim int) func(*gsi.State) {
 		return func(s *gsi.State) {
+			if s.Map.ClockTime >= 980 {
+				s.Items["slot2"] = gsi.Item{Name: "item_aegis"}
+			}
 			if s.Map.ClockTime >= 1140 {
 				kill := chat(1140, fmt.Sprintf(`{"type":"CHAT_MESSAGE_HERO_KILL","playerid1":%d,"playerid2":7,"time":1140.3}`, victim))
 				s.Events = append([]gsi.Event{kill}, s.Events...)
 			}
 		}
 	}
-	if got := byRule(play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(4, killed(4))), "aegis"); len(got) != 0 {
-		t.Fatalf("the teammate holding the Aegis died at 19:00, so it was already used: %+v", got)
+	if got := byRule(play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(2, carrying(2))), "aegis"); len(got) != 0 {
+		t.Fatalf("the player died at 19:00, so their Aegis was spent: %+v", got)
 	}
 	// Starting mid-match, the kill comes in the same update as the pickup, listed first.
-	if got := byRule(play(newEngine(nil), settings(dota.Carry), 1140, 1260, withAegis(4, killed(4))), "aegis"); len(got) != 0 {
+	if got := byRule(play(newEngine(nil), settings(dota.Carry), 1140, 1260, withAegis(2, carrying(2))), "aegis"); len(got) != 0 {
 		t.Fatalf("a kill listed before the pickup still comes after it: %+v", got)
 	}
-	if got := byRule(play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(4, killed(3))), "aegis"); len(got) != 1 {
-		t.Fatalf("another hero's death leaves the Aegis alone: %+v", got)
+	if got := byRule(play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(2, carrying(3))), "aegis"); len(got) != 1 {
+		t.Fatalf("another hero's death leaves the player's Aegis alone: %+v", got)
 	}
 }

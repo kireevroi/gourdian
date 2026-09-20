@@ -126,8 +126,12 @@ func (m *match) sinceRoshan(clock int) int {
 	return clock - m.roshanDeadAt
 }
 
+// aegisLeft is how long the Aegis has, and only for the player's own. Theirs leaves their
+// inventory where the trainer sees it go; anyone else's may already have brought them back,
+// and Dota tells nobody when it does. A countdown on a guess is worse than no countdown, so
+// there isn't one.
 func (m *match) aegisLeft(clock int) int {
-	if !m.aegisKnown || m.aegisUsed || m.aegisExpires <= clock {
+	if !m.aegisKnown || !m.aegisMine || m.aegisUsed || m.aegisExpires <= clock {
 		return 0
 	}
 	return m.aegisExpires - clock

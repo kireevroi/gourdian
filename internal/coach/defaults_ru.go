@@ -80,7 +80,7 @@ var russian = map[string]wording{
 		Name: "Рошан точно жив", Text: "Рошан точно жив", Speech: "Рошан жив",
 	},
 	"aegis": {
-		Name: "Аегис скоро истечёт", Text: "{aegis_holder} истекает в {aegis_expires}{aegis_note}", Speech: "{aegis_holder} истекает через 30 секунд",
+		Name: "Аегис скоро истечёт", Text: "Ваш Аегис истекает в {aegis_expires}", Speech: "Ваш Аегис истекает через 30 секунд",
 	},
 	"death": {
 		Name: "Разбор смерти", Text: "Смерть №{deaths_match}. Возрождение через {respawn} с, {gold} золота на покупки",
