@@ -15,6 +15,9 @@
 ; installs over it, into its folder (where the data is), and takes the old files away.
 #define LegacyName "Dota Trainer"
 #define LegacyExe "Dota Trainer.exe"
+#ifndef NumVersion
+  #define NumVersion "0.0.0"
+#endif
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
@@ -51,7 +54,7 @@ SignedUninstaller=yes
 #endif
 CloseApplications=force
 RestartApplications=no
-VersionInfoVersion={#AppVersion}
+VersionInfoVersion={#NumVersion}
 VersionInfoCompany=Gourdian
 VersionInfoDescription=Gourdian Setup
 VersionInfoProductName={#AppName}

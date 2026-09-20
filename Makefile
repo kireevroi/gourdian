@@ -1,6 +1,13 @@
 # -buildvcs=false: builds don't depend on the state of git (and work outside a checkout).
 GOFLAGS := -buildvcs=false
 VERSION := $(shell cat VERSION)
+# A prerelease is spelled 1.8.0-beta.1, which the three packaging systems each dislike in
+# their own way: Windows version resources are four numbers and nothing else, Debian reads the
+# last hyphen as the start of a package revision, and Arch forbids hyphens outright. So the
+# version is kept whole for people to read and bent into shape for each of them.
+NUMVERSION := $(firstword $(subst -, ,$(VERSION)))
+# Debian sorts ~ before everything, which is what a prerelease should do against its release.
+DEBVERSION := $(subst -,~,$(VERSION))
 LDFLAGS := -X gourdian/internal/buildinfo.Version=$(VERSION)
 # The architecture the .deb is built for, in Debian's spelling: amd64 or arm64.
 DEBARCH ?= amd64
@@ -19,7 +26,7 @@ windows:
 # Regenerates cmd/gourdian/rsrc_windows_amd64.syso (icon, version info, manifest) from winres/ and
 # VERSION. The syso has to sit next to the main package, which winres/ does not, hence --out.
 winres:
-	go run github.com/tc-hib/go-winres@v0.3.3 make --arch amd64 --out cmd/gourdian/rsrc --product-version $(VERSION).0 --file-version $(VERSION).0
+	go run github.com/tc-hib/go-winres@v0.3.3 make --arch amd64 --out cmd/gourdian/rsrc --product-version $(NUMVERSION).0 --file-version $(NUMVERSION).0
 
 # Creates the self-signed "Gourdian" code-signing certificate and trusts it for this Windows user (once).
 cert:
@@ -39,8 +46,8 @@ app: installer
 
 # The version lives in VERSION; PKGBUILD repeats it for makepkg, so they have to agree.
 version-check:
-	@v=$$(tr -d '[:space:]' < VERSION); p=$$(sed -n 's/^pkgver=//p' packaging/arch/PKGBUILD); \
-	[ "$$v" = "$$p" ] || { echo "VERSION is $$v but PKGBUILD says $$p" >&2; exit 1; }
+	@v=$$(tr -d '[:space:]-' < VERSION); p=$$(sed -n 's/^pkgver=//p' packaging/arch/PKGBUILD); \
+	[ "$$v" = "$$p" ] || { echo "VERSION without its hyphens is $$v but PKGBUILD says $$p" >&2; exit 1; }
 
 # Formatting, vet for Linux and Windows, then the tests with the race detector.
 test: version-check
@@ -102,10 +109,10 @@ linux-deb:
 	install -Dm644 LICENSE dist/deb/usr/share/doc/gourdian/copyright
 	install -Dm644 THIRD_PARTY_NOTICES.txt dist/deb/usr/share/doc/gourdian/THIRD_PARTY_NOTICES.txt
 	@size=$$(du -ks dist/deb | cut -f1); mkdir -p dist/deb/DEBIAN; \
-		sed -e 's/@VERSION@/$(VERSION)/' -e 's/@ARCH@/$(DEBARCH)/' -e "s/@SIZE@/$$size/" \
+		sed -e 's/@VERSION@/$(DEBVERSION)/' -e 's/@ARCH@/$(DEBARCH)/' -e "s/@SIZE@/$$size/" \
 			packaging/debian/control > dist/deb/DEBIAN/control
-	dpkg-deb --build --root-owner-group dist/deb dist/gourdian_$(VERSION)_$(DEBARCH).deb
-	@echo "debian package: dist/gourdian_$(VERSION)_$(DEBARCH).deb"
+	dpkg-deb --build --root-owner-group dist/deb dist/gourdian_$(DEBVERSION)_$(DEBARCH).deb
+	@echo "debian package: dist/gourdian_$(DEBVERSION)_$(DEBARCH).deb"
 
 # Installs into your home folder on this Linux machine (not for WSL, where Windows runs the app).
 linux-install: linux-dist
