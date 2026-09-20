@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -26,9 +27,11 @@ func build(t *testing.T, dir string, files map[string][]byte) string {
 	var tree bytes.Buffer
 	byExt := map[string]map[string][]string{}
 	for name := range files {
-		folder, base := filepath.Split(name)
-		folder = filepath.Clean(folder)
-		ext := filepath.Ext(base)[1:]
+		// A pack spells its paths with slashes whatever system it was made on, so these are
+		// taken apart with path and not with filepath.
+		folder, base := path.Split(name)
+		folder = path.Clean(folder)
+		ext := path.Ext(base)[1:]
 		stem := base[:len(base)-len(ext)-1]
 		if byExt[ext] == nil {
 			byExt[ext] = map[string][]string{}
