@@ -376,3 +376,63 @@ func TestNoEnemiesMeansNoMatchupTalk(t *testing.T) {
 		}
 	}
 }
+
+// shaped makes a line-up of heroes with the given roles, and the meta to go with it.
+func shaped(start int, roles ...[]string) ([]int, map[int]dotadata.HeroMeta) {
+	ids := []int{}
+	meta := map[int]dotadata.HeroMeta{}
+	for i, r := range roles {
+		id := start + i
+		ids = append(ids, id)
+		m := bracketMeta(4, 1000, 500)
+		m.Roles, m.AttackType = r, "Ranged"
+		meta[id] = m
+	}
+	return ids, meta
+}
+
+// What a line-up is short of is worth saying, but only once enough of it is known: "nobody
+// here can stun" is not a gap when two heroes have been picked.
+func TestNotesOnTheShapeOfTheSides(t *testing.T) {
+	in := Input{Role: dota.Mid, Tuning: DefaultTuning(), History: games(1, "Mine", 5, 3, time.Hour)}
+	allies, meta := shaped(100, []string{"Carry"}, []string{"Nuker"}, []string{"Escape"}, []string{"Pusher"})
+	in.Allies, in.Meta = allies, meta
+	notes := Rank(in, now).Notes
+	if !slices.ContainsFunc(notes, func(s string) bool { return strings.Contains(s, "stun") }) {
+		t.Errorf("a side with no disabler drew no note: %q", notes)
+	}
+	if !slices.ContainsFunc(notes, func(s string) bool { return strings.Contains(s, "beating") }) {
+		t.Errorf("a side with nobody durable drew no note: %q", notes)
+	}
+
+	// Three picked is not a line-up yet.
+	in.Allies = allies[:3]
+	if notes := Rank(in, now).Notes; len(notes) != 0 {
+		t.Errorf("three heroes were judged as a line-up: %q", notes)
+	}
+}
+
+func TestNotesOnWhatTheOtherSideBrings(t *testing.T) {
+	in := Input{Role: dota.Mid, Tuning: DefaultTuning(), History: games(1, "Mine", 5, 3, time.Hour)}
+	enemies, meta := shaped(200, []string{"Disabler"}, []string{"Disabler"}, []string{"Disabler"}, []string{"Carry"})
+	in.Enemies, in.Meta = enemies, meta
+	notes := Rank(in, now).Notes
+	if !slices.ContainsFunc(notes, func(s string) bool { return strings.Contains(s, "3 of them") }) {
+		t.Errorf("three disablers drew no note: %q", notes)
+	}
+	if !slices.ContainsFunc(notes, func(s string) bool { return strings.Contains(s, "ranged") }) {
+		t.Errorf("an all-ranged side drew no note: %q", notes)
+	}
+	// And the heroes themselves carry what they are for.
+	if b := Rank(in, now); len(b.Enemies) != 4 || len(b.Enemies[0].Roles) == 0 {
+		t.Errorf("the enemy heroes don't say what they are: %+v", b.Enemies)
+	}
+}
+
+// With no draft in sight, which is the usual case, nothing is said about either side.
+func TestNoNotesWithoutADraft(t *testing.T) {
+	in := Input{Role: dota.Mid, Tuning: DefaultTuning(), History: games(1, "Mine", 5, 3, time.Hour)}
+	if notes := Rank(in, now).Notes; len(notes) != 0 {
+		t.Errorf("notes appeared with no draft: %q", notes)
+	}
+}

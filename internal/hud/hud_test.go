@@ -130,7 +130,7 @@ func TestPositionDeathAndItemRows(t *testing.T) {
 func TestSampleShowsEnabledWidgets(t *testing.T) {
 	w := widgets(func(w []config.HUDWidget) { find(w, config.WidgetDeath).On = false })
 	v := Sample(w)
-	if v.Alert == nil || len(v.Rows) != 19 {
+	if v.Alert == nil || len(v.Rows) != 20 {
 		t.Fatalf("sample = %+v", v)
 	}
 	for _, r := range v.Rows {

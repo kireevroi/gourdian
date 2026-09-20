@@ -273,6 +273,9 @@ func pickLines(p *picks.Board, l words) []Line {
 	for _, h := range p.Avoid {
 		lines = append(lines, Line{l.f("Avoid %s · %d%% of %d", h.Name, h.WinPct, h.Games), KindWarn})
 	}
+	for _, note := range p.Notes {
+		lines = append(lines, Line{note, KindInfo})
+	}
 	return lines
 }
 
@@ -444,7 +447,8 @@ func SampleIn(widgets []config.HUDWidget, lang string) View {
 					{Name: "Puck", Games: 8, Wins: 5, WinPct: 62, Score: 58, Why: []string{l.s("your 8 games 62%")}}},
 				Fresh:   []picks.Hero{{Name: "Death Prophet", Score: 55, Why: []string{l.s("meta 54% at Archon")}}},
 				Avoid:   []picks.Hero{{Name: "Invoker", Games: 6, Wins: 2, WinPct: 33}},
-				Enemies: []picks.Hero{{Name: "Sniper"}, {Name: "Lina"}}}, l)...)
+				Enemies: []picks.Hero{{Name: "Sniper"}, {Name: "Lina"}},
+				Notes:   []string{l.s("Nobody on your side can stun or hold")}}, l)...)
 		case config.WidgetBriefing:
 			v.Rows = append(v.Rows, briefingLines(&coach.Briefing{Hero: "Shadow Fiend", Games: 12, Wins: 7, Target10: 66, Usual10: 60,
 				Items: []coach.ItemGoal{{Name: "Black King Bar", By: 1170}}}, l)...)

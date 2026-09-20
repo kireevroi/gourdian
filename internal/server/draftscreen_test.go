@@ -26,7 +26,7 @@ func TestTheScreenIsNotReadUntilItIsTurnedOn(t *testing.T) {
 	if code := postDraft(t, srv, `{"theirs":[35,26]}`); code != http.StatusConflict {
 		t.Fatalf("a reading was taken with the setting off: %d", code)
 	}
-	if got := srv.enemies(""); len(got) != 0 {
+	if got := func() []int { _, t := srv.sides(""); return t }(); len(got) != 0 {
 		t.Errorf("enemies %v were remembered anyway", got)
 	}
 }
@@ -44,12 +44,12 @@ func TestAReadingReachesThePickBoard(t *testing.T) {
 	if code := postDraft(t, srv, `{"ours":[17],"theirs":[35,26,14]}`); code != http.StatusOK {
 		t.Fatalf("the reading was refused: %d", code)
 	}
-	got := srv.enemies("m1")
+	got := func() []int { _, t := srv.sides("m1"); return t }()
 	if len(got) != 3 || got[0] != 35 {
 		t.Fatalf("enemies = %v, want the three that were read", got)
 	}
 	// A reading belongs to the match it was taken in, not to the next one.
-	if other := srv.enemies("m2"); len(other) != 0 {
+	if other := func() []int { _, t := srv.sides("m2"); return t }(); len(other) != 0 {
 		t.Errorf("a later match inherited %v", other)
 	}
 }
@@ -66,7 +66,7 @@ func TestAReadingIsTidiedUp(t *testing.T) {
 	if code := postDraft(t, srv, `{"theirs":[35,35,0,-4,26]}`); code != http.StatusOK {
 		t.Fatalf("refused: %d", code)
 	}
-	if got := srv.enemies("m1"); len(got) != 2 || got[0] != 35 || got[1] != 26 {
+	if got := func() []int { _, t := srv.sides("m1"); return t }(); len(got) != 2 || got[0] != 35 || got[1] != 26 {
 		t.Errorf("enemies = %v, want [35 26]", got)
 	}
 }
