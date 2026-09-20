@@ -96,23 +96,36 @@ func inset(r image.Rectangle, by float64) image.Rectangle {
 	return in
 }
 
-// Table is the signature of every hero's portrait, by hero id. The trainer builds it from the
-// same art the dashboard shows, so it costs nothing extra to keep.
-type Table map[int]Signature
+// Table is what the portraits of the heroes look like, ready to be matched against. A hero
+// has an entry for every portrait the game draws them with: the base art and any arcana,
+// persona or alternate style.
+type Table map[int][]Signature
 
 // Add reads a hero's portrait into the table.
-func (t Table) Add(heroID int, portrait image.Image) { t[heroID] = Of(portrait, portrait.Bounds()) }
+func (t Table) Add(heroID int, portrait image.Image) { t.add(heroID, Of(portrait, portrait.Bounds())) }
+
+func (t Table) add(heroID int, s Signature) { t[heroID] = append(t[heroID], s) }
 
 // Match is the hero whose portrait is closest, or nothing when no hero stands clearly apart
 // from the next one. Answering "don't know" costs a frame; answering wrongly costs trust.
+//
+// The runner-up is the closest portrait of a different hero, not simply the second closest
+// picture: two styles of the same hero sitting near each other is agreement, not doubt.
 func (t Table) Match(s Signature) (heroID int, ok bool) {
 	best, second := -1, -1
-	for id, known := range t {
-		switch d := s.Distance(known); {
-		case best < 0 || d < best:
-			best, second, heroID = d, best, id
-		case second < 0 || d < second:
-			second = d
+	for id, arts := range t {
+		near := -1
+		for _, known := range arts {
+			if d := s.Distance(known); near < 0 || d < near {
+				near = d
+			}
+		}
+		switch {
+		case near < 0:
+		case best < 0 || near < best:
+			best, second, heroID = near, best, id
+		case second < 0 || near < second:
+			second = near
 		}
 	}
 	if best < 0 || second < 0 || float64(best) > Ratio*float64(second) {
