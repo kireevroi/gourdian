@@ -1,8 +1,10 @@
 package coach
 
 import (
+	"slices"
 	"testing"
 
+	"gourdian/internal/config"
 	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
@@ -102,10 +104,31 @@ var plainBuild = fakeData{items: shardItems, build: &dotadata.Build{Items: []dot
 	{Name: "force_staff", DName: "Force Staff", Cost: 2200, Phase: dotadata.PhaseMid},
 }}}
 
+// shardOn is the player having turned the Shard rules on, which the trainer does not ship with.
+func shardOn(role string) config.Settings {
+	set := settings(role)
+	set.DisabledRules = slices.DeleteFunc(slices.Clone(set.DisabledRules), func(id string) bool {
+		return slices.Contains(config.RulesShipOff, id)
+	})
+	return set
+}
+
+// The Shard is a matter of taste, not a mistake, so neither rule says anything unasked.
+func TestShardRulesShipSwitchedOff(t *testing.T) {
+	from := dota.DefaultTimings().ShardFrom
+	rich := func(s *gsi.State) { s.Player.Gold = 1500 }
+	tips := play(newEngine(shardBuild), settings(dota.HardSupport), from-30, from+120, rich)
+	for _, rule := range []string{"shard_sale", "shard"} {
+		if got := byRule(tips, rule); len(got) > 0 {
+			t.Errorf("%s spoke without being turned on: %+v", rule, got)
+		}
+	}
+}
+
 // The Shard goes on sale at 15:00, and a player who doesn't have one hears about it once.
 func TestShardSaleIsAnnouncedOnce(t *testing.T) {
 	from := dota.DefaultTimings().ShardFrom
-	got := byRule(play(newEngine(shardBuild), settings(dota.Carry), from-30, from+300, nil), "shard_sale")
+	got := byRule(play(newEngine(shardBuild), shardOn(dota.Carry), from-30, from+300, nil), "shard_sale")
 	if len(got) != 1 || got[0].Clock != from {
 		t.Fatalf("want one announcement at 15:00, got %+v", got)
 	}
@@ -117,7 +140,7 @@ func TestShardSaleIsAnnouncedOnce(t *testing.T) {
 // A Shard from a Tormentor is still a Shard, so there is nothing to announce and nothing to buy.
 func TestShardRulesAreQuietWhenYouAlreadyHaveOne(t *testing.T) {
 	from := dota.DefaultTimings().ShardFrom
-	got := play(newEngine(shardBuild), settings(dota.HardSupport), from-30, from+60, func(s *gsi.State) {
+	got := play(newEngine(shardBuild), shardOn(dota.HardSupport), from-30, from+60, func(s *gsi.State) {
 		s.Hero.AghanimsShard = true
 		s.Player.Gold = 1500
 	})
@@ -134,7 +157,7 @@ func TestShardNudgeFollowsTheBuild(t *testing.T) {
 	from := dota.DefaultTimings().ShardFrom
 	rich := func(s *gsi.State) { s.Player.Gold = 1500 }
 	for _, role := range []string{dota.HardSupport, dota.Carry} {
-		got := byRule(play(newEngine(shardBuild), settings(role), from, from+60, rich), "shard")
+		got := byRule(play(newEngine(shardBuild), shardOn(role), from, from+60, rich), "shard")
 		if len(got) != 1 || got[0].Clock != from+30 {
 			t.Fatalf("%s: want one nudge 30 seconds in, got %+v", role, got)
 		}
@@ -146,7 +169,7 @@ func TestShardNudgeFollowsTheBuild(t *testing.T) {
 		}
 	}
 	for _, role := range []string{dota.HardSupport, dota.SoftSupport, dota.Carry} {
-		if got := byRule(play(newEngine(plainBuild), settings(role), from, from+120, rich), "shard"); len(got) > 0 {
+		if got := byRule(play(newEngine(plainBuild), shardOn(role), from, from+120, rich), "shard"); len(got) > 0 {
 			t.Errorf("%s: nudged a hero whose build has no Shard: %+v", role, got)
 		}
 	}
@@ -156,7 +179,7 @@ func TestShardNudgeFollowsTheBuild(t *testing.T) {
 func TestShardNudgeWaitsForTheBuild(t *testing.T) {
 	from := dota.DefaultTimings().ShardFrom
 	rich := func(s *gsi.State) { s.Player.Gold = 1500 }
-	if got := byRule(play(newEngine(nil), settings(dota.HardSupport), from, from+120, rich), "shard"); len(got) > 0 {
+	if got := byRule(play(newEngine(nil), shardOn(dota.HardSupport), from, from+120, rich), "shard"); len(got) > 0 {
 		t.Errorf("nudged before any build had loaded: %+v", got)
 	}
 }
@@ -165,11 +188,11 @@ func TestShardNudgeWaitsForTheBuild(t *testing.T) {
 func TestShardNudgeWaitsForTheGoldAndTheClock(t *testing.T) {
 	from := dota.DefaultTimings().ShardFrom
 	poor := func(s *gsi.State) { s.Player.Gold = 1399 }
-	if got := byRule(play(newEngine(shardBuild), settings(dota.HardSupport), from, from+60, poor), "shard"); len(got) > 0 {
+	if got := byRule(play(newEngine(shardBuild), shardOn(dota.HardSupport), from, from+60, poor), "shard"); len(got) > 0 {
 		t.Errorf("nudged a player 1 gold short: %+v", got)
 	}
 	rich := func(s *gsi.State) { s.Player.Gold = 5000 }
-	if got := byRule(play(newEngine(shardBuild), settings(dota.HardSupport), from-120, from-1, rich), "shard"); len(got) > 0 {
+	if got := byRule(play(newEngine(shardBuild), shardOn(dota.HardSupport), from-120, from-1, rich), "shard"); len(got) > 0 {
 		t.Errorf("nudged a player before the Shard was on sale: %+v", got)
 	}
 }
