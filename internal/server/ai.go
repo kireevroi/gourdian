@@ -283,7 +283,7 @@ func (s *Server) handleReviewMatch(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	m, err := s.stats.Match(id)
 	if err != nil {
-		http.Error(w, err.Error(), matchErrorStatus(err))
+		s.matchProblem(w, "couldn't read that match", err)
 		return
 	}
 	set := s.cfg.Settings()
@@ -307,7 +307,7 @@ func (s *Server) handleReviewMatch(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleReviews(w http.ResponseWriter, r *http.Request) {
 	reviews, err := s.stats.Reviews()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't read your match reviews", err)
 		return
 	}
 	slices.Reverse(reviews)

@@ -129,7 +129,7 @@ func (s *Server) handleSetDrill(w http.ResponseWriter, r *http.Request) {
 		set.Drill = body.Rule
 		return nil
 	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.settingsProblem(w, err)
 		return
 	}
 	s.publishSettings()

@@ -407,6 +407,58 @@ func TestHeroRoleFollowsTheLastHero(t *testing.T) {
 	}
 }
 
+// What the player is shown when something breaks is a sentence about their trainer, never
+// the database's or the filesystem's own words.
+func TestBrokenThingsReadAsSentences(t *testing.T) {
+	srv, h, dir := newTestServer(t, nil)
+	ask := func(method, path, body string) (int, string) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(method, path, strings.NewReader(body)))
+		return rec.Code, strings.TrimSpace(rec.Body.String())
+	}
+	// A value the player can fix still says what's wrong with it.
+	if code, body := ask(http.MethodPut, "/api/settings", `{"role":"jungler"}`); code != http.StatusBadRequest || !strings.Contains(body, "jungler") {
+		t.Fatalf("a bad role should be refused by name: %d %q", code, body)
+	}
+	// With the data file closed, every read of the player's history fails inside the trainer.
+	srv.stats.Close()
+	for _, path := range []string{"/api/history", "/api/stats", "/api/mmr", "/api/reviews"} {
+		code, body := ask(http.MethodGet, path, "")
+		if code != http.StatusInternalServerError {
+			t.Errorf("%s answered %d", path, code)
+		}
+		if !strings.HasPrefix(body, "couldn't read your") {
+			t.Errorf("%s says %q", path, body)
+		}
+		for _, leak := range []string{"sql", "database", dir} {
+			if strings.Contains(strings.ToLower(body), strings.ToLower(leak)) {
+				t.Errorf("%s shows the player %q", path, body)
+			}
+		}
+	}
+}
+
+// Settings that can't be written are the trainer's problem, not a bad request.
+func TestSettingsThatCantBeSavedSayThat(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a read-only folder doesn't stop a write on Windows")
+	}
+	srv, h, dir := newTestServer(t, nil)
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(`{"voice_rate":3}`)))
+	if rec.Code != http.StatusInternalServerError || !strings.HasPrefix(rec.Body.String(), "couldn't save your settings") {
+		t.Fatalf("%d %q", rec.Code, rec.Body.String())
+	}
+	if got := srv.cfg.Settings().VoiceRate; got == 3 {
+		t.Error("the settings changed although they couldn't be saved")
+	}
+}
+
 func TestRoleFromHeroRoles(t *testing.T) {
 	cases := map[string][]string{
 		dota.SoftSupport: {"Support", "Disabler", "Nuker", "Initiator"},

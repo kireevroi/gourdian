@@ -103,7 +103,7 @@ func habits(sample []model.MatchSummary, rules []coach.Rule) []Habit {
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	recent, err := s.stats.Recent(50)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't read your recent matches", err)
 		return
 	}
 	writeJSON(w, struct {
@@ -137,16 +137,16 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	resp := statsResponse{Dir: s.stats.Dir(), LastHitsByMinute: map[string][]int{}}
 	var err error
 	if resp.Matches, err = s.stats.Matches(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't read your match history", err)
 		return
 	}
 	if resp.MMR, err = s.stats.MMR(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't read your MMR log", err)
 		return
 	}
 	timeline, err := s.stats.Timeline()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.failed(w, http.StatusInternalServerError, "couldn't read your match timelines", err)
 		return
 	}
 	for _, x := range timeline {
