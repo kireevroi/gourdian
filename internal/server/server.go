@@ -34,6 +34,7 @@ import (
 	"gourdian/internal/hud"
 	"gourdian/internal/matchdata"
 	"gourdian/internal/model"
+	"gourdian/internal/picks"
 	"gourdian/internal/platform"
 	"gourdian/internal/rules"
 	"gourdian/internal/secrets"
@@ -551,6 +552,10 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	apply := func(set *config.Settings) error {
 		if _, ok := keys["hero_roles"]; ok {
 			set.HeroRoles = nil // decoding merges into a map, so a sent map must replace it to drop heroes
+		}
+		// Decoding a null leaves a struct alone, so "picks": null is free to mean reset.
+		if raw, ok := keys["picks"]; ok && string(raw) == "null" {
+			set.Picks = picks.DefaultTuning()
 		}
 		return json.Unmarshal(body, set)
 	}

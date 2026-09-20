@@ -45,6 +45,18 @@
       </section>
 
       <section class="card">
+        <h2>Pick help</h2>
+        <p class="hint">How heroes are ranked while you choose one. What counts as recent depends on how much you play, so these are yours to set. <button class="btn small" id="picks-reset">Reset</button></p>
+        <div class="field"><label for="pick-days">Look back over</label><span><input type="number" id="pick-days" min="7" max="1825" style="width:80px"> days</span></div>
+        <div class="field"><label for="pick-half">A match counts half after</label><span><input type="number" id="pick-half" min="1" max="1825" style="width:80px"> days</span></div>
+        <div class="field"><label for="pick-trust">Trust a record after</label><span><input type="number" id="pick-trust" min="0" max="200" style="width:80px"> games</span></div>
+        <p class="hint">Below that, a hero's win rate is pulled towards an even game, so a short hot streak can't outrank a long steady record. 0 takes every record at face value.</p>
+        <div class="field"><label for="pick-min">Rank a hero after</label><span><input type="number" id="pick-min" min="1" max="50" style="width:80px"> games</span></div>
+        <div class="field"><label for="pick-avoid">Avoid below</label><span><input type="number" id="pick-avoid" min="0" max="50" style="width:80px"> % won</span></div>
+        <div class="field"><label for="pick-show">Show</label><span><input type="number" id="pick-show" min="0" max="10" style="width:64px"> of yours, <input type="number" id="pick-fresh" min="0" max="10" style="width:64px"> from the meta, <input type="number" id="pick-avoid-n" min="0" max="10" style="width:64px"> to avoid</span></div>
+      </section>
+
+      <section class="card">
         <h2>Recording</h2>
         <label class="toggle"><input type="checkbox" id="rec-auto"><span>Record every match<small>Saves the game data of each match so rules can be tested on it later.</small></span></label>
         <div class="field"><label for="rec-keep">Keep the newest</label><span><input type="number" id="rec-keep" min="1" max="500" style="width:80px"> recordings</span></div>

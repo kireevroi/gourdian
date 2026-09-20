@@ -157,3 +157,135 @@ func bracketMeta(bracket, pick, win int) dotadata.HeroMeta {
 	m.Pick[0], m.Win[0] = pick, win
 	return m
 }
+
+// A record leans on recent games: the same twenty wins count for much less half a year on,
+// though the board still shows every one of them.
+func TestOldGamesCountForLessButAreStillShown(t *testing.T) {
+	in := Input{Role: dota.Mid}
+	in.History = append(games(1, "Recent", 20, 14, time.Hour), games(2, "Faded", 20, 14, 180*24*time.Hour)...)
+	b := Rank(in, now)
+	recent, ok := find(b.Best, "Recent")
+	faded, ok2 := find(b.Best, "Faded")
+	if !ok || !ok2 {
+		t.Fatalf("want both heroes ranked, got %+v", b.Best)
+	}
+	if faded.Games != 20 || faded.WinPct != 70 {
+		t.Errorf("the board hides the old record: %d%% of %d, want 70%% of 20", faded.WinPct, faded.Games)
+	}
+	if recent.Score-faded.Score < 5 {
+		t.Errorf("half a year made almost no difference: %d against %d", faded.Score, recent.Score)
+	}
+}
+
+// The window must not be a cliff. By its far end a match is worth so little that cutting it
+// off costs nothing, so a hero can't drop off the board the day its games turn too old.
+func TestTheFarEndOfTheWindowBarelyCounts(t *testing.T) {
+	in := Input{Role: dota.Mid, History: games(1, "Ancient", 30, 30, DefaultTuning().Window()-72*time.Hour)}
+	b := Rank(in, now)
+	h, ok := find(b.Best, "Ancient")
+	if !ok {
+		t.Fatalf("board = %+v", b)
+	}
+	// Thirty straight wins, but a year ago: nothing of the record survives the weighting, so
+	// all that is left of the score is the rust.
+	if want := even - rustyCap; h.Score != want {
+		t.Errorf("score = %d, want %d: a year-old record should count for nothing but the rust", h.Score, want)
+	}
+}
+
+// However long a hero has been left alone, the fade stops: it means "out of practice", not
+// "worse than a hero you lose on".
+func TestTheRustPenaltyIsCapped(t *testing.T) {
+	in := Input{Role: dota.Mid}
+	in.History = append(games(1, "Stale", 5, 3, 250*24*time.Hour), games(2, "Staler", 5, 3, 350*24*time.Hour)...)
+	b := Rank(in, now)
+	stale, _ := find(b.Best, "Stale")
+	staler, _ := find(b.Best, "Staler")
+	if stale.Score != staler.Score {
+		t.Errorf("the fade kept going: %d after 250 days, %d after 350", stale.Score, staler.Score)
+	}
+}
+
+// TrustAfter is the knob that decides the short-hot-streak question, so turning it off must
+// flip the answer: taken at face value the shorter, better record wins; shrunk, it doesn't.
+// (The rates are kept modest so neither record runs into yoursCap, which would hide this.)
+func TestTrustAfterDecidesWhetherAStreakWins(t *testing.T) {
+	in := Input{Role: dota.Mid}
+	in.History = append(games(1, "Steady", 40, 24, time.Hour), games(2, "Lucky", 8, 5, time.Hour)...)
+
+	in.Tuning = DefaultTuning()
+	if b := Rank(in, now); b.Best[0].Name != "Steady" {
+		t.Errorf("by default %q ranks first, want Steady", b.Best[0].Name)
+	}
+	in.Tuning.TrustAfter = 0
+	if b := Rank(in, now); b.Best[0].Name != "Lucky" {
+		t.Errorf("with no shrinkage %q ranks first, want Lucky", b.Best[0].Name)
+	}
+}
+
+// A longer half-life forgives an older record, which is the whole point of the setting.
+func TestHalfLifeDecidesHowFastARecordFades(t *testing.T) {
+	in := Input{Role: dota.Mid, Tuning: DefaultTuning()}
+	in.History = append(games(1, "Now", 20, 13, time.Hour), games(2, "Then", 20, 15, 120*24*time.Hour)...)
+
+	gap := func(tune Tuning) int {
+		in.Tuning = tune
+		b := Rank(in, now)
+		nowHero, _ := find(b.Best, "Now")
+		thenHero, _ := find(b.Best, "Then")
+		return nowHero.Score - thenHero.Score
+	}
+	fast := DefaultTuning()
+	slow := DefaultTuning()
+	slow.HalfLifeDays = 365
+	if gap(fast) <= gap(slow) {
+		t.Errorf("a fast fade (%d) didn't punish the old record more than a slow one (%d)", gap(fast), gap(slow))
+	}
+}
+
+// The lists are sized from the settings, and no meta suggestions at all is a valid choice.
+func TestTheListSizesComeFromTheSettings(t *testing.T) {
+	in := Input{Role: dota.Mid, Rank: 43, Tuning: DefaultTuning(),
+		Heroes: []dotadata.HeroInfo{{ID: 5, LocalizedName: "One"}, {ID: 6, LocalizedName: "Two"}},
+		Meta:   map[int]dotadata.HeroMeta{5: bracketMeta(4, 1000, 560), 6: bracketMeta(4, 1000, 550)}}
+	in.History = append(games(1, "A", 5, 4, time.Hour), games(2, "B", 5, 3, time.Hour)...)
+
+	in.Tuning.Show, in.Tuning.Fresh = 1, 1
+	b := Rank(in, now)
+	if len(b.Best) != 1 || len(b.Fresh) != 1 {
+		t.Errorf("lists = %d best, %d fresh, want one each", len(b.Best), len(b.Fresh))
+	}
+	in.Tuning.Fresh = 0
+	if b := Rank(in, now); len(b.Fresh) != 0 {
+		t.Errorf("meta suggestions were turned off but %d came back", len(b.Fresh))
+	}
+}
+
+func TestTuningIsChecked(t *testing.T) {
+	for name, tune := range map[string]func(*Tuning){
+		"no history at all":              func(t *Tuning) { t.Days = 0 },
+		"a fade longer than the history": func(t *Tuning) { t.HalfLifeDays = t.Days + 1 },
+		"a negative trust":               func(t *Tuning) { t.TrustAfter = -1 },
+		"no games needed":                func(t *Tuning) { t.MinGames = 0 },
+		"an avoid line above even":       func(t *Tuning) { t.AvoidPct = 60 },
+		"a list of eleven":               func(t *Tuning) { t.Show = 11 },
+	} {
+		tune := tune
+		tuning := DefaultTuning()
+		tune(&tuning)
+		if err := tuning.Validate(); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+	if err := DefaultTuning().Validate(); err != nil {
+		t.Errorf("the defaults don't pass their own check: %v", err)
+	}
+}
+
+// A caller that fills in no tuning gets the defaults rather than nothing.
+func TestAnEmptyTuningFallsBackToTheDefaults(t *testing.T) {
+	in := Input{Role: dota.Mid, History: games(1, "Steady", 40, 26, time.Hour)}
+	if b := Rank(in, now); b == nil || len(b.Best) != 1 {
+		t.Fatalf("board = %+v", b)
+	}
+}

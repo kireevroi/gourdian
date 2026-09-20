@@ -49,6 +49,10 @@ onSettings((c) => {
   $('rate-v').textContent = s.voice_rate > 0 ? `+${s.voice_rate}` : s.voice_rate;
   $('voice-missing').hidden = !(!c.natural_voice && s.language !== 'en' && s.voice === 'system' && c.voice_langs && !c.voice_langs.includes(s.language));
 
+  for (const [id, key] of PICK_FIELDS) {
+    if (document.activeElement !== $(id)) $(id).value = s.picks[key];
+  }
+
   $('rec-auto').checked = s.recording.auto;
   if (document.activeElement !== $('rec-keep')) $('rec-keep').value = s.recording.keep;
   $('rec-state').textContent = c.recording ? tp('Recording to {file}', { file: c.recording.split(/[\\/]/).pop() }) : t('Not recording right now.');
@@ -146,6 +150,17 @@ $('voice-recheck').addEventListener('click', async () => {
   try { await api('/api/voice/recheck', { method: 'POST' }); } catch (err) { toast(err.message, true); }
 });
 events.on('voice_install', (st) => toast(t(st.text), st.state === 'failed'));
+
+// Pick help: each box saves the one number it holds, so a rejected value can't take the rest
+// of the card with it.
+const PICK_FIELDS = [['pick-days', 'days'], ['pick-half', 'half_life_days'], ['pick-trust', 'trust_after'],
+  ['pick-min', 'min_games'], ['pick-avoid', 'avoid_pct'], ['pick-show', 'show'], ['pick-fresh', 'fresh'], ['pick-avoid-n', 'avoid']];
+for (const [id, key] of PICK_FIELDS) {
+  $(id).addEventListener('change', async (e) => {
+    try { await saveSettings({ picks: { [key]: Number(e.target.value) } }); } catch (err) { toast(err.message, true); }
+  });
+}
+$('picks-reset').addEventListener('click', () => saveSettings({ picks: null }));
 
 $('rec-auto').addEventListener('change', (e) => saveSettings({ recording: { auto: e.target.checked } }));
 $('rec-keep').addEventListener('change', (e) => saveSettings({ recording: { keep: Number(e.target.value) } }));

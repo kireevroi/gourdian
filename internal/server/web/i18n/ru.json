@@ -755,7 +755,21 @@
     "Which building is dropping": "Какое строение падает",
     "Your base is under attack": "Ваша база под атакой",
     "Melee barracks of yours destroyed": "Разрушено ваших бараков ближнего боя",
-    "Your Glyph is ready": "Ваш глиф готов"
+    "Your Glyph is ready": "Ваш глиф готов",
+    "How heroes are ranked while you choose one. What counts as recent depends on how much you play, so these are yours to set.": "Как ранжируются герои, пока вы выбираете. Что считать недавним, зависит от того, сколько вы играете, — поэтому настройте под себя.",
+    "Reset": "Сбросить",
+    "Look back over": "Смотреть назад на",
+    "days": "дн.",
+    "A match counts half after": "Матч весит вдвое меньше через",
+    "Trust a record after": "Доверять статистике после",
+    "games": "матчей",
+    "Below that, a hero's win rate is pulled towards an even game, so a short hot streak can't outrank a long steady record. 0 takes every record at face value.": "Ниже этого винрейт героя притягивается к равной игре, чтобы короткая удачная серия не обгоняла длинную ровную статистику. 0 — верить любой статистике как есть.",
+    "Rank a hero after": "Ранжировать героя после",
+    "Avoid below": "Избегать ниже",
+    "% won": "% побед",
+    "of yours, ": "своих, ",
+    " from the meta, ": " из меты, ",
+    " to avoid": " для избегания"
   },
   "patterns": [
     [

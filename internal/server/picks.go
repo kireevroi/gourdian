@@ -35,10 +35,11 @@ type pickCache struct {
 // against how each hero is doing at their rank.
 func (s *Server) pickBoard(set config.Settings) *picks.Board {
 	rank := s.rankTier()
-	// The rank and the hero meta arrive from OpenDota after the first draft update, so both
-	// are part of the key: without them an early empty board would be kept all day.
+	// Everything the board is made of belongs in the key. The rank and the hero meta arrive
+	// from OpenDota after the first draft update, so without them an early empty board would
+	// be kept all day; without the tuning, changing a setting would appear to do nothing.
 	meta := s.data.Meta()
-	key := fmt.Sprintf("%s/%d/%d/%d/%s", set.Role, s.stats.HistoryVersion(), rank, len(meta), time.Now().Format(time.DateOnly))
+	key := fmt.Sprintf("%s/%d/%d/%d/%+v/%s", set.Role, s.stats.HistoryVersion(), rank, len(meta), set.Picks, time.Now().Format(time.DateOnly))
 	c := &s.picks
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -49,7 +50,7 @@ func (s *Server) pickBoard(set config.Settings) *picks.Board {
 }
 
 func (s *Server) readPickBoard(set config.Settings, rank int, meta map[int]dotadata.HeroMeta) *picks.Board {
-	history, err := s.stats.MatchesWhere(stats.MatchFilter{Role: set.Role, Since: time.Now().Add(-picks.Window), Real: true})
+	history, err := s.stats.MatchesWhere(stats.MatchFilter{Role: set.Role, Since: time.Now().Add(-set.Picks.Window()), Real: true})
 	if err != nil {
 		s.log.Warn("no match history for pick help", "err", err)
 	}
@@ -57,6 +58,7 @@ func (s *Server) readPickBoard(set config.Settings, rank int, meta map[int]dotad
 		Role:    set.Role,
 		Lang:    set.Language,
 		Rank:    rank,
+		Tuning:  set.Picks,
 		History: history,
 		Heroes:  s.data.Heroes(),
 		Meta:    meta,

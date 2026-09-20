@@ -1,6 +1,8 @@
 package server
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -11,6 +13,7 @@ import (
 	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 	"gourdian/internal/model"
+	"gourdian/internal/picks"
 )
 
 func TestPickBoardUsesYourOwnRecord(t *testing.T) {
@@ -111,4 +114,62 @@ func TestPickBoardIsSpokenOnceADraft(t *testing.T) {
 // picksSpoken is the pick tips the trainer has read out in this match.
 func picksSpoken(srv *Server) []coach.Tip {
 	return slices.DeleteFunc(srv.engine.RecentTips(), func(t coach.Tip) bool { return t.Rule != "picks" })
+}
+
+// The pick tuning is saved like any other setting, rejected when it makes no sense, and reset
+// by sending a null.
+func TestPickTuningIsSavedCheckedAndReset(t *testing.T) {
+	srv, _, _ := newTestServer(t, nil)
+	put := func(body string) int {
+		req := httptest.NewRequest("PUT", "/api/settings", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		srv.handlePutSettings(w, req)
+		return w.Code
+	}
+	if code := put(`{"picks":{"half_life_days":14,"show":6}}`); code != http.StatusOK {
+		t.Fatalf("saving a tuning returned %d", code)
+	}
+	if got := srv.cfg.Settings().Picks; got.HalfLifeDays != 14 || got.Show != 6 || got.Days != picks.DefaultTuning().Days {
+		t.Fatalf("tuning = %+v; the fields sent should change and the rest should stay", got)
+	}
+	if code := put(`{"picks":{"half_life_days":0}}`); code == http.StatusOK {
+		t.Error("a zero half-life was accepted")
+	}
+	if got := srv.cfg.Settings().Picks.HalfLifeDays; got != 14 {
+		t.Errorf("a rejected value changed the saved tuning to %d", got)
+	}
+	if code := put(`{"picks":null}`); code != http.StatusOK {
+		t.Fatalf("resetting returned %d", code)
+	}
+	if got := srv.cfg.Settings().Picks; got != picks.DefaultTuning() {
+		t.Errorf("after a reset the tuning is %+v", got)
+	}
+}
+
+// Changing a pick setting must change the board: the cache key has to cover everything the
+// board is made of, or a new setting looks like it did nothing.
+func TestChangingTheTuningRebuildsTheBoard(t *testing.T) {
+	srv, _, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.Mid })
+	add := func(hero string, id, n, wins int) {
+		for i := range n {
+			result := "loss"
+			if i < wins {
+				result = "win"
+			}
+			srv.stats.AppendMatch(model.MatchSummary{
+				MatchID: hero + string(rune('a'+i)), Hero: hero, HeroID: id, Role: dota.Mid,
+				Result: result, Source: model.SourceLive, EndedAt: time.Now().Add(-time.Duration(i+1) * time.Hour)})
+		}
+	}
+	add("Steady", 1, 40, 24) // 60% of 40
+	add("Lucky", 2, 8, 5)    // 62% of 8
+
+	set := roleSet(srv, dota.Mid)
+	if first := srv.pickBoard(set).Best[0].Name; first != "Steady" {
+		t.Fatalf("by default %q ranks first, want Steady", first)
+	}
+	set.Picks.TrustAfter = 0
+	if first := srv.pickBoard(set).Best[0].Name; first != "Lucky" {
+		t.Errorf("taking records at face value still ranks %q first, want Lucky", first)
+	}
 }

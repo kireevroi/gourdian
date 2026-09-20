@@ -23,6 +23,7 @@ import (
 
 	"gourdian/internal/dota"
 	"gourdian/internal/hotkey"
+	"gourdian/internal/picks"
 	"gourdian/internal/platform"
 )
 
@@ -225,16 +226,18 @@ type Settings struct {
 	// Drill is the rule whose habit the player is working on, counted live and after each match.
 	Drill string `json:"drill,omitempty"`
 	// QuietInFights holds back spoken reminders while the hero is losing health fast.
-	QuietInFights bool              `json:"quiet_in_fights"`
-	Voice         string            `json:"voice"`
-	VoiceRate     int               `json:"voice_rate"` // -10 (slow) .. 10 (fast)
-	VoiceLevel    string            `json:"voice_level"`
-	DisabledRules []string          `json:"disabled_rules"`
-	Timings       dota.Timings      `json:"-"` // always dota.DefaultTimings()
-	AI            AISettings        `json:"ai"`
-	Overlay       OverlaySettings   `json:"overlay"`
-	Recording     RecordingSettings `json:"recording"`
-	Hotkeys       HotkeySettings    `json:"hotkeys"`
+	QuietInFights bool         `json:"quiet_in_fights"`
+	Voice         string       `json:"voice"`
+	VoiceRate     int          `json:"voice_rate"` // -10 (slow) .. 10 (fast)
+	VoiceLevel    string       `json:"voice_level"`
+	DisabledRules []string     `json:"disabled_rules"`
+	Timings       dota.Timings `json:"-"` // always dota.DefaultTimings()
+	// Picks tunes how heroes are ranked while you choose one.
+	Picks     picks.Tuning      `json:"picks"`
+	AI        AISettings        `json:"ai"`
+	Overlay   OverlaySettings   `json:"overlay"`
+	Recording RecordingSettings `json:"recording"`
+	Hotkeys   HotkeySettings    `json:"hotkeys"`
 	// DashboardWindow opens the dashboard in its own app window instead of a browser tab.
 	DashboardWindow bool        `json:"dashboard_window"`
 	HUDWidgets      []HUDWidget `json:"hud_widgets"`
@@ -288,6 +291,9 @@ func (s Settings) Validate() error {
 	}
 	if !slices.Contains(HUDCorners, s.Overlay.HUDCorner) {
 		return fmt.Errorf("unknown HUD position %q", s.Overlay.HUDCorner)
+	}
+	if err := s.Picks.Validate(); err != nil {
+		return err
 	}
 	if id, err := strconv.ParseUint(s.AccountID, 10, 32); s.AccountID != "" && (err != nil || id == 0) {
 		return fmt.Errorf("account id must be your Dota Friend ID, a number like 123456789")
@@ -366,6 +372,7 @@ func Default() Config {
 			VoiceRate:     1,
 			VoiceLevel:    SpeakAll,
 			Timings:       dota.DefaultTimings(),
+			Picks:         picks.DefaultTuning(),
 			AI: AISettings{Enabled: true, Review: true, Draft: true, Interval: 180,
 				// Claude Code's aliases follow Anthropic's newest models, so the defaults never go stale.
 				Live:    AIChoice{Provider: "claude", Model: "sonnet", Effort: "low"},
