@@ -44,4 +44,15 @@ func TestDiedHoldingGoldCountsTheGoldBeforeDying(t *testing.T) {
 	if len(got) != 1 || !strings.Contains(got[0].Text, "1400") {
 		t.Fatalf("want the 1400 unreliable gold held before dying, got %+v", got)
 	}
+	// Dota can take the gold an update before it says the hero died, showing 0 health first.
+	tips = play(newEngine(nil), settings(dota.Carry), 600, 620, func(s *gsi.State) {
+		s.Player.Gold, s.Player.GoldReliable = 1500, 100
+		if c := s.Map.ClockTime; c >= 610 {
+			s.Hero.Health, s.Player.Gold = 0, 800
+			s.Hero.Alive = c == 610
+		}
+	})
+	if got := byRule(tips, "death_gold"); len(got) != 1 || !strings.Contains(got[0].Text, "1400") {
+		t.Fatalf("the gold was taken at 0 health, before the death: want 1400, got %+v", got)
+	}
 }

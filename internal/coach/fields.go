@@ -134,6 +134,9 @@ var Fields = []Field{
 	{ID: "base_under_attack", Label: "Your base is under attack", Group: "Match", Type: "bool",
 		Help: "A tier 3 or 4 tower, a barracks or the ancient of yours is losing health.",
 		flag: flag(func(c *Ctx) bool { _, d := c.m.buildingDrop(inBase); return d > 0 })},
+	{ID: "glyph_ready", Label: "Your Glyph is ready", Group: "Match", Type: "bool",
+		Help: "Your team's Glyph comes back 5 minutes after use, or as soon as a tower or barracks of yours falls.",
+		flag: flag(func(c *Ctx) bool { return c.m.glyphReady(c.Clock, c.T.GlyphCooldown) })},
 	{ID: "melee_rax_lost", Label: "Melee barracks of yours destroyed", Group: "Match", Type: "number",
 		num: num(func(c *Ctx) float64 {
 			n := 0
@@ -346,13 +349,8 @@ var Fields = []Field{
 	{ID: "earned_gold", Label: "Gold earned this match", Group: "Economy", Type: "number", Unit: "gold",
 		num: num(func(c *Ctx) float64 { return f64(earnedGold(c.S)) })},
 	{ID: "gold_before_death", Label: "Unreliable gold you died with", Group: "Economy", Type: "number", Unit: "gold",
-		Help: "Read from just before the death, since Dota takes part of it the moment you die.",
-		num: num(func(c *Ctx) float64 {
-			if c.Prev != nil && c.Prev.Player != nil {
-				return f64(c.Prev.Player.Gold - c.Prev.Player.GoldReliable)
-			}
-			return f64(c.S.Player.Gold - c.S.Player.GoldReliable)
-		})},
+		Help: "Read from the last moment you had health, since Dota takes part of it as you die.",
+		num:  num(func(c *Ctx) float64 { return f64(c.m.unreliable) })},
 	{ID: "gold_unreliable", Label: "Unreliable gold", Group: "Economy", Type: "number", Unit: "gold",
 		Help: "The gold you lose part of when you die: everything but reliable gold from kills, Roshan and objectives.",
 		num:  num(func(c *Ctx) float64 { return f64(c.S.Player.Gold - c.S.Player.GoldReliable) })},

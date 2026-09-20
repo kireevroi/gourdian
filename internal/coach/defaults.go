@@ -5,8 +5,6 @@ import "gourdian/internal/dota"
 // laningEnds is 10:00, when lanes break up and timed reminders give way to ones about where you are.
 const laningEnds = 600
 
-// DefaultSpecs are the built-in rules, written the same way the player writes their own so
-// every part of them can be edited. The IDs match the older Go rules, keeping habit counts.
 // DefaultSpec is the shipped version of one built-in rule, in English.
 func DefaultSpec(id string) (RuleSpec, bool) {
 	for _, s := range DefaultSpecs("en") {
@@ -17,6 +15,8 @@ func DefaultSpec(id string) (RuleSpec, bool) {
 	return RuleSpec{}, false
 }
 
+// DefaultSpecs are the built-in rules, written the same way the player writes their own so
+// every part of them can be edited. The IDs match the older Go rules, keeping habit counts.
 func DefaultSpecs(lang string) []RuleSpec {
 	t := dota.DefaultTimings()
 	specs := []RuleSpec{
@@ -374,10 +374,10 @@ func DefaultSpecs(lang string) []RuleSpec {
 			If: []Cond{
 				{Field: "tower_drop", Op: "ge", Num: 15},
 				{Field: "dropping_hp", Op: "le", Num: 50},
+				{Field: "glyph_ready", Op: "true"},
 			},
-			Then: AlertSpec{Text: "Your {dropping_building} is dropping fast. Glyph it now if your Glyph is ready",
+			Then: AlertSpec{Text: "Your {dropping_building} is dropping fast. Glyph it now",
 				Speech: "Glyph your {dropping_building}", Severity: "urgent"},
-			// The Glyph has a 5-minute cooldown, and Dota doesn't say whether it's ready.
 			Cooldown: 300, Max: 5,
 		},
 		{

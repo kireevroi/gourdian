@@ -14,6 +14,7 @@ type Timings struct {
 	RoshanRespawnMin int   `json:"roshan_respawn_min"`
 	RoshanRespawnMax int   `json:"roshan_respawn_max"`
 	AegisDuration    int   `json:"aegis_duration"`
+	GlyphCooldown    int   `json:"glyph_cooldown"`
 	BuybackFrom      int   `json:"buyback_from"`
 }
 
@@ -32,6 +33,7 @@ func DefaultTimings() Timings {
 		RoshanRespawnMin: 480,                               // 8 to 11 minutes after he dies
 		RoshanRespawnMax: 660,
 		AegisDuration:    300,
+		GlyphCooldown:    300,  // or less: losing a tower or barracks brings the Glyph back
 		BuybackFrom:      1800, // coaching choice, not a game rule: keep buyback gold from 30:00
 	}
 }

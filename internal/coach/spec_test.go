@@ -176,6 +176,7 @@ func TestCheckSpecSeesWhatTheEngineSees(t *testing.T) {
 	e.Update(before, set)
 	now := state(600)
 	now.Player.Gold, now.Player.GoldReliable = 450, 100 // died and lost unreliable gold
+	now.Hero.Alive, now.Hero.Health = false, 0
 	e.Update(now, set)
 
 	spec := RuleSpec{ID: "check", Name: "check", If: []Cond{

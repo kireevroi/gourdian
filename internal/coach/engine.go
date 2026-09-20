@@ -2,6 +2,7 @@
 package coach
 
 import (
+	"cmp"
 	"io"
 	"log/slog"
 	"slices"
@@ -488,6 +489,9 @@ type match struct {
 
 	lhAt   map[string]int
 	deaths []int
+	// unreliable is the unreliable gold the last time the hero had health. Dota can take the
+	// death's share an update before it reports the hero dead.
+	unreliable int
 
 	specTrue  map[string]bool // custom "becomes true" rules: whether conditions held last update
 	newEvents []string        // GSI event types first seen in this update
@@ -505,7 +509,12 @@ type match struct {
 	aegisExpires int
 	aegisTeam    string
 	aegisMine    bool
-	aegisUsed    bool // the player's own Aegis brought them back; a teammate's use can't be seen
+	aegisHolder  int
+	// aegisUsed is the Aegis having brought its holder back. The player's own shows at once;
+	// anyone else's only once they die for good, as coming back prints no kill.
+	aegisUsed bool
+	glyphUsed bool // your team's Glyph is cooling down since glyphAt
+	glyphAt   int
 
 	sampledMinute int
 
@@ -619,6 +628,9 @@ func (m *match) observe(s, prev *gsi.State, t dota.Timings) {
 	if prev != nil && died(prev, s) {
 		m.deaths = append(m.deaths, clock)
 	}
+	if s.Hero.Alive && s.Hero.Health > 0 {
+		m.unreliable = s.Player.Gold - s.Player.GoldReliable
+	}
 	if prev != nil && prev.Hero != nil && s.Hero.Alive && prev.Hero.HealthPercent-s.Hero.HealthPercent >= hurtDrop {
 		m.hurtAt = clock
 	}
@@ -629,11 +641,21 @@ func (m *match) observe(s, prev *gsi.State, t dota.Timings) {
 	// Event game_time is on the game_time axis, which is offset from the displayed clock.
 	offset := s.Map.GameTime - clock
 	m.newEvents = m.newEvents[:0]
+	var fresh []gsi.Event
 	for _, ev := range s.Events {
-		if m.events[ev.Key()] {
-			continue
+		if !m.events[ev.Key()] {
+			m.events[ev.Key()] = true
+			fresh = append(fresh, ev)
 		}
-		m.events[ev.Key()] = true
+	}
+	// GSI lists the newest first. A Glyph can be used in the second a tower falls, so chat
+	// lines keep their exact time for ties.
+	slices.SortStableFunc(fresh, func(a, b gsi.Event) int {
+		ca, _ := a.Chat()
+		cb, _ := b.Chat()
+		return cmp.Or(cmp.Compare(a.GameTime, b.GameTime), cmp.Compare(ca.Time, cb.Time))
+	})
+	for _, ev := range fresh {
 		m.newEvents = append(m.newEvents, ev.EventType)
 		// Events carry their own game time, which is what rules wait from.
 		m.eventAt[ev.EventType] = ev.GameTime - offset
@@ -648,6 +670,11 @@ func (m *match) observe(s, prev *gsi.State, t dota.Timings) {
 			}
 			me, ok := s.Player.PlayerID()
 			m.aegisMine = ok && me == ev.PlayerID
+			m.aegisHolder = ev.PlayerID
+		case "generic_event":
+			if c, ok := ev.Chat(); ok {
+				m.seeChat(c, ev.GameTime-offset)
+			}
 		}
 	}
 }

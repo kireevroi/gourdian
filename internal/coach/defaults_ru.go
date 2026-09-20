@@ -14,7 +14,7 @@ var russian = map[string]wording{
 		Advice: "Смерть забирает часть ненадёжного золота. Покупайте компоненты до того, как идти в бой.",
 	},
 	"glyph": {
-		Name: "Глиф на башню под пушем", Text: "Быстро падает: {dropping_building}. Нажмите глиф, если он готов",
+		Name: "Глиф на башню под пушем", Text: "Быстро падает: {dropping_building}. Нажмите глиф",
 		Speech: "Глиф! Падает {dropping_building}",
 	},
 	"glyph_refreshed": {
