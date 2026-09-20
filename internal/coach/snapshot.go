@@ -298,12 +298,8 @@ func timers(clock int, daytime bool, set config.Settings, m *match) []Timer {
 			add("Roshan surely up", "objective", hi)
 		}
 	}
-	if m != nil && m.aegisKnown && !m.aegisUsed {
-		label := "Aegis" + teamSuffix(m.aegisTeam, m.team, "on") + " expires"
-		if m.aegisMine {
-			label = "Your Aegis expires"
-		}
-		add(label, "objective", m.aegisExpires)
+	if m != nil && m.aegisLeft(clock) > 0 {
+		add("Your Aegis expires", "objective", m.aegisExpires)
 	}
 	if slices.Contains(supports, set.Role) && clock >= 0 {
 		pull := clock - clock%60 + 53

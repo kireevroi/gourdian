@@ -87,19 +87,9 @@ var Fields = []Field{
 			}
 			return names[0]
 		}},
-	{ID: "aegis_note", Label: "Whether the Aegis may be used already", Group: "Match", Type: "text",
-		Help: "Empty for your own Aegis, which the trainer sees you use; a warning for anyone else's.",
-		text: func(c *Ctx, _ string) string {
-			switch {
-			case aegisWhose(c) == "mine":
-				return ""
-			case c.Settings.Language == "ru":
-				return " (если его не использовали)"
-			}
-			return ", if it wasn't used"
-		}},
-	{ID: "aegis_expires", Label: "Time the Aegis expires", Group: "Match", Type: "number", Unit: "clock",
-		num: num(func(c *Ctx) float64 { return f64(c.m.aegisExpires) })},
+	{ID: "aegis_expires", Label: "Time your Aegis expires", Group: "Match", Type: "number", Unit: "clock",
+		Help: "Only meaningful while aegis_left is above zero, which is only for your own Aegis.",
+		num:  num(func(c *Ctx) float64 { return f64(c.m.aegisExpires) })},
 	{ID: "tower_low", Label: "Weakest tower of yours", Group: "Match", Type: "number", Unit: "percent",
 		Help: "The health left on your lowest standing building, 100 when everything is full.",
 		num:  num(func(c *Ctx) float64 { _, pct := lowestTower(c); return f64(pct) })},
@@ -413,8 +403,9 @@ var Fields = []Field{
 	{ID: "roshan_dead_for", Label: "Seconds since Roshan died", Group: "Match", Type: "number", Unit: "seconds",
 		Help: "Very large until Roshan is seen dying.",
 		num:  num(func(c *Ctx) float64 { return f64(c.m.sinceRoshan(c.Clock)) })},
-	{ID: "aegis_left", Label: "Seconds of Aegis left", Group: "Match", Type: "number", Unit: "seconds",
-		num: num(func(c *Ctx) float64 { return f64(c.m.aegisLeft(c.Clock)) })},
+	{ID: "aegis_left", Label: "Seconds of your Aegis left", Group: "Match", Type: "number", Unit: "seconds",
+		Help: "Only your own Aegis, which the trainer sees leave your inventory. Nothing in the game says when anyone else's is spent, so it stays 0 for theirs.",
+		num:  num(func(c *Ctx) float64 { return f64(c.m.aegisLeft(c.Clock)) })},
 	{ID: "skill_points", Label: "Unspent skill points", Group: "Abilities", Type: "number",
 		Help: "Counted against the fewest the hero has had this match, so innate and auto-levelled abilities don't show up as unspent.",
 		num:  num(func(c *Ctx) float64 { return f64(c.m.skillSpare()) })},

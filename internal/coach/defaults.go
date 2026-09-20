@@ -55,8 +55,9 @@ func DefaultSpecs(lang string) []RuleSpec {
 		{
 			ID: "aegis", Name: "Aegis is about to expire", Category: "timing",
 			When: Trigger{Type: WhenAfter, Event: "aegis_picked_up", After: t.AegisDuration - 30},
+			// aegis_left is only ever above zero for the player's own Aegis.
 			If:   []Cond{{Field: "aegis_left", Op: "gt"}},
-			Then: AlertSpec{Text: "{aegis_holder} expires at {aegis_expires}{aegis_note}", Speech: "{aegis_holder} expires in 30 seconds", Severity: "warn"},
+			Then: AlertSpec{Text: "Your Aegis expires at {aegis_expires}", Speech: "Your Aegis expires in 30 seconds", Severity: "warn"},
 		},
 		{
 			ID: "death", Name: "Death recap", Category: "survival",
