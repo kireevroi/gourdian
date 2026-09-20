@@ -17,7 +17,7 @@ var (
 	hudPanel  = color.RGBA{14, 17, 22, 255}
 	hudRow    = color.RGBA{28, 34, 48, 255}
 	hudLine   = color.RGBA{38, 45, 58, 255}
-	hudAccent = color.RGBA{224, 83, 61, 255}
+	hudAccent = color.RGBA{255, 138, 36, 255} // the dashboard's accent, --accent in app.css
 	hudKinds  = map[string]color.RGBA{
 		hud.KindText:   {230, 233, 239, 255},
 		hud.KindMuted:  {139, 149, 167, 255},
