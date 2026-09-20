@@ -33,6 +33,8 @@ header.shell { position: sticky; top: 0; z-index: 10; display: flex; align-items
 @font-face { font-family: 'Russo One'; src: url('/fonts/RussoOne-Regular.ttf') format('truetype'); font-display: swap; }
 .brand { display: inline-flex; align-items: center; gap: 8px; font: 18px 'Russo One', system-ui, sans-serif; letter-spacing: .5px; color: var(--text); text-decoration: none; }
 .brand img { width: 24px; height: 24px; }
+.brand .version { font: 11px/1 system-ui, sans-serif; letter-spacing: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.brand .version:empty { display: none; } /* no stray gap in the wordmark before the settings arrive */
 nav.pages { display: flex; gap: 2px; flex-wrap: wrap; }
 nav.pages a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 8px; }
 nav.pages a:hover { color: var(--text); background: var(--panel-2); }
