@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,6 +20,7 @@ import (
 	"time"
 
 	"gourdian/internal/ai"
+	"gourdian/internal/aisvc"
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
 	"gourdian/internal/dota"
@@ -299,20 +299,20 @@ echo '{"is_error":true,"subtype":"success","result":"Failed to authenticate: OAu
 func TestLoggedOutClaudePausesCoachAndWarnsOnce(t *testing.T) {
 	exe, loginFlag := fakeClaude(t)
 	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.AI.CLIPaths = map[string]string{"claude": exe}; s.AI.Enabled = true })
-	claude := srv.ai.providers.byID["claude"]
-	if !srv.aiReady() {
+	claude := must(srv.providers.Get("claude"))
+	if !srv.providers.Ready() {
 		t.Fatal("coach should start ready")
 	}
 	err := &ai.Error{Kind: ai.ErrAuth, Msg: "claude (success): Failed to authenticate"}
-	srv.aiFailed(claude, err)
+	srv.providers.Failed(claude, err)
 	if len(srv.engine.RecentTips()) != 0 {
 		t.Fatal("outside a match the warning waits for the dashboard or the next match")
 	}
 	postState(t, h, payload(100, nil))
-	srv.aiFailed(claude, err)
+	srv.providers.Failed(claude, err)
 	postState(t, h, payload(101, nil))
-	if srv.aiReady() || srv.healthOf("claude").Problem != aiLoggedOut || srv.aiBanner().Provider != "claude" {
-		t.Fatalf("coach should pause: %+v", srv.healthOf("claude"))
+	if srv.providers.Ready() || srv.providers.HealthOf("claude").Problem != aisvc.LoggedOut || srv.providers.Banner().Provider != "claude" {
+		t.Fatalf("coach should pause: %+v", srv.providers.HealthOf("claude"))
 	}
 	warnings := 0
 	for _, tip := range srv.engine.RecentTips() {
@@ -323,12 +323,12 @@ func TestLoggedOutClaudePausesCoachAndWarnsOnce(t *testing.T) {
 	if warnings != 1 {
 		t.Fatalf("want one warning, got %d", warnings)
 	}
-	if st := srv.checkProvider(t.Context(), "claude"); st.State != ai.StateLogin {
+	if st := srv.providers.Check(t.Context(), "claude"); st.State != ai.StateLogin {
 		t.Fatalf("still logged out: %+v", st)
 	}
 	os.WriteFile(loginFlag, nil, 0o600)
-	if st := srv.checkProvider(t.Context(), "claude"); st.State != ai.StateReady || !srv.aiReady() {
-		t.Fatalf("logging in should resume the coach: %+v %+v", st, srv.healthOf("claude"))
+	if st := srv.providers.Check(t.Context(), "claude"); st.State != ai.StateReady || !srv.providers.Ready() {
+		t.Fatalf("logging in should resume the coach: %+v %+v", st, srv.providers.HealthOf("claude"))
 	}
 }
 
@@ -336,32 +336,14 @@ func TestFallbackProviderAnswersWhileMainIsPaused(t *testing.T) {
 	srv, _, _ := newTestServer(t, func(s *config.Settings) {
 		s.AI.Fallback = config.AIChoice{Provider: "openrouter", Model: "openai/gpt-5-mini"}
 	})
-	srv.aiFailed(srv.ai.providers.byID["claude"], &ai.Error{Kind: ai.ErrAuth, Msg: "logged out"})
+	srv.providers.Failed(must(srv.providers.Get("claude")), &ai.Error{Kind: ai.ErrAuth, Msg: "logged out"})
 	set := srv.cfg.Settings().AI
-	p, choice, ok := srv.pick(set.Live, set)
+	p, choice, ok := srv.providers.Pick(set.Live, set)
 	if !ok || p.Info().ID != "openrouter" || choice.Model != "openai/gpt-5-mini" {
 		t.Fatalf("pick = %v %+v %v", p, choice, ok)
 	}
-	if msg := srv.healthOf("claude").Message; !strings.Contains(msg, "OpenRouter answers until then") {
+	if msg := srv.providers.HealthOf("claude").Message; !strings.Contains(msg, "OpenRouter answers until then") {
 		t.Fatalf("message should mention the fallback: %q", msg)
-	}
-}
-
-func TestUsageLimitBacksOff(t *testing.T) {
-	exe, _ := fakeClaude(t)
-	srv, _, _ := newTestServer(t, func(s *config.Settings) { s.AI.CLIPaths = map[string]string{"claude": exe}; s.AI.Enabled = true })
-	srv.aiFailed(srv.ai.providers.byID["claude"], errors.New("claude (success): Claude AI usage limit reached|1789000000"))
-	if srv.aiReady() {
-		t.Fatal("limit should pause the coach")
-	}
-	p := srv.ai.providers
-	p.mu.Lock()
-	h := p.health["claude"]
-	h.Until = time.Now().Add(-time.Second)
-	p.health["claude"] = h
-	p.mu.Unlock()
-	if !srv.aiReady() {
-		t.Fatal("coach should resume after the back-off")
 	}
 }
 
@@ -781,4 +763,12 @@ func TestReadJSONRefusesAnEmptyBody(t *testing.T) {
 	if err := read(readOptionalJSON, `{"N": `); err == nil {
 		t.Fatal("a broken body was accepted")
 	}
+}
+
+// must is the provider a lookup found, for tests that know it's there.
+func must(p ai.Provider, ok bool) ai.Provider {
+	if !ok {
+		panic("no such provider")
+	}
+	return p
 }

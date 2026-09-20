@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -142,18 +141,6 @@ type recordingInfo struct {
 	Name     string    `json:"name"`
 	Size     int64     `json:"size"`
 	Modified time.Time `json:"modified"`
-}
-
-func (s *Server) handleRecordings(w http.ResponseWriter, r *http.Request) {
-	files, _ := filepath.Glob(filepath.Join(s.recordingsDir(), "*.jsonl*"))
-	var out []recordingInfo
-	for _, f := range files {
-		if fi, err := os.Stat(f); err == nil && fi.Size() > 100 {
-			out = append(out, recordingInfo{Name: filepath.Base(f), Size: fi.Size(), Modified: fi.ModTime()})
-		}
-	}
-	slices.SortFunc(out, func(a, b recordingInfo) int { return b.Modified.Compare(a.Modified) })
-	writeJSON(w, out)
 }
 
 type testFire struct {

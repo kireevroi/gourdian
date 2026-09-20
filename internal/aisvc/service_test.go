@@ -1,14 +1,53 @@
-package server
+package aisvc
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"testing"
 	"time"
 
 	"gourdian/internal/ai"
+	"gourdian/internal/config"
+	"gourdian/internal/secrets"
 )
+
+// testService is a service with a fresh settings file and nothing listening to it.
+func testService(t *testing.T, providers ...ai.Provider) *Service {
+	t.Helper()
+	dir := t.TempDir()
+	store, err := config.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(Host{Settings: store, Keys: secrets.Open(dir), WorkDir: dir, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Ctx: t.Context(), Spawn: func(work func(context.Context)) { go work(t.Context()) },
+		Publish: func(string, any) {}, PublishSettings: func() {}, Paused: func(Health) {}, Resumed: func() {}})
+	if len(providers) > 0 {
+		s.UseProviders(providers)
+	}
+	return s
+}
+
+// A usage limit pauses the provider, and the pause ends by itself.
+func TestUsageLimitBacksOff(t *testing.T) {
+	srv := testService(t)
+	claude, _ := srv.Get("claude")
+	srv.Failed(claude, errors.New("claude (success): Claude AI usage limit reached|1789000000"))
+	if srv.Ready() {
+		t.Fatal("limit should pause the coach")
+	}
+	srv.mu.Lock()
+	h := srv.health["claude"]
+	h.Until = time.Now().Add(-time.Second)
+	srv.health["claude"] = h
+	srv.mu.Unlock()
+	if !srv.Ready() {
+		t.Fatal("coach should resume after the back-off")
+	}
+}
 
 // fakeCLI is a provider that needs installing and logging in, like the real CLIs.
 type fakeCLI struct {
@@ -46,23 +85,22 @@ func (f *fakeCLI) Login() error {
 	return nil
 }
 
-func waitSetup(t *testing.T, s *Server) setupState {
+func waitSetup(t *testing.T, s *Service) SetupState {
 	t.Helper()
 	for range 200 {
-		if st := s.setupSnapshot(); !st.Running {
+		if st := s.Setup(); !st.Running {
 			return st
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("the setup never finished")
-	return setupState{}
+	return SetupState{}
 }
 
 func TestSetupInstallsThenLogsIn(t *testing.T) {
-	srv, _, _ := newTestServer(t, nil)
 	f := &fakeCLI{}
-	srv.ai.providers = newProviders([]ai.Provider{f})
-	if _, err := srv.startSetup([]string{"fake"}); err != nil {
+	srv := testService(t, f)
+	if _, err := srv.StartSetup([]string{"fake"}); err != nil {
 		t.Fatal(err)
 	}
 	st := waitSetup(t, srv)
@@ -75,9 +113,8 @@ func TestSetupInstallsThenLogsIn(t *testing.T) {
 }
 
 func TestSetupReportsAFailedInstall(t *testing.T) {
-	srv, _, _ := newTestServer(t, nil)
-	srv.ai.providers = newProviders([]ai.Provider{&fakeCLI{installErr: errors.New("no network")}})
-	if _, err := srv.startSetup([]string{"fake"}); err != nil {
+	srv := testService(t, &fakeCLI{installErr: errors.New("no network")})
+	if _, err := srv.StartSetup([]string{"fake"}); err != nil {
 		t.Fatal(err)
 	}
 	st := waitSetup(t, srv)
@@ -87,34 +124,31 @@ func TestSetupReportsAFailedInstall(t *testing.T) {
 }
 
 func TestOnlyOneSetupAtATime(t *testing.T) {
-	srv, _, _ := newTestServer(t, nil)
-	srv.ai.providers = newProviders([]ai.Provider{&fakeCLI{}})
-	srv.ai.setup.state = setupState{Running: true}
-	if _, err := srv.startSetup([]string{"fake"}); err == nil {
+	srv := testService(t, &fakeCLI{})
+	srv.setup.state = SetupState{Running: true}
+	if _, err := srv.StartSetup([]string{"fake"}); err == nil {
 		t.Fatal("a second setup started while one was running")
 	}
-	srv.ai.setup.state = setupState{}
+	srv.setup.state = SetupState{}
 }
 
 // A short watch after a login must not clear the mark of the open-ended watch still running
 // for the same provider, or the next logout starts a second one.
 func TestLoginWatchLeavesTheOpenEndedWatchMarked(t *testing.T) {
-	srv, _, _ := newTestServer(t, nil)
-	defer srv.Close()
-	srv.setAIProblem(aiHealth{Problem: aiLoggedOut, Provider: "claude"})
+	srv := testService(t, &fakeCLI{})
+	srv.setProblem(Health{Problem: LoggedOut, Provider: "fake"})
 	watching := func() bool {
-		p := srv.ai.providers
-		p.mu.Lock()
-		defer p.mu.Unlock()
-		return p.watching["claude"]
+		srv.mu.Lock()
+		defer srv.mu.Unlock()
+		return srv.watching["fake"]
 	}
-	go srv.watchLogin("claude", time.Hour, 0) // waits for a logout to clear, for as long as it takes
+	go srv.WatchLogin("fake", time.Hour, 0) // waits for a logout to clear, for as long as it takes
 	for deadline := time.Now().Add(5 * time.Second); !watching(); time.Sleep(time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatal("the open-ended watch never started")
 		}
 	}
-	srv.watchLogin("claude", time.Millisecond, 5*time.Millisecond) // the short watch after a login
+	srv.WatchLogin("fake", time.Millisecond, 5*time.Millisecond) // the short watch after a login
 	if !watching() {
 		t.Fatal("the short watch cleared the open-ended watch's mark")
 	}

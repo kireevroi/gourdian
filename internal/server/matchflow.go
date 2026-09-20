@@ -75,7 +75,7 @@ func (s *Server) afterMatch(m model.MatchSummary, set config.Settings) {
 		return
 	}
 	reviewing := set.AI.Review
-	if _, _, ok := s.pick(set.AI.Reviews, set.AI); !ok {
+	if _, _, ok := s.providers.Pick(set.AI.Reviews, set.AI); !ok {
 		reviewing = false
 	}
 	status := func(waited time.Duration) {

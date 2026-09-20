@@ -27,7 +27,7 @@ func (l *listingProvider) ListModels(context.Context) ([]ai.Model, error) { retu
 func TestConnectingAProviderPicksItsModels(t *testing.T) {
 	srv, _, _ := newTestServer(t, nil)
 	p := &listingProvider{models: []ai.Model{{ID: "gemini-2.5-flash"}, {ID: "gemini-3.8-flash"}, {ID: "gemini-3.7-pro"}, {ID: "lyria-3-pro"}}}
-	srv.ai.providers = newProviders([]ai.Provider{p})
+	srv.providers.UseProviders([]ai.Provider{p})
 	set := srv.cfg.Settings()
 	set.AI.Live.Provider, set.AI.Live.Model = "listing", ""
 	set.AI.Reviews.Provider, set.AI.Reviews.Model = "listing", "gemini-1.0-pro" // retired
@@ -35,8 +35,8 @@ func TestConnectingAProviderPicksItsModels(t *testing.T) {
 	if err := srv.cfg.UpdateSettings(set); err != nil {
 		t.Fatal(err)
 	}
-	srv.checkProvider(t.Context(), "listing")
-	srv.refreshModels(t.Context(), "listing")
+	srv.providers.Check(t.Context(), "listing")
+	srv.providers.RefreshModels(t.Context(), "listing")
 	got := srv.cfg.Settings().AI
 	if got.Live.Model != "gemini-3.8-flash" || got.Reviews.Model != "gemini-3.7-pro" {
 		t.Fatalf("live %q, reviews %q", got.Live.Model, got.Reviews.Model)
@@ -47,8 +47,8 @@ func TestAModelTypedInIsKept(t *testing.T) {
 	srv, h, _ := newTestServer(t, nil)
 	p := &listingProvider{models: []ai.Model{{ID: "gemini-3.8-flash"}, {ID: "gemini-3.7-pro"}}}
 	claude := &listingProvider{id: srv.cfg.Settings().AI.Reviews.Provider, models: []ai.Model{{ID: "sonnet"}}}
-	srv.ai.providers = newProviders([]ai.Provider{p, claude})
-	srv.checkProvider(t.Context(), "listing")
+	srv.providers.UseProviders([]ai.Provider{p, claude})
+	srv.providers.Check(t.Context(), "listing")
 	for _, body := range []string{
 		`{"ai":{"live":{"provider":"listing","model":""}}}`,
 		`{"ai":{"live":{"provider":"listing","model":"gemini-3.9-flash-preview"}}}`,
@@ -58,7 +58,7 @@ func TestAModelTypedInIsKept(t *testing.T) {
 			t.Fatalf("%s: status %d", body, code)
 		}
 	}
-	srv.refreshModels(t.Context(), "listing")
+	srv.providers.RefreshModels(t.Context(), "listing")
 	got := srv.cfg.Settings().AI
 	if got.Live.Model != "gemini-3.9-flash-preview" || !got.Live.Typed {
 		t.Fatalf("the model the player typed was replaced: %+v", got.Live)
