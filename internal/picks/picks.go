@@ -77,9 +77,13 @@ const (
 	// freshPct is the meta win rate a hero the player doesn't play must beat to be suggested.
 	freshPct = 50
 
-	// The score caps. These are the shape of the model rather than a matter of taste, so they
-	// are not tuned from the dashboard: what the player's own record is worth against the
-	// patch and the hero's roles.
+	// The score caps: what the player's own record is worth against the patch and against the
+	// hero's roles. These are the shape of the model rather than a matter of taste, so they
+	// are not tuned from the dashboard like picks.Tuning is.
+	//
+	// TODO: tune. They were picked by hand and never measured. yoursCap in particular
+	// saturates: any weighted record above about 65% hits it, so a player's two best heroes
+	// tie and fall back to which they have played more.
 	yoursCap = 15
 	metaCap  = 6
 	fitBonus = 3
