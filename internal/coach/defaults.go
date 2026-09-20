@@ -237,7 +237,9 @@ func DefaultSpecs(lang string) []RuleSpec {
 			Then: AlertSpec{Text: "Items are waiting in your stash. Send them with the courier", Speech: "Deliver your stash items",
 				Severity: "warn", Mistake: true,
 				Advice: "Items in the stash do nothing. Send the courier right after you buy."},
-			Cooldown: 120, Max: 4,
+			// Nothing in the game says the courier is already on its way, so the reminder goes
+			// by what is sitting there: once for these items, again when something new lands.
+			Each: "stash_contents", Max: 4,
 		},
 		{
 			ID: "midas", Name: "Hand of Midas off cooldown", Category: "economy",

@@ -402,3 +402,36 @@ func TestRoleCheckSaysWhereTheRoleCameFrom(t *testing.T) {
 		t.Fatalf("role check = %+v", got)
 	}
 }
+
+// Nothing in the game says the courier is already on its way, so the stash reminder used to
+// come back every two minutes while it flew. It now speaks once for what is sitting there,
+// and again only when something new lands.
+func TestStashRemindsOncePerThingLeftThere(t *testing.T) {
+	e := newEngine(nil)
+	tips := play(e, settings(dota.Carry), 100, 600, func(s *gsi.State) {
+		s.Items["stash0"] = gsi.Item{Name: "item_blink"}
+		if s.Map.ClockTime >= 400 {
+			s.Items["stash1"] = gsi.Item{Name: "item_ward_observer"}
+		}
+	})
+	got := byRule(tips, "stash")
+	if len(got) != 2 {
+		t.Fatalf("want one reminder for the Blink and one when the ward joins it, got %+v", got)
+	}
+	if got[0].Clock != 115 || got[1].Clock != 415 {
+		t.Fatalf("want reminders at 115 and 415, got %d and %d", got[0].Clock, got[1].Clock)
+	}
+}
+
+// Sending the courier empties the stash, so buying into it again is worth a word.
+func TestStashSpeaksAgainAfterItIsEmptied(t *testing.T) {
+	e := newEngine(nil)
+	tips := play(e, settings(dota.Carry), 100, 600, func(s *gsi.State) {
+		if s.Map.ClockTime < 200 || s.Map.ClockTime >= 400 {
+			s.Items["stash0"] = gsi.Item{Name: "item_blink"}
+		}
+	})
+	if got := byRule(tips, "stash"); len(got) != 1 {
+		t.Fatalf("the same Blink back in the stash is the same reminder, got %+v", got)
+	}
+}

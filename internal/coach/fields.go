@@ -2,6 +2,7 @@ package coach
 
 import (
 	"math"
+	"slices"
 	"strings"
 
 	"gourdian/internal/dota"
@@ -247,6 +248,16 @@ var Fields = []Field{
 			return f64(it.Charges)
 		}},
 	{ID: "stash_items", Label: "Items in the stash", Group: "Items", Type: "number", num: num(func(c *Ctx) float64 { return f64(len(c.S.ItemsIn(gsi.Stash))) })},
+	{ID: "stash_contents", Label: "What is in the stash", Group: "Items", Type: "text",
+		Help: "The stash items by name, in order. A reminder keyed on this comes back when something new lands there, not while the courier fetches what is already known about.",
+		text: func(c *Ctx, _ string) string {
+			names := make([]string, 0, 6)
+			for _, it := range c.S.ItemsIn(gsi.Stash) {
+				names = append(names, it.Short())
+			}
+			slices.Sort(names)
+			return strings.Join(names, ",")
+		}},
 	{ID: "empty_slots", Label: "Empty inventory slots", Group: "Items", Type: "number",
 		num: num(func(c *Ctx) float64 { return f64(6 - len(c.S.ItemsIn(gsi.Inventory))) })},
 	{ID: "neutral_empty", Label: "Neutral slot is empty", Group: "Items", Type: "bool", flag: flag(func(c *Ctx) bool { return c.S.Items["neutral0"].Empty() })},
