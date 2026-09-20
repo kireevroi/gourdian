@@ -225,7 +225,7 @@ function bindCustom() {
     r.when = { type: e.target.value };
     if (r.when.type === 'event' || r.when.type === 'after') r.when.event = 'died';
     if (r.when.type === 'schedule') Object.assign(r.when, { first: 300, every: 120, lead: 15 });
-    if (r.when.type === 'state' && !r.cooldown && !r.once) r.cooldown = 60;
+    if (r.when.type === 'state' && !r.cooldown && !r.once && !r.each) r.cooldown = 60;
     rerender();
   });
   const num = (id, key, clock) => $(id) && $(id).addEventListener('change', (e) => { r.when[key] = clock ? parseClock(e.target.value) : Number(e.target.value); });

@@ -570,6 +570,8 @@
     "Item is ready to use": "Предмет готов к использованию",
     "Item charges": "Заряды предмета",
     "Items in the stash": "Предметов в стоке",
+    "What is in the stash": "Что лежит в стоке",
+    "The stash items by name, in order. A reminder keyed on this comes back when something new lands there, not while the courier fetches what is already known about.": "Предметы в стоке по названиям, по порядку. Напоминание, привязанное к этому, повторится, когда в сток попадёт что-то новое, а не пока курьер везёт уже известное.",
     "Empty inventory slots": "Пустых слотов инвентаря",
     "Neutral slot is empty": "Слот нейтрального предмета пуст",
     "Has a TP scroll": "Есть свиток телепорта",

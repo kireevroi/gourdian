@@ -29,6 +29,11 @@ type RuleSpec struct {
 	// Cooldown is the least game time between two alerts; Once allows one per match.
 	Cooldown int  `json:"cooldown,omitempty"`
 	Once     bool `json:"once,omitempty"`
+	// Each names a field whose value tells one firing of a state rule from another: the rule
+	// speaks once for each value it sees instead of once a cooldown. A reminder about what is
+	// sitting in the stash comes back when something new lands there, and stays quiet while
+	// the courier is on its way, which the game never tells us about.
+	Each string `json:"each,omitempty"`
 	// Max caps how often a rule may fire in one match, so a habit you keep isn't nagged at
 	// all game. 0 means no cap.
 	Max int `json:"max,omitempty"`
@@ -119,10 +124,19 @@ func (r RuleSpec) Validate() error {
 			return fmt.Errorf("unknown position %q", role)
 		}
 	}
+	if r.Each != "" {
+		if _, ok := fieldIndex[r.Each]; !ok {
+			return fmt.Errorf("unknown field %q to fire once for each of", r.Each)
+		}
+		if r.When.Type != WhenState {
+			return errors.New("only a rule that fires while something is true can fire once for each value of a field")
+		}
+	}
 	switch r.When.Type {
 	case WhenState:
-		if !r.Once && r.Cooldown < 5 {
-			return errors.New("a rule that fires while something is true needs a cooldown of at least 5 seconds, or once per match")
+		// Each spaces the firings by itself: the same value never speaks twice.
+		if !r.Once && r.Each == "" && r.Cooldown < 5 {
+			return errors.New("a rule that fires while something is true needs a cooldown of at least 5 seconds, once per match, or a field to fire once for each of")
 		}
 	case WhenChange:
 	case WhenEvent:
@@ -190,8 +204,11 @@ func (c *Ctx) runSpec(spec *RuleSpec) {
 	}
 	switch w := spec.When; w.Type {
 	case WhenState:
-		if c.held("cond", c.conditions(spec), w.For) {
-			c.fireSpec(spec, "state", nil)
+		// The wait is per value too, so something new in the stash gets the same moment's
+		// grace the first thing did rather than being called out as it lands.
+		key := c.stateKey(spec)
+		if c.held(key, c.conditions(spec), w.For) {
+			c.fireSpec(spec, key, nil)
 		}
 	case WhenChange:
 		now := c.conditions(spec)
@@ -283,6 +300,16 @@ func (c *Ctx) check(cond Cond) bool {
 
 // fireSpec emits the rule's alert. Schedules fire once per time; other triggers follow the
 // rule's cooldown or once-per-match setting.
+// stateKey tells one firing of a state rule from another. Without Each every firing shares a
+// key and the cooldown alone spaces them out.
+func (c *Ctx) stateKey(spec *RuleSpec) string {
+	f, ok := fieldIndex[spec.Each]
+	if !ok {
+		return "state"
+	}
+	return "state/" + formatField(c, f, "")
+}
+
 func (c *Ctx) fireSpec(spec *RuleSpec, key string, extras map[string]string) {
 	if spec.Max > 0 && c.m.ruleFires[spec.ID] >= spec.Max {
 		return
@@ -296,6 +323,10 @@ func (c *Ctx) fireSpec(spec *RuleSpec, key string, extras map[string]string) {
 		if spec.Once {
 			key = "once"
 		}
+	}
+	// A rule that speaks once per value has said its piece for this one.
+	if spec.Each != "" && !spec.Once {
+		cooldown = once
 	}
 	text := c.render(spec.Then.Text, extras)
 	speech := text
