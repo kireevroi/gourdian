@@ -4,7 +4,7 @@ const WIDGETS = {
   alerts: ['Alerts', 'Tips from the rules and the AI coach, in large type for a few seconds.'],
   position: ['Position', 'Before 2:30: the position you are coached as, and how to change it.'],
   drill: ['Drill', 'The habit you are drilling, and how often it happened this game.'],
-  picks: ['Your best heroes', 'While you pick: your best and worst heroes in this position.'],
+  picks: ['Pick help', 'While you pick: the heroes worth taking in this position, from your own record and how each is doing at your rank.'],
   briefing: ['Briefing', 'Before the horn: your record on the hero, the last-hit target and item goals.'],
   focus: ['Focus', 'Your focus from the last match review, before the horn and while dead.'],
   death: ['While dead', 'Respawn time and gold to spend.'],

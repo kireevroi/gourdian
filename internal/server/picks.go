@@ -1,133 +1,150 @@
 package server
 
 import (
+	"cmp"
 	"fmt"
-	"slices"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"gourdian/internal/coach"
+	"gourdian/internal/config"
+	"gourdian/internal/dota"
+	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
+	"gourdian/internal/picks"
 	"gourdian/internal/stats"
 )
 
-const (
-	// pickMinGames is how many matches a hero needs before its record says anything.
-	pickMinGames = 3
-	pickShow     = 4
-	pickGoodPct  = 50
-	pickAvoidPct = 40
-	pickRecent   = 120 * 24 * time.Hour
-)
-
-// pickCache keeps pick help, which the draft asks for every tick, until the match history
-// changes (or the day does, since old games drop out of the window).
+// pickCache keeps the board, which the draft asks for on every tick, until something it is
+// made of changes: the match history, the player's rank, the hero meta, or the day, since old
+// games drop out of the window.
 type pickCache struct {
-	mu   sync.Mutex
-	key  string
-	help *coach.PickHelp
+	mu    sync.Mutex
+	key   string
+	board *picks.Board
+
+	// drafting is whether the last update came from a draft, so the picks are read out once
+	// when one opens. Dota doesn't always set the match id during hero selection, so the
+	// draft is spotted by the change of state rather than by the match it belongs to.
+	drafting bool
 }
 
-// pickHelp is your own record for this position: the heroes worth picking and the ones that
-// keep losing. Dota tells the player nothing about the draft, so this is history only.
-func (s *Server) pickHelp(role string) *coach.PickHelp {
-	key := fmt.Sprintf("%s/%d/%s", role, s.stats.HistoryVersion(), time.Now().Format(time.DateOnly))
+// pickBoard is the heroes worth taking in this position: the player's own record, weighed
+// against how each hero is doing at their rank.
+func (s *Server) pickBoard(set config.Settings) *picks.Board {
+	rank := s.rankTier()
+	// The rank and the hero meta arrive from OpenDota after the first draft update, so both
+	// are part of the key: without them an early empty board would be kept all day.
+	meta := s.data.Meta()
+	key := fmt.Sprintf("%s/%d/%d/%d/%s", set.Role, s.stats.HistoryVersion(), rank, len(meta), time.Now().Format(time.DateOnly))
 	c := &s.picks
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.key != key {
-		c.key, c.help = key, s.readPickHelp(role)
+		c.key, c.board = key, s.readPickBoard(set, rank, meta)
 	}
-	return c.help
+	return c.board
 }
 
-func (s *Server) readPickHelp(role string) *coach.PickHelp {
-	matches, err := s.stats.MatchesWhere(stats.MatchFilter{Role: role, Since: time.Now().Add(-pickRecent), Real: true})
-	if err != nil || len(matches) == 0 {
-		return nil
+func (s *Server) readPickBoard(set config.Settings, rank int, meta map[int]dotadata.HeroMeta) *picks.Board {
+	history, err := s.stats.MatchesWhere(stats.MatchFilter{Role: set.Role, Since: time.Now().Add(-picks.Window), Real: true})
+	if err != nil {
+		s.log.Warn("no match history for pick help", "err", err)
 	}
-	type record struct {
-		hero          string
-		games, wins   int
-		lastPlayed    time.Time
-		deaths, lh10  int
-		countedLH     int
-		countedDeaths int
+	return picks.Rank(picks.Input{
+		Role:    set.Role,
+		Lang:    set.Language,
+		Rank:    rank,
+		History: history,
+		Heroes:  s.data.Heroes(),
+		Meta:    meta,
+	}, time.Now())
+}
+
+// rankTier is the player's medal, or 0 while OpenDota hasn't answered.
+func (s *Server) rankTier() int {
+	acct, _ := s.accountID.Load().(string)
+	if acct == "" {
+		return 0
 	}
-	byHero := map[int]*record{}
-	since := time.Now().Add(-pickRecent)
-	for _, m := range matches {
-		if !m.Real() || m.Role != role || m.HeroID == 0 || m.EndedAt.Before(since) {
-			continue
-		}
-		r := byHero[m.HeroID]
-		if r == nil {
-			r = &record{hero: m.Hero}
-			byHero[m.HeroID] = r
-		}
-		r.games++
-		if m.Result == "win" {
-			r.wins++
-		}
-		if m.EndedAt.After(r.lastPlayed) {
-			r.lastPlayed = m.EndedAt
-		}
-		if m.Deaths > 0 || m.Result != "" {
-			r.deaths += m.Deaths
-			r.countedDeaths++
-		}
-		if lh, ok := m.LastHitsAt["10:00"]; ok {
-			r.lh10 += lh
-			r.countedLH++
-		}
+	return s.data.RankTier(acct)
+}
+
+// draftState reports whether a game state is one Dota shows while the player is still
+// choosing a hero.
+func draftState(state string) bool {
+	switch state {
+	case gsi.StateWaitForPlayers, gsi.StateHeroSelection, gsi.StateStrategyTime:
+		return true
 	}
-	var best, avoid []coach.HeroRecord
-	for _, r := range byHero {
-		if r.games < pickMinGames {
-			continue
-		}
-		rec := coach.HeroRecord{Hero: r.hero, Games: r.games, Wins: r.wins, WinPct: r.wins * 100 / r.games}
-		if r.countedDeaths > 0 {
-			rec.AvgDeaths = float64(r.deaths) / float64(r.countedDeaths)
-		}
-		if r.countedLH > 0 {
-			rec.AvgLH10 = r.lh10 / r.countedLH
-		}
-		switch {
-		case rec.WinPct < pickAvoidPct:
-			avoid = append(avoid, rec)
-		case rec.WinPct >= pickGoodPct:
-			best = append(best, rec)
-		}
-	}
-	if len(best) == 0 && len(avoid) == 0 {
-		return nil
-	}
-	byWins := func(a, b coach.HeroRecord) int {
-		if a.WinPct != b.WinPct {
-			return b.WinPct - a.WinPct
-		}
-		return b.Games - a.Games
-	}
-	slices.SortFunc(best, byWins)
-	slices.SortFunc(avoid, func(a, b coach.HeroRecord) int { return byWins(b, a) })
-	return &coach.PickHelp{
-		Role:  role,
-		Best:  best[:min(len(best), pickShow)],
-		Avoid: avoid[:min(len(avoid), 2)],
-	}
+	return false
 }
 
 // pickMatters reports whether the player is still choosing a hero: Dota says it's the draft
 // and has no hero for them yet. (It used to ask for a match in progress without a hero, which
 // never happens, so pick help never showed.)
 func pickMatters(snap coach.Snapshot) bool {
-	if !snap.Connected || snap.Hero != nil {
+	return snap.Connected && snap.Hero == nil && draftState(snap.GameState)
+}
+
+// drafting is pickMatters for a game state straight off the wire, so the hot path can tell a
+// draft from a match without building a whole snapshot.
+func drafting(st *gsi.State) bool {
+	if st.Map == nil || (st.Hero != nil && st.Hero.ID != 0) {
 		return false
 	}
-	switch snap.GameState {
-	case gsi.StateWaitForPlayers, gsi.StateHeroSelection, gsi.StateStrategyTime:
-		return true
+	return draftState(st.Map.GameState)
+}
+
+// draftOpened reports the one update on which the player enters a draft, so the trainer can
+// speak and ask about the pick once rather than twice a second.
+func (s *Server) draftOpened(st *gsi.State) bool {
+	open := drafting(st)
+	c := &s.picks
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	first := open && !c.drafting
+	c.drafting = open
+	return first
+}
+
+// speakPicks reads out the top of the board.
+func (s *Server) speakPicks(set config.Settings) {
+	snap := s.snapshot(set)
+	if snap.Picks == nil || len(snap.Picks.Best) == 0 {
+		return
 	}
-	return false
+	var names []string
+	for _, h := range snap.Picks.Best[:min(len(snap.Picks.Best), 2)] {
+		names = append(names, h.Name)
+	}
+	role := dota.RoleName(set.Role, set.Language)
+	text := roleSay(set.Language, "Best %s picks: %s", role, strings.Join(names, " · "))
+	speech := roleSay(set.Language, "Best %s picks: %s", role, strings.Join(names, ", ")) + "."
+	if len(snap.Picks.Avoid) > 0 {
+		avoid := roleSay(set.Language, "Avoid %s", snap.Picks.Avoid[0].Name)
+		text, speech = text+" · "+avoid, speech+" "+avoid+"."
+	}
+	s.emitTips(snap.MatchID, []coach.Tip{{Rule: "picks", Category: "focus", Severity: coach.Info,
+		Clock: snap.Clock, At: time.Now(), Text: text, Speech: speech}}, set)
+}
+
+// handlePicksAsk is the dashboard's "ask the coach" button during a draft.
+func (s *Server) handlePicksAsk(w http.ResponseWriter, r *http.Request) {
+	set := s.cfg.Settings()
+	switch _, _, ok := s.providers.Pick(set.AI.Live, set.AI); {
+	case !ok:
+		http.Error(w, cmp.Or(s.providers.Banner().Message, "the AI coach isn't connected; set it up on the AI coach page"), http.StatusConflict)
+		return
+	case !pickMatters(s.snapshot(set)):
+		http.Error(w, "the coach can only help while you're choosing a hero", http.StatusConflict)
+		return
+	}
+	if !s.askDraft(set, true) {
+		http.Error(w, "the coach is still answering the previous question", http.StatusConflict)
+		return
+	}
+	writeJSON(w, map[string]string{"status": "asking"})
 }

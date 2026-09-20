@@ -11,6 +11,7 @@ import (
 	"gourdian/internal/config"
 	"gourdian/internal/dota"
 	"gourdian/internal/model"
+	"gourdian/internal/picks"
 )
 
 // Line kinds, which pick the colour.
@@ -69,7 +70,7 @@ const PositionUntil = 150
 
 var severityRank = map[string]int{"info": 0, "warn": 1, "urgent": 2}
 
-// Build returns what the HUD shows now. Outside a match it's empty.
+// Build returns what the HUD shows now. Outside a match and outside a draft it's empty.
 func Build(snap coach.Snapshot, tips []coach.Tip, widgets []config.HUDWidget, now time.Time) View {
 	return BuildHeld(snap, tips, widgets, now, nil, "en")
 }
@@ -79,7 +80,10 @@ func Build(snap coach.Snapshot, tips []coach.Tip, widgets []config.HUDWidget, no
 func BuildHeld(snap coach.Snapshot, tips []coach.Tip, widgets []config.HUDWidget, now time.Time, queue *Queue, lang string) View {
 	var v View
 	l := wordsFor(lang)
-	if !snap.InMatch {
+	// The HUD draws during a match, and during a draft, where the pick advice is the whole
+	// point of it. The trainer fills Picks in only while the player is still choosing, so it
+	// doubles as "this is a draft" without the HUD having to know Dota's game states.
+	if !snap.InMatch && snap.Picks == nil {
 		return v
 	}
 	for _, w := range widgets {
@@ -156,7 +160,8 @@ func BuildHeld(snap coach.Snapshot, tips []coach.Tip, widgets []config.HUDWidget
 				v.Rows = append(v.Rows, line)
 			}
 		case config.WidgetStats:
-			if p := snap.Player; p != nil {
+			// Dota sends a player block during the draft too, where the score is all zeroes.
+			if p := snap.Player; p != nil && snap.InMatch {
 				v.Rows = append(v.Rows, statsLine(p.Kills, p.Deaths, p.Assists, p.GPM, p.LastHits, p.Denies, l))
 			}
 		}
@@ -242,19 +247,31 @@ func alert(tips []coach.Tip, w config.HUDWidget, now time.Time, q *Queue, l word
 	return line, len(live) - len(done) - 1
 }
 
-// pickLines are your own record for this position, shown while you are choosing a hero.
-func pickLines(p *coach.PickHelp, l words) []Line {
-	if p == nil {
+// pickLines are the heroes worth taking in this position, shown while you are choosing one.
+// Each carries the reason it is there, since a name and a number alone say nothing.
+func pickLines(p *picks.Board, l words) []Line {
+	if p.Empty() {
 		return nil
 	}
 	lines := []Line{{l.f("Your best %s heroes:", l.role(p.Role)), KindCoach}}
 	for _, h := range p.Best {
-		lines = append(lines, Line{l.f("%s · %d%% of %d", h.Hero, h.WinPct, h.Games), KindText})
+		lines = append(lines, Line{h.Name + why(h, l), KindText})
+	}
+	for _, h := range p.Fresh {
+		lines = append(lines, Line{l.f("New to you: %s", h.Name) + why(h, l), KindMuted})
 	}
 	for _, h := range p.Avoid {
-		lines = append(lines, Line{l.f("Avoid %s · %d%% of %d", h.Hero, h.WinPct, h.Games), KindWarn})
+		lines = append(lines, Line{l.f("Avoid %s · %d%% of %d", h.Name, h.WinPct, h.Games), KindWarn})
 	}
 	return lines
+}
+
+// why is the first couple of reasons a hero is on the list, as a tail for its line.
+func why(h picks.Hero, l words) string {
+	if len(h.Why) == 0 {
+		return ""
+	}
+	return " · " + strings.Join(h.Why[:min(len(h.Why), 2)], " · ")
 }
 
 // briefingLines sum up the plan before the horn: the record on this hero, the last-hit target,
@@ -400,9 +417,12 @@ func SampleIn(widgets []config.HUDWidget, lang string) View {
 		case config.WidgetDrill:
 			v.Rows = append(v.Rows, Line{l.f("Drill: %s · %d this game", l.s("No TP scroll"), 1), KindText})
 		case config.WidgetPicks:
-			v.Rows = append(v.Rows, pickLines(&coach.PickHelp{Role: dota.Mid,
-				Best:  []coach.HeroRecord{{Hero: "Storm Spirit", Games: 11, Wins: 7, WinPct: 63}, {Hero: "Puck", Games: 8, Wins: 5, WinPct: 62}},
-				Avoid: []coach.HeroRecord{{Hero: "Invoker", Games: 6, Wins: 2, WinPct: 33}}}, l)...)
+			v.Rows = append(v.Rows, pickLines(&picks.Board{Role: dota.Mid,
+				Best: []picks.Hero{
+					{Name: "Storm Spirit", Games: 11, Wins: 7, WinPct: 63, Score: 61, Why: []string{l.s("your 11 games 63%")}},
+					{Name: "Puck", Games: 8, Wins: 5, WinPct: 62, Score: 58, Why: []string{l.s("your 8 games 62%")}}},
+				Fresh: []picks.Hero{{Name: "Death Prophet", Score: 55, Why: []string{l.s("meta 54% at Archon")}}},
+				Avoid: []picks.Hero{{Name: "Invoker", Games: 6, Wins: 2, WinPct: 33}}}, l)...)
 		case config.WidgetBriefing:
 			v.Rows = append(v.Rows, briefingLines(&coach.Briefing{Hero: "Shadow Fiend", Games: 12, Wins: 7, Target10: 66, Usual10: 60,
 				Items: []coach.ItemGoal{{Name: "Black King Bar", By: 1170}}}, l)...)

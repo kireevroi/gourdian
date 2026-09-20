@@ -54,6 +54,7 @@ type AIChoice struct {
 type AISettings struct {
 	Enabled bool     `json:"enabled"` // live tips
 	Review  bool     `json:"review"`  // match reviews
+	Draft   bool     `json:"draft"`   // a word on which hero to take, as the draft opens
 	Live    AIChoice `json:"live"`
 	Reviews AIChoice `json:"reviews"`
 	// Fallback answers when the chosen provider is logged out or out of usage; empty means none.
@@ -365,7 +366,7 @@ func Default() Config {
 			VoiceRate:     1,
 			VoiceLevel:    SpeakAll,
 			Timings:       dota.DefaultTimings(),
-			AI: AISettings{Enabled: true, Review: true, Interval: 180,
+			AI: AISettings{Enabled: true, Review: true, Draft: true, Interval: 180,
 				// Claude Code's aliases follow Anthropic's newest models, so the defaults never go stale.
 				Live:    AIChoice{Provider: "claude", Model: "sonnet", Effort: "low"},
 				Reviews: AIChoice{Provider: "claude", Model: "opus", Effort: "medium"}},

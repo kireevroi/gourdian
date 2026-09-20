@@ -7,6 +7,7 @@ A live coach for Dota 2, called Dota Trainer before 1.5. While you play it:
 - **Speaks tips**: rune timings, a missing TP scroll, low HP, unspent gold, items stuck in the stash or backpack, unspent skill points, farm pace, item timing goals, Roshan and Aegis timers, and more.
 - **Draws a transparent HUD** over the game — you choose where it sits, how big and see-through it is, and which lines it shows.
 - **Coaches for the position you actually play**, picked with Ctrl+Shift+1…5 or worked out from the lane you stand in.
+- **Helps you pick**: while you choose a hero, the heroes worth taking in your position, ranked from your own record and how each is doing at your rank, each line saying why.
 - **Sets personal targets** from your own match history: last hits at each checkpoint, timings for your core items, goals for the week.
 - **Asks an AI coach** for advice during the game and reviews every match afterwards. The Claude Code and Codex CLIs run on your existing subscriptions; API keys and any OpenAI-compatible server work too.
 - **Runs your own rules** next to the built-in ones, built with When / If / Then cards.

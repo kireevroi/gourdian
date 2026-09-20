@@ -2,6 +2,7 @@ package hud
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"gourdian/internal/config"
 	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
+	"gourdian/internal/picks"
 )
 
 func widgets(mutate func([]config.HUDWidget)) []config.HUDWidget {
@@ -128,7 +130,7 @@ func TestPositionDeathAndItemRows(t *testing.T) {
 func TestSampleShowsEnabledWidgets(t *testing.T) {
 	w := widgets(func(w []config.HUDWidget) { find(w, config.WidgetDeath).On = false })
 	v := Sample(w)
-	if v.Alert == nil || len(v.Rows) != 17 {
+	if v.Alert == nil || len(v.Rows) != 18 {
 		t.Fatalf("sample = %+v", v)
 	}
 	for _, r := range v.Rows {
@@ -224,5 +226,62 @@ func TestSkillRowOnlyWithAPointToSpend(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("the skill row names the ability and where the order comes from")
+	}
+}
+
+// draftSnap is what the trainer knows while the player is still choosing a hero: no hero, no
+// pace, no timers, but a board to pick from. Dota sends a player block here too, all zeroes.
+func draftSnap() coach.Snapshot {
+	return coach.Snapshot{
+		InMatch: false, Clock: -75, Role: dota.Mid,
+		Player: &gsi.Player{},
+		Picks: &picks.Board{Role: dota.Mid,
+			Best:  []picks.Hero{{Name: "Storm Spirit", Games: 11, Wins: 7, WinPct: 63, Why: []string{"your 11 games 63%", "meta 52% at Archon"}}},
+			Fresh: []picks.Hero{{Name: "Death Prophet", Why: []string{"meta 54% at Archon"}}},
+			Avoid: []picks.Hero{{Name: "Invoker", Games: 6, Wins: 2, WinPct: 33}}},
+	}
+}
+
+// The HUD used to draw nothing outside a match, so the pick widget it carried could never
+// appear: the draft is the one time it is worth anything.
+func TestPickHelpShowsDuringTheDraft(t *testing.T) {
+	v := BuildHeld(draftSnap(), nil, widgets(nil), time.Now(), nil, "en")
+	want := []string{
+		"Your best mid heroes:",
+		"Storm Spirit · your 11 games 63% · meta 52% at Archon",
+		"New to you: Death Prophet · meta 54% at Archon",
+		"Avoid Invoker · 33% of 6",
+	}
+	var got []string
+	for _, r := range v.Rows {
+		got = append(got, r.Text)
+	}
+	for _, w := range want {
+		if !slices.Contains(got, w) {
+			t.Errorf("no row %q in %q", w, got)
+		}
+	}
+}
+
+// Nothing that needs a hero may show during the draft, least of all an all-zero score line.
+// The stats widget is off by default, so it is turned on here to be checked at all.
+func TestTheDraftHUDShowsNothingThatNeedsAHero(t *testing.T) {
+	w := widgets(func(w []config.HUDWidget) { find(w, config.WidgetStats).On = true })
+	v := BuildHeld(draftSnap(), nil, w, time.Now(), nil, "en")
+	for _, r := range v.Rows {
+		for _, bad := range []string{"0/0/0", "Last hits", "Next item", "Skill:", "Dead ·"} {
+			if strings.Contains(r.Text, bad) {
+				t.Errorf("row %q belongs to a match, not a draft", r.Text)
+			}
+		}
+	}
+}
+
+// With no board and no match there is still nothing to draw.
+func TestTheHUDIsEmptyOutsideAMatchAndADraft(t *testing.T) {
+	snap := draftSnap()
+	snap.Picks = nil
+	if v := BuildHeld(snap, nil, widgets(nil), time.Now(), nil, "en"); v.Alert != nil || len(v.Rows) != 0 {
+		t.Errorf("HUD = %+v", v)
 	}
 }

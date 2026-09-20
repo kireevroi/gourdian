@@ -96,19 +96,21 @@ func BenchmarkSnapshotWhilePicking(b *testing.B) {
 	}
 }
 
-func BenchmarkPickHelp(b *testing.B) {
+func BenchmarkPickBoard(b *testing.B) {
 	srv, _ := benchServer(b, 200)
+	set := roleSet(srv, dota.HardSupport)
 	b.ResetTimer()
 	for b.Loop() {
-		srv.pickHelp(dota.HardSupport)
+		srv.readPickBoard(set, 0, nil) // not pickBoard: the cache would answer every call but the first
 	}
 }
 
-// BenchmarkPickHelpLongHistory is BenchmarkPickHelp over several seasons of matches.
-func BenchmarkPickHelpLongHistory(b *testing.B) {
+// BenchmarkPickBoardLongHistory is BenchmarkPickBoard over several seasons of matches.
+func BenchmarkPickBoardLongHistory(b *testing.B) {
 	srv, _ := benchServer(b, 1000)
+	set := roleSet(srv, dota.HardSupport)
 	for b.Loop() {
-		srv.pickHelp(dota.HardSupport)
+		srv.readPickBoard(set, 0, nil)
 	}
 }
 

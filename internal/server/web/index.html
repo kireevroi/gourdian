@@ -82,6 +82,11 @@
   .habit { padding: 8px 10px; border-radius: 8px; background: var(--panel-2); margin-bottom: 6px; }
   .habit b { display: flex; justify-content: space-between; gap: 8px; }
   .habit p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  .habit.pick { display: flex; align-items: center; gap: 10px; }
+  .habit.pick > div { flex: 1; min-width: 0; }
+  .habit.pick img { width: 46px; height: 26px; border-radius: 4px; flex: none; }
+  #picks .label + .habit { margin-top: 4px; }
+  #picks .label:not(:first-child) { margin-top: 10px; }
   .goal { margin-bottom: 10px; }
   .goal b { display: flex; justify-content: space-between; gap: 8px; font-weight: 500; }
   .goal .track { height: 8px; border-radius: 4px; background: #0b0e13; margin-top: 4px; overflow: hidden; }
@@ -149,6 +154,7 @@
       <section class="card" id="picks-card" hidden>
         <h2>Pick help <span class="muted" id="picks-sub"></span></h2>
         <div id="picks"></div>
+        <button class="btn small" id="picks-ask" title="Ask the AI coach which hero to take">Ask the coach</button>
       </section>
       <section class="card" id="briefing-card" hidden>
         <h2>Briefing <span id="briefing-sub"></span></h2>

@@ -293,16 +293,25 @@ async function setDrill(rule) {
   try { drill = await api('/api/drill', { method: 'PUT', body: { rule } }); renderDrill(); } catch (e) { toast(e.message, true); }
 }
 
-// Pick help: your own record for this position, while you are choosing a hero.
+// Pick help while you are choosing a hero: your own record and the meta at your rank, with
+// the reason each hero is on the list, since a name and a number alone say nothing.
 function renderPicks(p) {
   $('picks-card').hidden = !p;
   if (!p) return;
   $('picks-sub').textContent = ROLE_NAMES[p.role] || '';
-  const row = (h, avoid) => `<div class="habit"><b><span>${esc(h.hero)}</span><span class="num ${avoid ? 'bad' : ''}">${h.win_pct}% of ${h.games}</span></b>
-    <p class="muted">${h.avg_lh10 ? tp('{lh} last hits at 10:00', { lh: h.avg_lh10 }) : ''}${h.avg_deaths ? ` · ${tp('{d} deaths a game', { d: h.avg_deaths.toFixed(1) })}` : ''}</p></div>`;
-  $('picks').innerHTML =
-    (p.best && p.best.length ? `<div class="label">${t('Your best on this position')}</div>` + p.best.map((h) => row(h, false)).join('') : '') +
-    (p.avoid && p.avoid.length ? `<div class="label" style="margin-top:8px">${t('Losing on this position')}</div>` + p.avoid.map((h) => row(h, true)).join('') : '');
+  const row = (h, avoid) => {
+    const detail = [(h.why || []).join(' · '),
+      h.avg_lh10 ? tp('{lh} last hits at 10:00', { lh: h.avg_lh10 }) : '',
+      h.avg_deaths ? tp('{d} deaths a game', { d: h.avg_deaths.toFixed(1) }) : ''].filter(Boolean).join(' · ');
+    return `<div class="habit pick">${h.img ? `<img src="${esc(imgURL(h.img))}" alt="">` : ''}<div>
+      <b><span>${esc(h.hero)}</span>${h.games ? `<span class="num ${avoid ? 'bad' : ''}">${h.win_pct}% of ${h.games}</span>` : ''}</b>
+      <p class="muted">${esc(detail)}</p></div></div>`;
+  };
+  const list = (heroes, label, avoid) => (heroes && heroes.length
+    ? `<div class="label">${t(label)}</div>` + heroes.map((h) => row(h, avoid)).join('') : '');
+  $('picks').innerHTML = list(p.best, 'Your best on this position', false)
+    + list(p.fresh, 'Strong right now, new to you', false)
+    + list(p.avoid, 'Losing on this position', true);
 }
 
 function renderReview(r, status) {
@@ -381,6 +390,9 @@ onSettings((c) => {
 $('voice').addEventListener('change', (e) => saveSettings({ voice: e.target.value }));
 $('ask-coach').addEventListener('click', async () => {
   try { await api('/api/ai/ask', { method: 'POST' }); } catch (e) { systemNote(e.message); }
+});
+$('picks-ask').addEventListener('click', async () => {
+  try { await api('/api/picks/ask', { method: 'POST' }); } catch (e) { systemNote(e.message); }
 });
 $('review').addEventListener('click', async (e) => {
   const id = e.target.dataset.reviewNow;
