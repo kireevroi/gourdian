@@ -139,7 +139,7 @@ func itemGoalSource(t Targets, hero string, w sourceWords) Source {
 func timerSource(t dota.Timings, w sourceWords) Source {
 	return Source{ID: "timers", What: w.f("Timers", "Таймеры"),
 		From: w.f("Built into Gourdian %s: bounty runes every %s, power runes from %s every %s, Shrines of Wisdom every %s. An app update brings new patch timings; the rules that use them show them.",
-			"Встроены в Gourdian %s: руны богатства каждые %s, руны силы с %s каждые %s, святыни мудрости каждые %s. Новые тайминги патча приходят с обновлением приложения; правила, которые их используют, их показывают.",
+			"Встроены в Gourdian %s: руны богатства каждые %s, руны силы с %s каждые %s, святилища мудрости каждые %s. Новые тайминги патча приходят с обновлением приложения; правила, которые их используют, их показывают.",
 			buildinfo.Version, dota.Clock(t.BountyRuneEvery), dota.Clock(t.PowerRuneFirst), dota.Clock(t.PowerRuneEvery), dota.Clock(t.WisdomRuneEvery))}
 }
 

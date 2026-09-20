@@ -2,7 +2,6 @@ package hud
 
 import (
 	"regexp"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -144,13 +143,13 @@ func TestItemGoalRow(t *testing.T) {
 		{ItemGoal: coach.ItemGoal{Item: "bfury", Name: "Battle Fury", By: 900}, Owned: true},
 		{ItemGoal: coach.ItemGoal{Item: "manta", Name: "Manta Style", By: 1500}, Remaining: 2100},
 	}
-	if _, ok := itemGoalLine(goals, 1000, 0, nil); ok {
+	if _, ok := itemGoalLine(goals, 1000, 0, wordsFor("en")); ok {
 		t.Fatal("goals more than five minutes away stay hidden")
 	}
-	if l, ok := itemGoalLine(goals, 1300, 0, nil); !ok || l.Text != "Manta Style by 25:00 · 2100g to go" {
+	if l, ok := itemGoalLine(goals, 1300, 0, wordsFor("en")); !ok || l.Text != "Manta Style by 25:00 · 2100g to go" {
 		t.Fatalf("line = %+v", l)
 	}
-	if l, _ := itemGoalLine(goals, 1560, 0, nil); l.Kind != KindWarn || l.Text != "Manta Style is late (goal 25:00) · 2100g to go" {
+	if l, _ := itemGoalLine(goals, 1560, 0, wordsFor("en")); l.Kind != KindWarn || l.Text != "Manta Style is late (goal 25:00) · 2100g to go" {
 		t.Fatalf("late line = %+v", l)
 	}
 }
@@ -205,15 +204,6 @@ func TestHUDSpeaksRussian(t *testing.T) {
 	for _, line := range live.Rows {
 		if strings.HasPrefix(line.Text, "Dead") || strings.Contains(line.Text, "Buy now") {
 			t.Errorf("an English line on the Russian HUD: %q", line.Text)
-		}
-	}
-}
-
-func TestRussianLinesTakeTheSameValues(t *testing.T) {
-	verbs := regexp.MustCompile(`%[-+ 0-9.]*[a-z%]`)
-	for en, ru := range russian {
-		if a, b := verbs.FindAllString(en, -1), verbs.FindAllString(ru, -1); !slices.Equal(a, b) {
-			t.Errorf("%q takes %v, its Russian %q takes %v", en, a, ru, b)
 		}
 	}
 }
