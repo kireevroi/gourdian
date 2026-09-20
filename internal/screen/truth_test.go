@@ -172,3 +172,38 @@ func shortVotes(v map[string]int) map[string]int {
 	}
 	return out
 }
+
+// TestReadingOverTheFrames runs the real accumulating reader over the captured frames, the
+// way the trainer will during a draft, including the first frame which is not Dota at all.
+func TestReadingOverTheFrames(t *testing.T) {
+	files := loadFrames(t)
+	table, names := namedTable(t)
+	var seen Reading
+	first := 0
+	for i, path := range files {
+		img := openFrame(t, path)
+		bar := Predict(img.Bounds())
+		seen.Add(img, bar, table)
+		if seen.Settled() == 2*Slots && first == 0 {
+			first = i + 1
+		}
+	}
+	got := seen.Heroes()
+	wrong := 0
+	for slot, want := range truth {
+		switch {
+		case got[slot] == 0:
+			t.Errorf("slot %d never settled (%s)", slot, short(want))
+		case names[got[slot]] != want:
+			wrong++
+			t.Errorf("slot %d settled on %s, is %s", slot, short(names[got[slot]]), short(want))
+		}
+	}
+	fmt.Printf("all ten settled after %d frames, %d wrong\n", first, wrong)
+	// The enemy five are what the pick advice is for; the player was radiant here.
+	fmt.Printf("theirs:")
+	for _, id := range seen.Theirs(false) {
+		fmt.Printf(" %s", short(names[id]))
+	}
+	fmt.Println()
+}

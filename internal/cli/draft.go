@@ -4,12 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"image"
 	"image/png"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
 	"time"
 
 	"gourdian/internal/config"
@@ -50,6 +50,10 @@ func draftCmd(args []string) error {
 	}
 
 	deadline := time.Now().Add(*forHow)
+	bar := screen.Predict(size)
+	fmt.Printf("expecting the portraits at %+v and %+v\n", bar.Left, bar.Right)
+	var seen screen.Reading
+	searched := false
 	for shot := 1; time.Now().Before(deadline); shot++ {
 		time.Sleep(*every)
 		img, err := screen.Grab(size)
@@ -57,32 +61,71 @@ func draftCmd(args []string) error {
 			return err
 		}
 		if !*quiet {
-			name := filepath.Join(*out, fmt.Sprintf("frame%02d.png", shot))
-			f, err := os.Create(name)
-			if err != nil {
-				return err
-			}
-			err = png.Encode(f, img)
-			if closeErr := f.Close(); err == nil {
-				err = closeErr
-			}
-			if err != nil {
+			if err := savePNG(filepath.Join(*out, fmt.Sprintf("frame%02d.png", shot)), img); err != nil {
 				return err
 			}
 		}
-		started := time.Now()
-		found := screen.FindAny(img, table)
-		sort.Slice(found, func(i, j int) bool { return found[i].Cell.Min.X < found[j].Cell.Min.X })
-		fmt.Printf("frame %2d: %d portraits in %s", shot, len(found), time.Since(started).Round(time.Millisecond))
-		for _, s := range found {
-			fmt.Printf("\n   %-22s at %d,%d %dx%d", names[s.Hero], s.Cell.Min.X, s.Cell.Min.Y, s.Cell.Dx(), s.Cell.Dy())
+		fresh := seen.Add(img, bar, table)
+		// Dota's interface can be scaled by hand, and then the guess reads nothing. Look for
+		// the bar properly, once, before giving up on it.
+		if seen.Settled() == 0 && !searched {
+			searched = true
+			if found := screen.FindAny(img, table); len(found) > 0 {
+				fmt.Printf("frame %2d: the guess found nothing, but a sweep found %d portraits:\n", shot, len(found))
+				for _, f := range found {
+					fmt.Printf("   %-22s at %d,%d %dx%d\n", names[f.Hero], f.Cell.Min.X, f.Cell.Min.Y, f.Cell.Dx(), f.Cell.Dy())
+				}
+			}
 		}
-		fmt.Println()
+		fmt.Printf("frame %2d: %d of 10 known%s\n", shot, seen.Settled(), more(fresh))
+		if fresh > 0 || seen.Settled() == 2*screen.Slots {
+			printBoard(seen.Heroes(), names)
+		}
+		if seen.Settled() == 2*screen.Slots {
+			fmt.Println("the whole bar is read; stopping early")
+			break
+		}
 	}
 	if !*quiet {
 		fmt.Printf("pictures saved in %s\n", *out)
 	}
 	return nil
+}
+
+func more(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf(", %d just now", n)
+}
+
+func printBoard(heroes [2 * screen.Slots]int, names map[int]string) {
+	for _, side := range []struct {
+		name string
+		from int
+	}{{"yours ", 0}, {"theirs", screen.Slots}} {
+		fmt.Printf("   %s:", side.name)
+		for _, id := range heroes[side.from : side.from+screen.Slots] {
+			if id == 0 {
+				fmt.Printf(" %-18s", "?")
+				continue
+			}
+			fmt.Printf(" %-18s", names[id])
+		}
+		fmt.Println()
+	}
+}
+
+func savePNG(name string, img image.Image) error {
+	f, err := os.Create(name)
+	if err != nil {
+		return err
+	}
+	err = png.Encode(f, img)
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	return err
 }
 
 // heroTable is what every hero's portrait looks like, numbered the way the game state and
