@@ -528,6 +528,17 @@ type Store struct {
 	repaired []string
 }
 
+// OpenDefault opens the settings in the folder Dir picks, and reports that folder. It is how
+// every command reaches the app's data without repeating the two steps.
+func OpenDefault() (*Store, string, error) {
+	dir, err := Dir()
+	if err != nil {
+		return nil, "", err
+	}
+	store, err := Open(dir)
+	return store, dir, err
+}
+
 func Open(dir string) (*Store, error) {
 	s := &Store{path: filepath.Join(dir, "config.json"), cfg: Default()}
 	data, err := os.ReadFile(s.path)

@@ -10,15 +10,16 @@ DEBARCH ?= amd64
 all: linux windows
 
 linux:
-	go build $(GOFLAGS) -trimpath -ldflags "$(LDFLAGS)" -o bin/gourdian .
+	go build $(GOFLAGS) -trimpath -ldflags "$(LDFLAGS)" -o bin/gourdian ./cmd/gourdian
 
 # -H=windowsgui: the app lives in the tray, so no console window.
 windows:
-	GOOS=windows GOARCH=amd64 go build $(GOFLAGS) -trimpath -ldflags "-H=windowsgui $(LDFLAGS)" -o bin/gourdian.exe .
+	GOOS=windows GOARCH=amd64 go build $(GOFLAGS) -trimpath -ldflags "-H=windowsgui $(LDFLAGS)" -o bin/gourdian.exe ./cmd/gourdian
 
-# Regenerates rsrc_windows_amd64.syso (icon, version info, manifest) from winres/ and VERSION.
+# Regenerates cmd/gourdian/rsrc_windows_amd64.syso (icon, version info, manifest) from winres/ and
+# VERSION. The syso has to sit next to the main package, which winres/ does not, hence --out.
 winres:
-	go run github.com/tc-hib/go-winres@v0.3.3 make --arch amd64 --product-version $(VERSION).0 --file-version $(VERSION).0
+	go run github.com/tc-hib/go-winres@v0.3.3 make --arch amd64 --out cmd/gourdian/rsrc --product-version $(VERSION).0 --file-version $(VERSION).0
 
 # Creates the self-signed "Gourdian" code-signing certificate and trusts it for this Windows user (once).
 cert:
@@ -75,7 +76,7 @@ install: all
 # A release for Linux (Arch and friends): the program, a menu entry, the icon and install.sh.
 linux-dist:
 	rm -rf dist/linux && mkdir -p dist/linux
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(GOFLAGS) -trimpath -ldflags "-s -w $(LDFLAGS)" -o dist/linux/gourdian .
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(GOFLAGS) -trimpath -ldflags "-s -w $(LDFLAGS)" -o dist/linux/gourdian ./cmd/gourdian
 	cp packaging/linux/gourdian.desktop packaging/linux/install.sh LICENSE THIRD_PARTY_NOTICES.txt dist/linux/
 	cp winres/icon.png dist/linux/gourdian.png
 	tar -C dist -czf dist/gourdian-$(VERSION)-linux-x86_64.tar.gz --transform 's,^linux,gourdian-$(VERSION),' linux
@@ -87,7 +88,7 @@ linux-dist:
 linux-deb:
 	rm -rf dist/deb
 	mkdir -p dist/deb/usr/bin
-	CGO_ENABLED=0 GOOS=linux GOARCH=$(DEBARCH) go build $(GOFLAGS) -trimpath -ldflags "-s -w $(LDFLAGS)" -o dist/deb/usr/bin/gourdian .
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(DEBARCH) go build $(GOFLAGS) -trimpath -ldflags "-s -w $(LDFLAGS)" -o dist/deb/usr/bin/gourdian ./cmd/gourdian
 	install -Dm644 packaging/linux/gourdian.desktop dist/deb/usr/share/applications/gourdian.desktop
 	install -Dm644 winres/icon.png dist/deb/usr/share/icons/hicolor/256x256/apps/gourdian.png
 	install -Dm644 LICENSE dist/deb/usr/share/doc/gourdian/copyright

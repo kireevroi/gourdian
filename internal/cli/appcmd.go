@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"fmt"
@@ -11,8 +11,10 @@ import (
 	"runtime"
 	"time"
 
+	"gourdian/internal/app"
 	"gourdian/internal/buildinfo"
 	"gourdian/internal/config"
+	"gourdian/internal/hidewin"
 	"gourdian/internal/overlay"
 )
 
@@ -33,7 +35,7 @@ func setupCmd() error {
 	if err != nil {
 		return err
 	}
-	ensureInstalled(store.Get(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	app.EnsureInstalled(store.Get(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	return nil
 }
 
@@ -60,13 +62,13 @@ func trainerFetch(method, url string) ([]byte, bool) {
 	if err != nil || runtime.GOOS == "windows" {
 		return nil, false
 	}
-	out, err := windowsCommand(curl, "-s", "-f", "-m", "5", "-X", method, url).Output()
+	out, err := hidewin.WindowsCommand(curl, "-s", "-f", "-m", "5", "-X", method, url).Output()
 	return out, err == nil
 }
 
 // stopRunningTrainer asks a running trainer to quit and waits until it has, so its exe can be replaced.
 func stopRunningTrainer() {
-	store, _, err := openStore()
+	store, _, err := config.OpenDefault()
 	if err != nil {
 		return
 	}
@@ -86,7 +88,7 @@ func stopRunningTrainer() {
 // runApp is what starting the exe without a command does: tray, HUD and dashboard, with errors
 // shown as dialogs. background is set when Windows starts it at sign-in.
 func runApp(background bool) {
-	if store, _, err := openStore(); err == nil {
+	if store, _, err := config.OpenDefault(); err == nil {
 		base := "http://" + config.DashboardHost(store.Get().Listen)
 		client := &http.Client{Timeout: time.Second}
 		if resp, err := client.Get(base + "/api/state"); err == nil {
@@ -101,7 +103,7 @@ func runApp(background bool) {
 	if background {
 		args = []string{"-overlay", "-tray", "-background"}
 	}
-	if err := run(args); err != nil {
+	if err := runCmd(args); err != nil {
 		overlay.ShowMessage(config.AppName, "Gourdian stopped:\n\n"+err.Error(), true)
 		os.Exit(1)
 	}

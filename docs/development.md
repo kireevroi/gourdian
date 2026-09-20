@@ -83,5 +83,7 @@ Everything slow hangs off that path rather than sitting in it: OpenDota lookups,
 | `internal/speech` | Windows speech and Piper voices |
 | `internal/install` | Steam and Dota discovery, GSI config |
 | `internal/sim` | Simulator and recordings |
-| `app.go`, `doctor.go`, `main.go` | App startup, commands and checks |
+| `cmd/gourdian` | The binary, and the Windows icon and version resource |
+| `internal/cli` | The commands, their flags, and the checks behind `doctor` |
+| `internal/app` | Starting the trainer: settings, logger, engine, statistics and server wired together |
 | `installer/` | Inno Setup script, signing scripts, build script, icons |
