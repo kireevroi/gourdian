@@ -274,6 +274,9 @@ var Fields = []Field{
 	{ID: "shard_on_sale", Label: "Aghanim's Shard is on sale", Group: "Items", Type: "bool",
 		Help: "From 15:00, and only while you don't have one; a Tormentor's Shard counts.",
 		flag: flag(func(c *Ctx) bool { return c.Clock >= c.T.ShardFrom && !c.S.Hero.AghanimsShard })},
+	{ID: "shard_in_build", Label: "Aghanim's Shard is in the popular build", Group: "Items", Type: "bool",
+		Help: "Whether the build for your hero and position buys a Shard. Many heroes never do.",
+		flag: flag(shardInBuild)},
 	{ID: "shard_gold", Label: "Gold still needed for Aghanim's Shard", Group: "Items", Type: "number", Unit: "gold",
 		Help: "0 once you can afford it.",
 		num: num(func(c *Ctx) float64 {

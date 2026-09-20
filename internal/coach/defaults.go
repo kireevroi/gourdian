@@ -179,26 +179,6 @@ func DefaultSpecs(lang string) []RuleSpec {
 				Speech: "Tier {neutral_tier} neutral items", Severity: "info"},
 		},
 		{
-			ID: "shard_sale", Name: "Aghanim's Shard goes on sale", Category: "items",
-			When: Trigger{Type: WhenSchedule, First: t.ShardFrom},
-			If:   []Cond{{Field: "has_shard", Op: "false"}},
-			Then: AlertSpec{Text: "Aghanim's Shard is on sale ({shard_cost}g). It upgrades one of your abilities for the rest of the game",
-				Speech: "Aghanim's Shard is on sale", Severity: "info"},
-		},
-		{
-			ID: "shard", Name: "Aghanim's Shard is affordable", Category: "items", Roles: supports,
-			When: Trigger{Type: WhenState, For: 30},
-			If: []Cond{
-				{Field: "alive", Op: "true"},
-				{Field: "shard_on_sale", Op: "true"},
-				{Field: "shard_gold", Op: "eq"},
-			},
-			Then: AlertSpec{Text: "You can afford Aghanim's Shard ({shard_cost}g). Buy it before your next item",
-				Speech: "Buy your Aghanim's Shard", Severity: "warn", Mistake: true, Habit: "No Aghanim's Shard",
-				Advice: "Your Shard upgrades an ability for the rest of the game and costs less than most items. Supports should have one soon after 15:00."},
-			Cooldown: 300, Max: 3,
-		},
-		{
 			ID: "tormentor", Name: "Tormentor spawn", Category: "timing",
 			When: Trigger{Type: WhenSchedule, First: t.TormentorSpawn},
 			Then: AlertSpec{Text: "Tormentors have spawned: a free Aghanim's Shard for whoever takes it",

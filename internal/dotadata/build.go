@@ -240,6 +240,11 @@ func (b *Build) Progress(held []string, items map[string]ItemInfo, clock int) Pr
 	return p
 }
 
+// Has reports whether the build includes an item, whatever the player has bought so far.
+func (b *Build) Has(name string) bool {
+	return b != nil && slices.ContainsFunc(b.Items, func(it BuildItem) bool { return it.Name == name })
+}
+
 func (b *Build) Next(held []string, items map[string]ItemInfo, clock int) (BuildItem, bool) {
 	if b == nil {
 		return BuildItem{}, false
