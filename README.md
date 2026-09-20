@@ -4,7 +4,7 @@
 
 A live coach for Dota 2, called Dota Trainer before 1.5. While you play it:
 
-- **Speaks tips**: rune timings, a missing TP scroll, low HP, unspent gold, items stuck in the stash or backpack, unspent skill points, farm pace, item timing goals, an Aghanim's Shard you can afford, Roshan and Aegis timers, and more.
+- **Speaks tips**: rune timings, a missing TP scroll, low HP, unspent gold, items stuck in the stash or backpack, unspent skill points, farm pace, item timing goals, Roshan and Aegis timers, and more.
 - **Draws a transparent HUD** over the game — you choose where it sits, how big and see-through it is, and which lines it shows.
 - **Coaches for the position you actually play**, picked with Ctrl+Shift+1…5 or worked out from the lane you stand in.
 - **Sets personal targets** from your own match history: last hits at each checkpoint, timings for your core items, goals for the week.
@@ -16,13 +16,13 @@ It reads Valve's official Game State Integration feed, which only describes your
 
 ## Install
 
-Downloads are on the [Releases page](https://github.com/kireevroi/gourdian/releases): the Windows installer, the Linux tarball and `SHA256SUMS`.
+Downloads are on the [Releases page](https://github.com/kireevroi/gourdian/releases): the Windows installer, the Debian package, the Linux tarball and `SHA256SUMS`.
 
 **Windows** — run **Gourdian-Setup-\<version\>.exe**. It installs to `%LOCALAPPDATA%\Programs\Gourdian` without admin rights, adds shortcuts, can start the app when you sign in, and connects Dota 2. Upgrades close a running copy first and keep your settings and statistics, including upgrades from Dota Trainer. Uninstall from Windows Settings › Apps; you're asked whether to keep your statistics.
 
 The build is signed with a self-signed **Gourdian** certificate ([`installer/gourdian.cer`](installer/gourdian.cer)), so SmartScreen says "Unknown publisher": choose **More info › Run anyway**. Every release file carries a GitHub attestation — `gh attestation verify Gourdian-Setup-<version>.exe --repo kireevroi/gourdian`.
 
-**Linux** — `cd packaging/arch && makepkg -si` on Arch and its derivatives, or unpack the tarball and run `./install.sh` on any distribution. See [Linux](docs/linux.md) for the in-game view and what else differs.
+**Linux** — `sudo apt install ./gourdian_<version>_amd64.deb` on Debian, Ubuntu and their derivatives, `cd packaging/arch && makepkg -si` on Arch and its derivatives, or unpack the tarball and run `./install.sh` on any distribution. See [Linux](docs/linux.md) for the in-game view and what else differs.
 
 Then:
 
