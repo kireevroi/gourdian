@@ -2,7 +2,7 @@
 # (EndeavourOS, CachyOS, Manjaro, Garuda). From the repository root:
 #   cd packaging/arch && makepkg -si
 pkgname=gourdian
-pkgver=1.8.0beta.3
+pkgver=1.8.0beta.4
 pkgrel=1
 pkgdesc='Live coaching for Dota 2: rules, voice, AI reviews and statistics'
 arch=('x86_64' 'aarch64')
