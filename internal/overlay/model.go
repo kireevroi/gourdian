@@ -59,6 +59,7 @@ type model struct {
 	online    bool
 	inMatch   bool
 	clock     int
+	team      string // "radiant" or "dire", for telling the two runs of portraits apart
 	hud       hud.Payload
 }
 
@@ -80,7 +81,7 @@ func (m *model) apply(event string, data []byte, now time.Time) bool {
 		if json.Unmarshal(data, &s) != nil {
 			return false
 		}
-		m.online, m.inMatch, m.clock = true, s.InMatch, s.Clock
+		m.online, m.inMatch, m.clock, m.team = true, s.InMatch, s.Clock, s.Team
 		if m.quiet && !m.announced && s.InMatch {
 			m.started, m.announced = now, true
 		}
@@ -94,6 +95,21 @@ func (m *model) apply(event string, data []byte, now time.Time) bool {
 		return false
 	}
 	return true
+}
+
+// draft reports whether the trainer says the player is choosing a hero, which is the only
+// time the screen is read.
+func (m *model) draft() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.online && m.hud.Draft
+}
+
+// dire reports which side the player is on, so a run of portraits can be called theirs.
+func (m *model) dire() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.team == "dire"
 }
 
 func (m *model) setHotkeys(hk config.HotkeySettings) {

@@ -101,7 +101,7 @@ func BenchmarkPickBoard(b *testing.B) {
 	set := roleSet(srv, dota.HardSupport)
 	b.ResetTimer()
 	for b.Loop() {
-		srv.readPickBoard(set, 0, nil) // not pickBoard: the cache would answer every call but the first
+		srv.readPickBoard(set, 0, nil, nil) // not pickBoard: the cache would answer every call but the first
 	}
 }
 
@@ -110,7 +110,7 @@ func BenchmarkPickBoardLongHistory(b *testing.B) {
 	srv, _ := benchServer(b, 1000)
 	set := roleSet(srv, dota.HardSupport)
 	for b.Loop() {
-		srv.readPickBoard(set, 0, nil)
+		srv.readPickBoard(set, 0, nil, nil)
 	}
 }
 

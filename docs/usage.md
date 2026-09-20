@@ -78,7 +78,17 @@ All of those numbers are yours to change, on Settings › **Pick help**, because
 
 The top of the list is read aloud once as the draft opens, and the AI coach can add a sentence on which to take (AI page › **A word on your pick**).
 
-It is all built from your history and public statistics, never from the draft in front of you: Valve sends the picks and bans to spectators only, so no tool that follows the rules can see what the enemy took. `gourdian doctor` says so, and will say otherwise if that ever changes.
+### Where the enemy picks come from
+
+Valve sends the draft to spectators and not to players, so Dota's own feed tells your tools nothing about who the other side took. `gourdian doctor` says so, and will say otherwise if that ever changes.
+
+What is left is the screen. Settings › Pick help › **Read the enemy picks off your screen** turns on reading the ten hero portraits Dota draws along the top of the game: the same pixels a screenshot would take, from the strip those portraits sit in, only while you are choosing a hero. It is off until you ask for it.
+
+Once it is on, the heroes the other side has taken are shown on the pick card, and each hero you might take is weighed against them — a line like `+4% against their picks`. That weighing is deliberately gentle: OpenDota's record of two heroes meeting is a hundred-odd games measured across every position, so it orders heroes that are otherwise level rather than choosing one for you.
+
+It recognises the portraits by their colours, against the art from your own Dota install, so an Arcana, a persona or an alternate style is read as the hero it is. It says nothing rather than guessing: an unpicked slot, a hero it isn't sure of, or the same hero seemingly in two places are all left blank, and a hero has to be read the same way twice before it is believed. Measured over three drafts, all ten heroes were read within two to three readings, none wrongly.
+
+It needs the game drawn where a program can read it: on Linux that means an X11 session, not Wayland.
 
 ## Personal targets
 

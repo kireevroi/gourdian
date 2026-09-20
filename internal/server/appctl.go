@@ -124,7 +124,8 @@ func (s *Server) hudPayload() hud.Payload {
 	s.hudMu.Lock()
 	live := hud.BuildHeld(snap, tips, set.HUDWidgets, time.Now(), &s.hudQueue, set.Language)
 	s.hudMu.Unlock()
-	return hud.Payload{Live: live, Sample: hud.SampleIn(set.HUDWidgets, set.Language)}
+	return hud.Payload{Live: live, Sample: hud.SampleIn(set.HUDWidgets, set.Language),
+		Draft: set.Screen.Draft && pickMatters(snap)}
 }
 
 func (s *Server) handleHUD(w http.ResponseWriter, r *http.Request) {

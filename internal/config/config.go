@@ -25,6 +25,7 @@ import (
 	"gourdian/internal/hotkey"
 	"gourdian/internal/picks"
 	"gourdian/internal/platform"
+	"gourdian/internal/screen"
 )
 
 const (
@@ -165,6 +166,18 @@ var (
 	TipSeverities = []string{"info", "warn", "urgent"}
 )
 
+// ScreenSettings covers reading the bar of hero portraits Dota draws along the top of the
+// screen, which is the only way a player's tools can learn who the other side picked: Valve
+// sends the draft to spectators and not to players.
+type ScreenSettings struct {
+	// Draft turns the reading on. It is off until the player asks for it, because it means
+	// the trainer looks at their screen.
+	Draft bool `json:"draft"`
+	// Bars is where the portraits were found, by screen size ("2560x1440"), so the search
+	// only has to happen once per screen.
+	Bars map[string]screen.Bar `json:"bars,omitempty"`
+}
+
 func DefaultWidgets() []HUDWidget {
 	return []HUDWidget{
 		{ID: WidgetAlerts, On: true, MinSeverity: "info", Coach: true},
@@ -236,7 +249,9 @@ type Settings struct {
 	RulesOffSeen []string     `json:"rules_off_seen,omitempty"`
 	Timings      dota.Timings `json:"-"` // always dota.DefaultTimings()
 	// Picks tunes how heroes are ranked while you choose one.
-	Picks     picks.Tuning      `json:"picks"`
+	Picks picks.Tuning `json:"picks"`
+	// Screen is the reading of the hero portraits along the top of the game.
+	Screen    ScreenSettings    `json:"screen"`
 	AI        AISettings        `json:"ai"`
 	Overlay   OverlaySettings   `json:"overlay"`
 	Recording RecordingSettings `json:"recording"`
