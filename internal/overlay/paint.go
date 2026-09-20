@@ -29,29 +29,6 @@ type painter struct {
 	big, small font.Face
 }
 
-var (
-	paintPanel  = color.RGBA{14, 17, 22, 255}
-	paintRow    = color.RGBA{28, 34, 48, 255}
-	paintLine   = color.RGBA{38, 45, 58, 255}
-	paintAccent = color.RGBA{224, 83, 61, 255}
-	paintKinds  = map[string]color.RGBA{
-		hud.KindText:   {230, 233, 239, 255},
-		hud.KindMuted:  {139, 149, 167, 255},
-		hud.KindGood:   {63, 185, 122, 255},
-		hud.KindInfo:   {91, 156, 240, 255},
-		hud.KindWarn:   {229, 169, 59, 255},
-		hud.KindUrgent: {239, 74, 74, 255},
-		hud.KindCoach:  {144, 133, 233, 255},
-	}
-)
-
-func kindColor(kind string) color.RGBA {
-	if c, ok := paintKinds[kind]; ok {
-		return c
-	}
-	return paintKinds[hud.KindText]
-}
-
 // newPainter sizes the HUD for base, the screen's scale, and the player's layout.
 func newPainter(base float64, o config.OverlaySettings) (*painter, error) {
 	p := &painter{scale: base * float64(max(o.HUDScale, config.MinHUDScale)) / 100, layout: o}
@@ -120,7 +97,7 @@ type paintBlock struct {
 
 // paint draws the view and returns an image exactly as tall as the HUD.
 func (p *painter) paint(v View, editing bool) *image.RGBA {
-	pad, gap, bar := p.px(12), p.px(4), p.px(5)
+	pad, gap, bar := p.px(hudPad), p.px(hudGap), p.px(hudBar)
 	textW := p.width - bar - 2*pad
 
 	var blocks []*paintBlock
@@ -135,7 +112,7 @@ func (p *painter) paint(v View, editing bool) *image.RGBA {
 		blocks = append(blocks, &paintBlock{lines: []hud.Line{a}, accent: kindColor(v.Alert.Kind), face: p.big})
 	}
 	if len(v.Rows) > 0 {
-		blocks = append(blocks, &paintBlock{lines: v.Rows, accent: paintLine, face: p.small})
+		blocks = append(blocks, &paintBlock{lines: v.Rows, accent: hudLine, face: p.small})
 	}
 	content := 0
 	for _, b := range blocks {
@@ -148,22 +125,22 @@ func (p *painter) paint(v View, editing bool) *image.RGBA {
 				b.height += gap
 			}
 		}
-		content += b.height + p.px(8)
+		content += b.height + p.px(hudSpacing)
 	}
 	total := content
 	if editing {
-		total = max(content+p.px(52), p.px(200))
+		total = max(content+p.px(editBottom), p.px(editMin))
 	}
 	img := image.NewRGBA(image.Rect(0, 0, p.width, max(total, 1)))
 	if editing {
-		fill(img, img.Bounds(), paintRow, 170)
+		fill(img, img.Bounds(), hudRow, 170)
 	}
 
 	bg := uint32(p.layout.HUDBackground) * 255 / 100
 	y := 0
 	for _, b := range blocks {
-		fillRound(img, image.Rect(0, y, p.width, y+b.height), p.px(10), paintPanel, bg)
-		fill(img, image.Rect(0, y+p.px(6), bar, y+b.height-p.px(6)), b.accent, 255)
+		fillRound(img, image.Rect(0, y, p.width, y+b.height), p.px(hudRadius), hudPanel, bg)
+		fill(img, image.Rect(0, y+p.px(hudBarInset), bar, y+b.height-p.px(hudBarInset)), b.accent, 255)
 		ty := y + pad
 		for i, l := range b.lines {
 			for _, line := range b.wraps[i] {
@@ -172,7 +149,7 @@ func (p *painter) paint(v View, editing bool) *image.RGBA {
 			}
 			ty += gap
 		}
-		y += b.height + p.px(8)
+		y += b.height + p.px(hudSpacing)
 	}
 	if editing {
 		p.frame(img)
@@ -189,17 +166,7 @@ func (p *painter) doneRect(h int) image.Rectangle {
 }
 
 func (p *painter) hint(width int) string {
-	o := p.layout
-	for _, s := range []string{
-		fmt.Sprintf("Drag to move · wheel: size %d%% · Ctrl+wheel: background %d%%", o.HUDScale, o.HUDBackground),
-		fmt.Sprintf("Drag · wheel: %d%% · Ctrl+wheel: %d%%", o.HUDScale, o.HUDBackground),
-		fmt.Sprintf("%d%% · %d%%", o.HUDScale, o.HUDBackground),
-	} {
-		if font.MeasureString(p.small, s) <= fixed.I(width) {
-			return s
-		}
-	}
-	return ""
+	return editHint(p.layout, func(s string) bool { return font.MeasureString(p.small, s) <= fixed.I(width) })
 }
 
 // frame outlines the HUD while editing and adds the hint and the Done button.
@@ -207,13 +174,13 @@ func (p *painter) frame(img *image.RGBA) {
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
 	b := p.px(2)
 	for _, r := range []image.Rectangle{image.Rect(0, 0, w, b), image.Rect(0, h-b, w, h), image.Rect(0, 0, b, h), image.Rect(w-b, 0, w, h)} {
-		fill(img, r, paintAccent, 255)
+		fill(img, r, hudAccent, 255)
 	}
 	d := p.doneRect(h)
 	lh := lineHeight(p.small)
 	ty := d.Min.Y + (d.Dy()-lh)/2
 	p.text(img, p.hint(d.Min.X-p.px(20)), p.px(12), ty, p.small, kindColor(hud.KindText), true)
-	fillRound(img, d, p.px(6), paintAccent, 255)
+	fillRound(img, d, p.px(6), hudAccent, 255)
 	label := "Done"
 	x := d.Min.X + (d.Dx()-font.MeasureString(p.small, label).Ceil())/2
 	p.text(img, label, x, ty, p.small, kindColor(hud.KindText), false)
@@ -308,9 +275,15 @@ func fade(img *image.RGBA, a uint32) {
 }
 
 // savePaintedPNG writes a painted HUD with its transparency.
-func savePaintedPNG(path string, img *image.RGBA) error {
+// paintedNRGBA is the painted frame with its alpha un-premultiplied, the way a PNG holds it.
+func paintedNRGBA(img *image.RGBA) *image.NRGBA {
 	out := image.NewNRGBA(img.Rect)
 	draw.Draw(out, out.Rect, img, image.Point{}, draw.Src)
+	return out
+}
+
+func savePaintedPNG(path string, img *image.RGBA) error {
+	out := paintedNRGBA(img)
 	f, err := os.Create(path)
 	if err != nil {
 		return err

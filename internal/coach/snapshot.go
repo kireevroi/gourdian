@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 const connectedWindow = 35 * time.Second
@@ -78,7 +79,7 @@ type Briefing struct {
 	Target10   int                  `json:"target_10,omitempty"`
 	Usual10    int                  `json:"usual_10,omitempty"`
 	Items      []ItemGoal           `json:"items,omitempty"`
-	Goals      []stats.GoalProgress `json:"goals,omitempty"`
+	Goals      []model.GoalProgress `json:"goals,omitempty"`
 	LastReview string               `json:"last_review,omitempty"` // focus from the last review on this hero
 }
 
@@ -223,7 +224,7 @@ func (e *Engine) Snapshot(set config.Settings) Snapshot {
 			snap.Pace = &Pace{LastHits: s.Player.LastHits, Expected: exp}
 			for i, cp := range paceCheckpoints {
 				if cp > s.Map.ClockTime {
-					snap.Pace.Checkpoint, snap.Pace.Target = clockStr(cp), targets.LastHits[i]
+					snap.Pace.Checkpoint, snap.Pace.Target = dota.Clock(cp), targets.LastHits[i]
 					if i < len(targets.Usual) {
 						snap.Pace.Usual = targets.Usual[i]
 					}

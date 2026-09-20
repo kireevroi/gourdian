@@ -14,6 +14,7 @@ import (
 	"gourdian/internal/aicoach"
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
 	"gourdian/internal/sim"
@@ -28,7 +29,7 @@ func TestReplayRecording(t *testing.T) {
 	var od *dotadata.Client
 	var e *coach.Engine
 	set := config.Default().Settings
-	set.Role, set.Voice = config.RoleHardSupport, config.VoiceOff
+	set.Role, set.Voice = dota.HardSupport, config.VoiceOff
 	if r := os.Getenv("ROLE"); r != "" {
 		set.Role = r
 	}

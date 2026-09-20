@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gourdian/internal/dota"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -33,7 +34,7 @@ func (c *Client) SkillBuildFor(heroID int, role string) *SkillBuild {
 	if heroID <= 0 {
 		return nil
 	}
-	key := positionKey{heroID, Positions[role], true}
+	key := positionKey{heroID, dota.Position(role), true}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if b, ok := c.skillBuilds[key]; ok {
@@ -147,7 +148,7 @@ func (c *Client) skillBuildFrom(key positionKey, heroName string, seqs [][]int) 
 		}
 	}
 	c.mu.RUnlock()
-	if len(named) < positionMinGames {
+	if len(named) < MinProGames {
 		return nil
 	}
 	return &SkillBuild{HeroID: key.hero, Position: key.pos, Games: len(named), Won: key.won, Order: SkillConsensus(named)}
@@ -245,5 +246,5 @@ func skillSQL(key positionKey) string {
 SELECT ability_upgrades_arr FROM p WHERE hero_id = %d AND %s AND ability_upgrades_arr IS NOT NULL AND (%d = 0 OR CASE
     WHEN farm <= 3 AND lane_role = 2 THEN 2 WHEN farm <= 3 AND lane_role = 1 THEN 1
     WHEN farm <= 3 AND lane_role = 3 THEN 3 WHEN farm <= 3 THEN 0 WHEN farm = 4 THEN 4 ELSE 5 END = %d)
-ORDER BY start_time DESC LIMIT 300`, positionDays, hero, hero, key.filter(), pos, pos)
+ORDER BY start_time DESC LIMIT 300`, ProDays, hero, hero, key.filter(), pos, pos)
 }

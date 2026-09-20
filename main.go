@@ -26,7 +26,9 @@ import (
 	"gourdian/internal/dotadata"
 	"gourdian/internal/install"
 	"gourdian/internal/matchdata"
+	"gourdian/internal/model"
 	"gourdian/internal/overlay"
+	"gourdian/internal/platform"
 	"gourdian/internal/server"
 	"gourdian/internal/sim"
 	"gourdian/internal/speech"
@@ -115,7 +117,7 @@ func run(args []string) error {
 	listen := fs.String("listen", "", "address to listen on (default from config.json)")
 	open := fs.Bool("open", false, "open the dashboard in your browser")
 	openFirst := fs.Bool("open-first", false, "open the dashboard only on the very first start")
-	withOverlay := fs.Bool("overlay", nativeLinux(), "also show the in-game overlay (on by default on Linux)")
+	withOverlay := fs.Bool("overlay", platform.LinuxDesktop(), "also show the in-game overlay (on by default on Linux)")
 	withTray := fs.Bool("tray", false, "show a tray icon (Windows)")
 	background := fs.Bool("background", false, "started at sign-in: stay quiet until Dota sends data")
 	record := fs.Bool("record", false, "save every game-state update to a replayable file")
@@ -150,7 +152,7 @@ func run(args []string) error {
 
 	var speaker *speech.Speaker
 	// On a Linux desktop Piper's natural voice needs only something to play sound with.
-	if exe, ok := speech.Available(); ok || nativeLinux() && speech.Player() != nil {
+	if exe, ok := speech.Available(); ok || platform.LinuxDesktop() && speech.Player() != nil {
 		speaker = speech.New(exe, cfg.Settings.VoiceRate, log)
 		speaker.SetLanguage(cfg.Settings.Language)
 		defer speaker.Close()
@@ -364,7 +366,7 @@ func statsCmd() error {
 		return err
 	}
 	fmt.Println("CSV files:", st.Dir())
-	var real []stats.MatchSummary
+	var real []model.MatchSummary
 	for _, m := range matches {
 		if m.Real() {
 			real = append(real, m)
@@ -469,7 +471,7 @@ func mmrCmd(args []string) error {
 		return err
 	}
 	defer st.Close()
-	if err := st.AppendMMR(stats.MMREntry{Date: time.Now(), MMR: mmr, Note: strings.Join(args[1:], " ")}); err != nil {
+	if err := st.AppendMMR(model.MMREntry{Date: time.Now(), MMR: mmr, Note: strings.Join(args[1:], " ")}); err != nil {
 		return err
 	}
 	fmt.Println("logged MMR", mmr, "in", st.Dir())
@@ -501,13 +503,10 @@ func overlayCmd(args []string) error {
 		Snapshot: *snapshot, SnapshotEditing: *snapshotEditing})
 }
 
-// nativeLinux is a Linux desktop playing Dota itself, as opposed to WSL coaching Windows.
-func nativeLinux() bool { return runtime.GOOS == "linux" && os.Getenv("WSL_DISTRO_NAME") == "" }
-
 // startOverlay runs the overlay in-process on Windows and Linux desktops; under WSL it launches
 // the Windows build sitting next to this binary, since only a Windows process can draw over the game.
 func startOverlay(ctx context.Context, o overlay.Options, stop func(), log *slog.Logger) {
-	if nativeLinux() {
+	if platform.LinuxDesktop() {
 		go func() {
 			// The trainer still coaches by voice and the dashboard without a HUD.
 			if err := overlay.Run(ctx, o); err != nil {

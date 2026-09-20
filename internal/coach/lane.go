@@ -3,16 +3,8 @@ package coach
 import (
 	"slices"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
-)
-
-// Lanes as the player's team sees them.
-const (
-	LaneSafe   = "safe lane"
-	LaneMid    = "mid lane"
-	LaneOff    = "offlane"
-	LaneJungle = "jungle"
 )
 
 const (
@@ -41,18 +33,18 @@ func laneAt(x, y int, team string) string {
 	var side string
 	switch {
 	case abs(y-x) < laneWidth:
-		return LaneMid
+		return dota.LaneMid
 	case x < -laneEdge || y > laneEdge:
 		side = "top"
 	case x > laneEdge || y < -laneEdge:
 		side = "bottom"
 	default:
-		return LaneJungle
+		return dota.LaneJungle
 	}
 	if (side == "bottom") == (team == "radiant") {
-		return LaneSafe
+		return dota.LaneSafe
 	}
-	return LaneOff
+	return dota.LaneOff
 }
 
 func abs(v int) int {
@@ -94,7 +86,7 @@ func (l *laneTracker) decide(clock int) (string, bool) {
 		return "", false
 	}
 	for lane, n := range l.counts {
-		if lane != LaneJungle && float64(n) >= laneShare*float64(l.samples) {
+		if lane != dota.LaneJungle && float64(n) >= laneShare*float64(l.samples) {
 			return lane, true
 		}
 	}
@@ -106,16 +98,16 @@ func (l *laneTracker) decide(clock int) (string, bool) {
 func roleForLane(lane, current string, wards bool) string {
 	support := wards || slices.Contains(supports, current)
 	switch {
-	case lane == LaneMid:
-		return config.RoleMid
-	case lane == LaneSafe && support:
-		return config.RoleHardSupport
-	case lane == LaneSafe:
-		return config.RoleCarry
-	case lane == LaneOff && support:
-		return config.RoleSoftSupport
-	case lane == LaneOff:
-		return config.RoleOfflane
+	case lane == dota.LaneMid:
+		return dota.Mid
+	case lane == dota.LaneSafe && support:
+		return dota.HardSupport
+	case lane == dota.LaneSafe:
+		return dota.Carry
+	case lane == dota.LaneOff && support:
+		return dota.SoftSupport
+	case lane == dota.LaneOff:
+		return dota.Offlane
 	}
 	return ""
 }

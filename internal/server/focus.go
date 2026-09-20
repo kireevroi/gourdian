@@ -1,11 +1,11 @@
 package server
 
 import (
-	"gourdian/internal/coach"
 	"strings"
 
 	"gourdian/internal/config"
-	"gourdian/internal/stats"
+	"gourdian/internal/dota"
+	"gourdian/internal/model"
 )
 
 // applyFocus picks the focus for the match about to start: this hero and position first,
@@ -15,7 +15,7 @@ func (s *Server) applyFocus(role string, heroID int) {
 	if err != nil || len(reviews) == 0 {
 		return
 	}
-	var sameHero, sameRole, any stats.Review
+	var sameHero, sameRole, any model.Review
 	for _, r := range reviews {
 		if strings.TrimSpace(r.NextGameFocus) == "" {
 			continue
@@ -58,8 +58,8 @@ func (s *Server) lastFocusFor(role string, heroID int) string {
 }
 
 // fromRole says which game a focus came from when it wasn't this position.
-func fromRole(r stats.Review, lang string) string {
-	name := coach.RoleName(r.Role, lang)
+func fromRole(r model.Review, lang string) string {
+	name := dota.RoleName(r.Role, lang)
 	switch {
 	case name != "" && r.Hero != "":
 		return roleSay(lang, "%s (from your %s game as %s)", r.NextGameFocus, r.Hero, name)
@@ -70,7 +70,7 @@ func fromRole(r stats.Review, lang string) string {
 }
 
 // reviewRole is the position played in a match, for storing with its review.
-func reviewRole(m stats.MatchSummary, set config.Settings) string {
+func reviewRole(m model.MatchSummary, set config.Settings) string {
 	if m.Role != "" {
 		return m.Role
 	}

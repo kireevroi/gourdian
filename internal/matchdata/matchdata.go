@@ -11,8 +11,9 @@ import (
 	"strconv"
 	"time"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
+	"gourdian/internal/model"
 	"gourdian/internal/stats"
 )
 
@@ -37,10 +38,6 @@ type ItemTime struct {
 	Time int
 }
 
-var laneNames = map[int]string{dotadata.LaneSafe: "safe lane", dotadata.LaneMid: "mid lane", dotadata.LaneOff: "offlane", dotadata.LaneJungle: "jungle"}
-
-const coreItemCost = 1500
-
 func (s Service) names(ids []int) []string {
 	out := make([]string, 0, len(ids))
 	for _, id := range ids {
@@ -50,14 +47,14 @@ func (s Service) names(ids []int) []string {
 }
 
 func (s Service) detail(d dotadata.PlayerDetail) *Detail {
-	out := &Detail{PlayerDetail: d, LaneRoleName: laneNames[d.LaneRole], Enemies: s.names(d.Enemies),
+	out := &Detail{PlayerDetail: d, LaneRoleName: dota.LaneNumbered(d.LaneRole), Enemies: s.names(d.Enemies),
 		Allies: s.names(d.Allies), LaneOpponents: s.names(d.LaneOpponents)}
 	if d.Roaming {
 		out.LaneRoleName = "roaming"
 	}
 	items := s.Data.Items()
 	for name, t := range d.ItemTimes {
-		if info, ok := items[name]; ok && info.Cost >= coreItemCost && info.Tier == 0 {
+		if info, ok := items[name]; ok && info.Cost >= dota.CoreItemCost && info.Tier == 0 {
 			out.CoreItems = append(out.CoreItems, ItemTime{Name: info.DName, Time: t})
 		}
 	}
@@ -67,7 +64,7 @@ func (s Service) detail(d dotadata.PlayerDetail) *Detail {
 
 // Enrich returns the detail with Parsed false when the parse doesn't arrive before ctx ends.
 // progress, if set, is called while waiting with how long it has taken.
-func (s Service) Enrich(ctx context.Context, m stats.MatchSummary, accountID string, progress func(time.Duration)) (*Detail, error) {
+func (s Service) Enrich(ctx context.Context, m model.MatchSummary, accountID string, progress func(time.Duration)) (*Detail, error) {
 	match, err := s.Data.WaitParsed(ctx, m.MatchID, progress)
 	if err != nil {
 		return nil, err
@@ -81,7 +78,7 @@ func (s Service) Enrich(ctx context.Context, m stats.MatchSummary, accountID str
 		return s.detail(d), nil
 	}
 	enemies := s.names(d.Enemies)
-	err = s.Stats.UpdateMatch(m.MatchID, func(row *stats.MatchSummary) {
+	err = s.Stats.UpdateMatch(m.MatchID, func(row *model.MatchSummary) {
 		applyDetail(row, d, enemies)
 	})
 	if err != nil {
@@ -93,7 +90,7 @@ func (s Service) Enrich(ctx context.Context, m stats.MatchSummary, accountID str
 	return s.detail(d), nil
 }
 
-func applyDetail(row *stats.MatchSummary, d dotadata.PlayerDetail, enemies []string) {
+func applyDetail(row *model.MatchSummary, d dotadata.PlayerDetail, enemies []string) {
 	row.Parsed, row.LaneRole, row.NetWorth, row.HeroDamage, row.TowerDamage = true, d.LaneRole, d.NetWorth, d.HeroDamage, d.TowerDamage
 	row.ObsPlaced, row.SenPlaced, row.CampsStacked, row.TeamfightParticipation = d.ObsPlaced, d.SenPlaced, d.CampsStacked, d.TeamfightParticipation
 	row.GPMPct, row.LHPct, row.HeroDamagePct = d.Percentiles["gold_per_min"], d.Percentiles["last_hits_per_min"], d.Percentiles["hero_damage_per_min"]
@@ -112,12 +109,12 @@ func applyDetail(row *stats.MatchSummary, d dotadata.PlayerDetail, enemies []str
 	}
 }
 
-func itemTimings(matchID, hero string, d dotadata.PlayerDetail, items map[string]dotadata.ItemInfo) []stats.ItemTiming {
-	var out []stats.ItemTiming
-	for name, t := range dotadata.CoreItemTimes(d.ItemTimes, items, coreItemCost) {
-		out = append(out, stats.ItemTiming{MatchID: matchID, Hero: hero, Item: name, Time: t, Source: stats.SourceOpenDota})
+func itemTimings(matchID, hero string, d dotadata.PlayerDetail, items map[string]dotadata.ItemInfo) []model.ItemTiming {
+	var out []model.ItemTiming
+	for name, t := range dotadata.CoreItemTimes(d.ItemTimes, items, dota.CoreItemCost) {
+		out = append(out, model.ItemTiming{MatchID: matchID, Hero: hero, Item: name, Time: t, Source: model.SourceOpenDota})
 	}
-	slices.SortFunc(out, func(a, b stats.ItemTiming) int { return a.Time - b.Time })
+	slices.SortFunc(out, func(a, b model.ItemTiming) int { return a.Time - b.Time })
 	return out
 }
 
@@ -126,17 +123,17 @@ func itemTimings(matchID, hero string, d dotadata.PlayerDetail, items map[string
 func roleFor(d dotadata.PlayerDetail) string {
 	switch {
 	case d.LaneRole == dotadata.LaneMid:
-		return config.RoleMid
+		return dota.Mid
 	case d.LaneRole == dotadata.LaneSafe && d.NetWorthRank <= 2:
-		return config.RoleCarry
+		return dota.Carry
 	case d.LaneRole == dotadata.LaneOff && d.NetWorthRank <= 3:
-		return config.RoleOfflane
+		return dota.Offlane
 	case d.LaneRole == dotadata.LaneOff || d.Roaming:
-		return config.RoleSoftSupport
+		return dota.SoftSupport
 	case d.LaneRole == 0 && d.NetWorthRank <= 2:
-		return config.RoleCarry
+		return dota.Carry
 	default:
-		return config.RoleHardSupport
+		return dota.HardSupport
 	}
 }
 
@@ -202,8 +199,8 @@ func (s Service) importOne(ctx context.Context, id string, acct int64, pm dotada
 	if d.Radiant {
 		team = "radiant"
 	}
-	m := stats.MatchSummary{
-		MatchID: id, Source: stats.SourceOpenDota, HeroID: d.HeroID, Hero: hero, Role: roleFor(d), Team: team, Result: result,
+	m := model.MatchSummary{
+		MatchID: id, Source: model.SourceOpenDota, HeroID: d.HeroID, Hero: hero, Role: roleFor(d), Team: team, Result: result,
 		EndedAt:     time.Unix(match.StartTime+int64(match.Duration), 0),
 		DurationSec: match.Duration, Kills: d.Kills, Deaths: d.Deaths, Assists: d.Assists, LastHits: d.LastHits,
 		Denies: d.Denies, GPM: d.GPM, XPM: d.XPM, RankTier: d.RankTier, DeathClocks: d.DeathTimes,

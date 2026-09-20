@@ -18,7 +18,7 @@ import (
 	"sync"
 
 	"gourdian/internal/coach"
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/stats"
 )
 
@@ -180,7 +180,7 @@ func (s *Store) SetOverride(id string, o coach.RuleOverride) error {
 		return fmt.Errorf("unknown voice setting %q", o.Voice)
 	}
 	for _, role := range o.Roles {
-		if !slices.Contains(config.Roles, role) {
+		if !slices.Contains(dota.Roles, role) {
 			return fmt.Errorf("unknown position %q", role)
 		}
 	}

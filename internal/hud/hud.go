@@ -3,14 +3,14 @@
 package hud
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"time"
 
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
-	"gourdian/internal/stats"
+	"gourdian/internal/dota"
+	"gourdian/internal/model"
 )
 
 // Line kinds, which pick the colour.
@@ -67,10 +67,6 @@ type Payload struct {
 // PositionUntil is when the HUD stops offering the position hotkeys; lane detection decides then.
 const PositionUntil = 150
 
-var positionNumbers = map[string]int{
-	config.RoleCarry: 1, config.RoleMid: 2, config.RoleOfflane: 3, config.RoleSoftSupport: 4, config.RoleHardSupport: 5,
-}
-
 var severityRank = map[string]int{"info": 0, "warn": 1, "urgent": 2}
 
 // Build returns what the HUD shows now. Outside a match it's empty.
@@ -95,7 +91,7 @@ func BuildHeld(snap coach.Snapshot, tips []coach.Tip, widgets []config.HUDWidget
 			v.Alert, v.More = alert(tips, w, now, queue, l)
 		case config.WidgetPosition:
 			if snap.Clock < PositionUntil && snap.Role != "" {
-				line := l.f("Position %d · %s", positionNumbers[snap.Role], l.s(roleWord(snap.Role)))
+				line := l.f("Position %d · %s", dota.Position(snap.Role), l.role(snap.Role))
 				if snap.RoleNote != "" {
 					line += " (" + snap.RoleNote + ")"
 				}
@@ -251,7 +247,7 @@ func pickLines(p *coach.PickHelp, l words) []Line {
 	if p == nil {
 		return nil
 	}
-	lines := []Line{{l.f("Your best %s heroes:", l.s(roleWord(p.Role))), KindCoach}}
+	lines := []Line{{l.f("Your best %s heroes:", l.role(p.Role)), KindCoach}}
 	for _, h := range p.Best {
 		lines = append(lines, Line{l.f("%s · %d%% of %d", h.Hero, h.WinPct, h.Games), KindText})
 	}
@@ -259,13 +255,6 @@ func pickLines(p *coach.PickHelp, l words) []Line {
 		lines = append(lines, Line{l.f("Avoid %s · %d%% of %d", h.Hero, h.WinPct, h.Games), KindWarn})
 	}
 	return lines
-}
-
-func roleWord(role string) string {
-	return map[string]string{
-		config.RoleCarry: "carry", config.RoleMid: "mid", config.RoleOfflane: "offlane",
-		config.RoleSoftSupport: "soft support", config.RoleHardSupport: "hard support",
-	}[role]
 }
 
 // briefingLines sum up the plan before the horn: the record on this hero, the last-hit target,
@@ -288,13 +277,13 @@ func briefingLines(b *coach.Briefing, l words) []Line {
 	}
 	var items []string
 	for _, it := range b.Items {
-		items = append(items, l.f("%s by %s", it.Name, clockStr(it.By)))
+		items = append(items, l.f("%s by %s", it.Name, dota.Clock(it.By)))
 	}
 	if len(items) > 0 {
 		lines = append(lines, Line{strings.Join(items, " · "), KindText})
 	}
 	for _, g := range b.Goals[:min(len(b.Goals), 2)] {
-		lines = append(lines, Line{l.f("Goal: %s · %d/%d this week", g.Label, g.Met, stats.GoalsDone), KindCoach})
+		lines = append(lines, Line{l.f("Goal: %s · %d/%d this week", g.Label, g.Met, model.GoalsDone), KindCoach})
 	}
 	return lines
 }
@@ -317,7 +306,7 @@ func timerLines(timers []coach.Timer, clock int, w config.HUDWidget, l words) []
 		if in <= 20 {
 			kind = KindWarn
 		}
-		out = append(out, Line{clockStr(in) + "  " + l.timer(t.Label), kind})
+		out = append(out, Line{dota.Clock(in) + "  " + l.timer(t.Label), kind})
 	}
 	return out
 }
@@ -351,13 +340,13 @@ func itemGoalLine(goals []coach.ItemGoalView, clock, gold int, l words) (Line, b
 		need := g.Remaining - gold
 		switch left := g.By - clock; {
 		case left < 0 && need <= 0:
-			return Line{l.f("%s is late (goal %s) · buy it now", g.Name, clockStr(g.By)), KindWarn}, true
+			return Line{l.f("%s is late (goal %s) · buy it now", g.Name, dota.Clock(g.By)), KindWarn}, true
 		case left < 0:
-			return Line{l.f("%s is late (goal %s) · %dg to go", g.Name, clockStr(g.By), need), KindWarn}, true
+			return Line{l.f("%s is late (goal %s) · %dg to go", g.Name, dota.Clock(g.By), need), KindWarn}, true
 		case left <= itemGoalShowFor && need <= 0:
-			return Line{l.f("%s by %s · buy it now", g.Name, clockStr(g.By)), KindGood}, true
+			return Line{l.f("%s by %s · buy it now", g.Name, dota.Clock(g.By)), KindGood}, true
 		case left <= itemGoalShowFor:
-			return Line{l.f("%s by %s · %dg to go", g.Name, clockStr(g.By), need), KindText}, true
+			return Line{l.f("%s by %s · %dg to go", g.Name, dota.Clock(g.By), need), KindText}, true
 		}
 		return Line{}, false
 	}
@@ -405,12 +394,12 @@ func SampleIn(widgets []config.HUDWidget, lang string) View {
 		case config.WidgetAlerts:
 			v.Alert = &Line{l.s("Stack the ancient camp at 0:53"), KindInfo}
 		case config.WidgetPosition:
-			line := l.f("Position %d · %s", 2, l.s("mid")) + " (" + l.s("your pick") + ")" + l.s(" · Ctrl+Shift+1–5 to change")
+			line := l.f("Position %d · %s", dota.Position(dota.Mid), l.role(dota.Mid)) + " (" + l.s("your pick") + ")" + l.s(" · Ctrl+Shift+1–5 to change")
 			v.Rows = append(v.Rows, Line{line, KindCoach})
 		case config.WidgetDrill:
 			v.Rows = append(v.Rows, Line{l.f("Drill: %s · %d this game", l.s("No TP scroll"), 1), KindText})
 		case config.WidgetPicks:
-			v.Rows = append(v.Rows, pickLines(&coach.PickHelp{Role: config.RoleMid,
+			v.Rows = append(v.Rows, pickLines(&coach.PickHelp{Role: dota.Mid,
 				Best:  []coach.HeroRecord{{Hero: "Storm Spirit", Games: 11, Wins: 7, WinPct: 63}, {Hero: "Puck", Games: 8, Wins: 5, WinPct: 62}},
 				Avoid: []coach.HeroRecord{{Hero: "Invoker", Games: 6, Wins: 2, WinPct: 33}}}, l)...)
 		case config.WidgetBriefing:
@@ -428,10 +417,10 @@ func SampleIn(widgets []config.HUDWidget, lang string) View {
 			v.Rows = append(v.Rows, line)
 		case config.WidgetNextItem:
 			line := itemLine("Battle Fury", 1450, 800, l)
-			line.Text += " · " + l.f("%s, %d won pro games", l.s("carry"), 180)
+			line.Text += " · " + l.f("%s, %d won pro games", l.role(dota.Carry), 180)
 			v.Rows = append(v.Rows, line)
 		case config.WidgetSkill:
-			v.Rows = append(v.Rows, skillLine("Ball Lightning", l.f("%s, %d won pro games", l.s("mid"), 235), l))
+			v.Rows = append(v.Rows, skillLine("Ball Lightning", l.f("%s, %d won pro games", l.role(dota.Mid), 235), l))
 		case config.WidgetItemGoal:
 			v.Rows = append(v.Rows, Line{l.f("%s by %s · %dg to go", "Battle Fury", "15:00", 650), KindText})
 		case config.WidgetStats:
@@ -439,12 +428,4 @@ func SampleIn(widgets []config.HUDWidget, lang string) View {
 		}
 	}
 	return v
-}
-
-func clockStr(sec int) string {
-	sign := ""
-	if sec < 0 {
-		sign, sec = "-", -sec
-	}
-	return fmt.Sprintf("%s%d:%02d", sign, sec/60, sec%60)
 }

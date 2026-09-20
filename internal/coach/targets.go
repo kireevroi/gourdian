@@ -5,18 +5,18 @@ import (
 	"math"
 	"slices"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 var paceCheckpoints = []int{300, 600, 900, 1200, 1800}
 
 // paceTargets are last hits at each checkpoint for players without enough games on a hero.
 var paceTargets = map[string][]int{
-	config.RoleCarry:   {30, 65, 110, 160, 270},
-	config.RoleMid:     {30, 60, 100, 145, 240},
-	config.RoleOfflane: {18, 40, 65, 95, 160},
+	dota.Carry:   {30, 65, 110, 160, 270},
+	dota.Mid:     {30, 60, 100, 145, 240},
+	dota.Offlane: {18, 40, 65, 95, 160},
 }
 
 // Targets are one hero and position's goals: last hits at each checkpoint and core item timings.
@@ -45,14 +45,15 @@ type TargetSource interface {
 func RoleTargets(role string) Targets { return Targets{LastHits: slices.Clone(paceTargets[role])} }
 
 const (
-	personalSample  = 10
 	personalMinimum = 3
-	personalStretch = 1.10
+	// stretchPercent is how far above the player's usual their targets go.
+	stretchPercent  = 10
+	personalStretch = 1 + stretchPercent/100.0
 )
 
 // PersonalLastHits sets each checkpoint's target 10% above the player's median over their
 // last 10 matches on the hero and position (newest first), where they have at least 3.
-func PersonalLastHits(role string, history []stats.MatchSummary) Targets {
+func PersonalLastHits(role string, history []model.MatchSummary) Targets {
 	t := RoleTargets(role)
 	if t.LastHits == nil {
 		return t
@@ -60,8 +61,8 @@ func PersonalLastHits(role string, history []stats.MatchSummary) Targets {
 	t.Usual = make([]int, len(paceCheckpoints))
 	for i, cp := range paceCheckpoints {
 		var values []int
-		for _, m := range history[:min(len(history), personalSample)] {
-			if lh, ok := m.LastHitsAt[clockStr(cp)]; ok {
+		for _, m := range history[:min(len(history), dota.PersonalGames)] {
+			if lh, ok := m.LastHitsAt[dota.Clock(cp)]; ok {
 				values = append(values, lh)
 			}
 		}
@@ -69,7 +70,7 @@ func PersonalLastHits(role string, history []stats.MatchSummary) Targets {
 			continue
 		}
 		t.Games = max(t.Games, len(values))
-		t.Usual[i] = Median(values)
+		t.Usual[i] = dota.Median(values)
 		t.LastHits[i] = int(math.Round(float64(t.Usual[i]) * personalStretch))
 	}
 	for i := 1; i < len(t.LastHits); i++ {
@@ -78,25 +79,11 @@ func PersonalLastHits(role string, history []stats.MatchSummary) Targets {
 	return t
 }
 
-// Median is the middle value, or the mean of the two middle ones, and 0 for none. Every
-// personal target uses it, so "your usual" means the same everywhere.
-func Median(values []int) int {
-	if len(values) == 0 {
-		return 0
-	}
-	s := slices.Clone(values)
-	slices.Sort(s)
-	if n := len(s); n%2 == 0 {
-		return (s[n/2-1] + s[n/2]) / 2
-	}
-	return s[len(s)/2]
-}
-
 // LastHitMap labels targets by checkpoint, like "10:00", for review prompts.
 func (t Targets) LastHitMap() map[string]int {
 	out := map[string]int{}
 	for i, v := range t.LastHits {
-		out[clockStr(paceCheckpoints[i])] = v
+		out[dota.Clock(paceCheckpoints[i])] = v
 	}
 	return out
 }
@@ -134,7 +121,7 @@ func (c *Ctx) switchedFrom(g ItemGoal, items map[string]dotadata.ItemInfo) bool 
 	goalCost := items[g.Item].Cost
 	for name, at := range c.m.itemSeen {
 		cost := items[name].Cost
-		if at >= 0 && name != g.Item && cost >= 2000 && cost*5 >= goalCost*4 &&
+		if at >= 0 && name != g.Item && cost >= dota.GoalItemCost && cost*5 >= goalCost*4 &&
 			!dotadata.Contains(g.Item, name, items) && !dotadata.Contains(name, g.Item, items) {
 			return true
 		}
@@ -146,7 +133,7 @@ func duration(sec int) string {
 	if sec < 60 {
 		return fmt.Sprintf("%ds", sec)
 	}
-	return clockStr(sec)
+	return dota.Clock(sec)
 }
 
 // seeItems records when each item first appears. Items already held when the trainer first

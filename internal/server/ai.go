@@ -17,7 +17,7 @@ import (
 	"gourdian/internal/config"
 	"gourdian/internal/gsi"
 	"gourdian/internal/matchdata"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 const (
@@ -27,13 +27,24 @@ const (
 	aiDeathSpacing = 45
 )
 
+// noticeAIProblem tells the player about a paused coach on the HUD and by voice, but only in a
+// match: outside one, such as when the app starts with Windows, the dashboard banner is enough.
+func (s *Server) noticeAIProblem() {
+	set := s.cfg.Settings()
+	snap := s.engine.Snapshot(set)
+	h := s.providers.Banner()
+	if !snap.InMatch || h.Problem == "" || !s.ai.noticePending.CompareAndSwap(true, false) {
+		return
+	}
+	tip := coach.Tip{Rule: "ai_problem", Category: "system", Severity: coach.Warn, Text: h.Message, Clock: snap.Clock, At: time.Now(),
+		Speech: "The AI coach is paused. Check the dashboard."}
+	s.emitTips(snap.MatchID, []coach.Tip{tip}, set)
+}
+
 type aiState struct {
 	busy atomic.Bool
 	// noticePending is set when a problem hasn't been announced in a match yet.
 	noticePending atomic.Bool
-	providers     *providers
-	setup         aiSetup
-	models        modelCache
 
 	mu      sync.Mutex
 	matchID string
@@ -51,7 +62,7 @@ func (s *Server) maybeAskAI(st *gsi.State, matchID string, res coach.Result, set
 	clock := st.Map.ClockTime
 	died := slices.ContainsFunc(res.Tips, func(t coach.Tip) bool { return t.Rule == "death" })
 
-	ready := s.aiReady()
+	ready := s.providers.Ready()
 	a := &s.ai
 	a.mu.Lock()
 	if a.matchID != matchID {
@@ -76,7 +87,7 @@ func (s *Server) maybeAskAI(st *gsi.State, matchID string, res coach.Result, set
 
 // askAI drops live answers that arrive after the match ended; answers the player asked for are always shown.
 func (s *Server) askAI(reason, matchID string, set config.Settings, live bool) bool {
-	provider, choice, ok := s.pick(set.AI.Live, set.AI)
+	provider, choice, ok := s.providers.Pick(set.AI.Live, set.AI)
 	if !ok || !s.ai.busy.CompareAndSwap(false, true) {
 		return false
 	}
@@ -91,7 +102,7 @@ func (s *Server) askAI(reason, matchID string, set config.Settings, live bool) b
 		suggestions, err := aicoach.Suggest(ctx, provider, choice, set.AI, set.Language, prompt)
 		if err != nil {
 			s.log.Warn("AI coach failed", "provider", provider.Info().ID, "err", err)
-			s.aiFailed(provider, err)
+			s.providers.Failed(provider, err)
 			return
 		}
 		snap := s.engine.Snapshot(set)
@@ -150,12 +161,12 @@ func (s *Server) heroFacts(heroID int, role string, owned []string) *aicoach.Her
 	return h
 }
 
-func (s *Server) matchTimeline(matchID string) []stats.Sample {
+func (s *Server) matchTimeline(matchID string) []model.Sample {
 	timeline, err := s.stats.Timeline()
 	if err != nil {
 		return nil
 	}
-	return slices.DeleteFunc(timeline, func(x stats.Sample) bool { return x.MatchID != matchID })
+	return slices.DeleteFunc(timeline, func(x model.Sample) bool { return x.MatchID != matchID })
 }
 
 func (s *Server) aiInput(reason, matchID string, set config.Settings) aicoach.Input {
@@ -185,8 +196,8 @@ func (s *Server) aiInput(reason, matchID string, set config.Settings) aicoach.In
 }
 
 // reviewMatch skips simulated and practice matches unless forced, so they don't spend subscription usage.
-func (s *Server) reviewMatch(m stats.MatchSummary, set config.Settings, force bool, detail *matchdata.Detail) bool {
-	provider, choice, ok := s.pick(set.AI.Reviews, set.AI)
+func (s *Server) reviewMatch(m model.MatchSummary, set config.Settings, force bool, detail *matchdata.Detail) bool {
+	provider, choice, ok := s.providers.Pick(set.AI.Reviews, set.AI)
 	if !ok || !force && (!set.AI.Review || !m.Real()) {
 		return false
 	}
@@ -223,13 +234,13 @@ func (s *Server) reviewMatch(m stats.MatchSummary, set config.Settings, force bo
 		if err != nil {
 			s.log.Warn("match review failed", "provider", provider.Info().ID, "err", err)
 			if k := ai.KindOf(err); k == ai.ErrAuth || k == ai.ErrLimit {
-				s.aiFailed(provider, err)
+				s.providers.Failed(provider, err)
 			} else {
 				s.hub.publish("ai_error", "Match review failed: "+err.Error())
 			}
 			return
 		}
-		review := stats.Review{Date: time.Now(), MatchID: m.MatchID, Hero: m.Hero, HeroID: m.HeroID,
+		review := model.Review{Date: time.Now(), MatchID: m.MatchID, Hero: m.Hero, HeroID: m.HeroID,
 			Role: reviewRole(m, set), Result: m.Result, Summary: r.Summary, FollowedFocus: r.FollowedFocus,
 			Strengths: r.Strengths, Improve: r.Improve, NextGameFocus: r.NextGameFocus}
 		if err := s.stats.AppendReview(review); err != nil {
@@ -249,9 +260,9 @@ func (s *Server) reviewMatch(m stats.MatchSummary, set config.Settings, force bo
 func (s *Server) handleAIAsk(w http.ResponseWriter, r *http.Request) {
 	set := s.cfg.Settings()
 	snap := s.engine.Snapshot(set)
-	switch _, _, ok := s.pick(set.AI.Live, set.AI); {
+	switch _, _, ok := s.providers.Pick(set.AI.Live, set.AI); {
 	case !ok:
-		http.Error(w, cmp.Or(s.aiBanner().Message, "the AI coach isn't connected; set it up on the AI coach page"), http.StatusConflict)
+		http.Error(w, cmp.Or(s.providers.Banner().Message, "the AI coach isn't connected; set it up on the AI coach page"), http.StatusConflict)
 		return
 	case snap.Hero == nil:
 		http.Error(w, "no hero yet: start a match first", http.StatusConflict)
@@ -276,8 +287,8 @@ func (s *Server) handleReviewMatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	set := s.cfg.Settings()
-	if _, _, ok := s.pick(set.AI.Reviews, set.AI); !ok {
-		http.Error(w, cmp.Or(s.aiBanner().Message, "the AI coach isn't connected; set it up on the AI coach page"), http.StatusConflict)
+	if _, _, ok := s.providers.Pick(set.AI.Reviews, set.AI); !ok {
+		http.Error(w, cmp.Or(s.providers.Banner().Message, "the AI coach isn't connected; set it up on the AI coach page"), http.StatusConflict)
 		return
 	}
 	s.hub.publish("review_status", reviewStatus{Text: "Preparing the match review…", MatchID: id})

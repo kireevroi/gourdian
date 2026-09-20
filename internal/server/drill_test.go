@@ -9,23 +9,23 @@ import (
 	"time"
 
 	"gourdian/internal/config"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 func TestDrillScoresRecentMatches(t *testing.T) {
 	srv, _, _ := newTestServer(t, nil)
 	for i, count := range []int{4, 2, 0} {
 		id := string(rune('a' + i))
-		srv.stats.AppendMatch(stats.MatchSummary{MatchID: id, Hero: "Lion", Source: stats.SourceLive,
+		srv.stats.AppendMatch(model.MatchSummary{MatchID: id, Hero: "Lion", Source: model.SourceLive,
 			EndedAt: time.Now().Add(-time.Duration(3-i) * time.Hour)})
-		tips := make([]stats.TipRecord, count)
+		tips := make([]model.TipRecord, count)
 		for j := range tips {
-			tips[j] = stats.TipRecord{At: time.Now(), MatchID: id, Rule: "no_tp", Habit: true, Text: "No TP scroll"}
+			tips[j] = model.TipRecord{At: time.Now(), MatchID: id, Rule: "no_tp", Habit: true, Text: "No TP scroll"}
 		}
 		srv.stats.AppendTips(tips)
 	}
 	// Imported history has no tips, since the trainer wasn't watching; it mustn't count as clean.
-	srv.stats.AppendMatch(stats.MatchSummary{MatchID: "imported", Hero: "Lion", Source: stats.SourceOpenDota, EndedAt: time.Now()})
+	srv.stats.AppendMatch(model.MatchSummary{MatchID: "imported", Hero: "Lion", Source: model.SourceOpenDota, EndedAt: time.Now()})
 	set := srv.cfg.Settings()
 	set.Drill = "no_tp"
 	if err := srv.cfg.UpdateSettings(set); err != nil {
@@ -70,13 +70,13 @@ func putJSON(t *testing.T, h http.Handler, path, body string) int {
 // it was English whatever the language.
 func TestDrillResultIsDeliveredInThePlayersLanguage(t *testing.T) {
 	srv, _, _ := newTestServer(t, func(s *config.Settings) { s.Drill, s.Language = "no_tp", "ru" })
-	m := stats.MatchSummary{MatchID: "m1", Source: stats.SourceLive, DurationSec: 1800, TipCounts: map[string]int{"no_tp": 2}}
+	m := model.MatchSummary{MatchID: "m1", Source: model.SourceLive, DurationSec: 1800, TipCounts: map[string]int{"no_tp": 2}}
 	srv.drillResult(m, srv.cfg.Settings())
 	saved, err := srv.stats.Tips()
 	if err != nil {
 		t.Fatal(err)
 	}
-	i := slices.IndexFunc(saved, func(r stats.TipRecord) bool { return r.Rule == "drill" })
+	i := slices.IndexFunc(saved, func(r model.TipRecord) bool { return r.Rule == "drill" })
 	if i < 0 {
 		t.Fatal("the drill line wasn't saved with the match's tips")
 	}

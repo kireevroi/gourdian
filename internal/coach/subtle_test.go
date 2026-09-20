@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
 
@@ -21,7 +21,7 @@ func twoTowers(s *gsi.State) {
 }
 
 func TestTowerAlertsTalkAboutTheTowerUnderAttack(t *testing.T) {
-	tips := play(newEngine(nil), settings(config.RoleMid), 690, 715, twoTowers)
+	tips := play(newEngine(nil), settings(dota.Mid), 690, 715, twoTowers)
 	for _, tip := range byRule(tips, "tower_defence") {
 		if strings.Contains(tip.Text, "22%") {
 			t.Errorf("reported the top tower's health for the mid tower: %q", tip.Text)
@@ -33,7 +33,7 @@ func TestTowerAlertsTalkAboutTheTowerUnderAttack(t *testing.T) {
 }
 
 func TestDiedHoldingGoldCountsTheGoldBeforeDying(t *testing.T) {
-	tips := play(newEngine(nil), settings(config.RoleCarry), 600, 620, func(s *gsi.State) {
+	tips := play(newEngine(nil), settings(dota.Carry), 600, 620, func(s *gsi.State) {
 		s.Player.Gold, s.Player.GoldReliable = 1500, 100 // 1400 unreliable while alive
 		if s.Map.ClockTime >= 610 {
 			s.Hero.Alive, s.Hero.RespawnSeconds = false, 30
@@ -45,7 +45,7 @@ func TestDiedHoldingGoldCountsTheGoldBeforeDying(t *testing.T) {
 		t.Fatalf("want the 1400 unreliable gold held before dying, got %+v", got)
 	}
 	// Dota can take the gold an update before it says the hero died, showing 0 health first.
-	tips = play(newEngine(nil), settings(config.RoleCarry), 600, 620, func(s *gsi.State) {
+	tips = play(newEngine(nil), settings(dota.Carry), 600, 620, func(s *gsi.State) {
 		s.Player.Gold, s.Player.GoldReliable = 1500, 100
 		if c := s.Map.ClockTime; c >= 610 {
 			s.Hero.Health, s.Player.Gold = 0, 800

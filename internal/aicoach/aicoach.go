@@ -13,8 +13,9 @@ import (
 	"gourdian/internal/ai"
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/matchdata"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 const liveSystemPrompt = `You are a Dota 2 coach speaking to one player during their match. Their goal is to climb in MMR. Your words appear on their screen and are read aloud, so each suggestion is one short, concrete instruction.
@@ -73,7 +74,7 @@ type History struct {
 type Context struct {
 	Profile string
 	History History
-	MMR     []stats.MMREntry
+	MMR     []model.MMREntry
 	Focus   string
 	// Hero is what is known about the hero being played, when the trainer has it.
 	Hero *HeroFacts
@@ -100,19 +101,19 @@ type Input struct {
 	Snapshot coach.Snapshot
 	Facts    coach.MatchFacts
 	Tips     []coach.Tip
-	Timeline []stats.Sample
+	Timeline []model.Sample
 }
 
 type ReviewInput struct {
 	Context
-	Match    stats.MatchSummary
+	Match    model.MatchSummary
 	Targets  map[string]int
-	Timeline []stats.Sample
+	Timeline []model.Sample
 	Warnings []string
 	Detail   *matchdata.Detail
 	// Metrics are the goal metrics the review may use, with what each measures.
 	Metrics   map[string]string
-	WeekGoals []stats.GoalProgress
+	WeekGoals []model.GoalProgress
 	// LastFocus is what the previous review told them to do, so this one can say whether
 	// it happened before asking for anything new.
 	LastFocus string
@@ -162,10 +163,8 @@ func sourceFor(position, games int, won bool) string {
 	if won {
 		kind = "professional games they won"
 	}
-	for role, n := range positionNumbers {
-		if n == position {
-			return fmt.Sprintf("as %s, from %d %s", positionName(role), games, kind)
-		}
+	if role := dota.RoleAt(position); role != "" {
+		return fmt.Sprintf("as %s, from %d %s", positionName(role), games, kind)
 	}
 	if games > 0 {
 		return fmt.Sprintf("from %d %s in every position", games, kind)
@@ -201,7 +200,7 @@ func Prompt(in Input) string {
 	w.line("Why you're being asked: %s", in.Reason)
 	w.heroFacts(in.Hero)
 	f := in.Facts
-	w.line("Role: %s. Team: %s. Clock %s (%s), %s.", roleName(in.Role), s.Team, clock(s.Clock), dayNight(s.Daytime), stage(s.Clock))
+	w.line("Role: %s. Team: %s. Clock %s (%s), %s.", dota.RoleName(in.Role, "en"), s.Team, dota.Clock(s.Clock), dayNight(s.Daytime), stage(s.Clock))
 	w.line("Kills: the player's team %d, the enemy %d.", f.TeamKills, f.EnemyKills)
 	if len(f.LostBuildings) > 0 {
 		w.line("The player's team has lost: %s.", strings.Join(f.LostBuildings, ", "))
@@ -240,7 +239,7 @@ func Prompt(in Input) string {
 	if len(f.Deaths) > 0 {
 		var at []string
 		for _, d := range f.Deaths {
-			at = append(at, clock(d))
+			at = append(at, dota.Clock(d))
 		}
 		w.line("Died at: %s.", strings.Join(at, ", "))
 	}
@@ -279,14 +278,14 @@ func Prompt(in Input) string {
 	}
 	var timers []string
 	for _, t := range s.Timers {
-		timers = append(timers, fmt.Sprintf("%s in %s", t.Label, clock(t.At-s.Clock)))
+		timers = append(timers, fmt.Sprintf("%s in %s", t.Label, dota.Clock(t.At-s.Clock)))
 	}
 	if len(timers) > 0 {
 		w.line("Upcoming: %s.", strings.Join(timers, "; "))
 	}
 	var alerts, advice []string
 	for _, t := range in.Tips {
-		line := fmt.Sprintf("[%s] %s", clock(t.Clock), t.Text)
+		line := fmt.Sprintf("[%s] %s", dota.Clock(t.Clock), t.Text)
 		if t.Rule == "ai" {
 			advice = append(advice, line)
 		} else if s.Clock-t.Clock <= 300 {
@@ -302,7 +301,7 @@ func Prompt(in Input) string {
 	if n := len(in.Timeline); n > 1 {
 		var parts []string
 		for _, x := range in.Timeline[max(0, n-6):] {
-			parts = append(parts, fmt.Sprintf("%s: %d LH, %d GPM, %d deaths", clock(x.Clock), x.LastHits, x.GPM, x.Deaths))
+			parts = append(parts, fmt.Sprintf("%s: %d LH, %d GPM, %d deaths", dota.Clock(x.Clock), x.LastHits, x.GPM, x.Deaths))
 		}
 		w.line("Recent minutes: %s.", strings.Join(parts, "; "))
 	}
@@ -317,7 +316,7 @@ func ReviewPrompt(in ReviewInput) string {
 		w.line("%s", line)
 	}
 	w.heroFacts(in.Hero)
-	w.line("Match: %s as %s (%s), %s after %s.", m.Hero, roleName(m.Role), m.Team, m.Result, clock(m.DurationSec))
+	w.line("Match: %s as %s (%s), %s after %s.", m.Hero, dota.RoleName(m.Role, "en"), m.Team, m.Result, dota.Clock(m.DurationSec))
 	w.line("Final: %d/%d/%d, %d last hits, %d denies, %d GPM, %d XPM.", m.Kills, m.Deaths, m.Assists, m.LastHits, m.Denies, m.GPM, m.XPM)
 	var checkpoints []string
 	for _, key := range []string{"5:00", "10:00", "15:00", "20:00", "30:00"} {
@@ -337,7 +336,7 @@ func ReviewPrompt(in ReviewInput) string {
 	if len(m.DeathClocks) > 0 {
 		var deaths []string
 		for _, d := range m.DeathClocks {
-			deaths = append(deaths, clock(d))
+			deaths = append(deaths, dota.Clock(d))
 		}
 		w.line("Died at: %s.", strings.Join(deaths, ", "))
 	}
@@ -349,7 +348,7 @@ func ReviewPrompt(in ReviewInput) string {
 		for i, x := range in.Timeline {
 			if i%5 == 0 || i == n-1 {
 				parts = append(parts, fmt.Sprintf("%s: %d LH, %d gold held, %d GPM, K/D/A %d/%d/%d, level %d",
-					clock(x.Clock), x.LastHits, x.Gold, x.GPM, x.Kills, x.Deaths, x.Assists, x.Level))
+					dota.Clock(x.Clock), x.LastHits, x.Gold, x.GPM, x.Kills, x.Deaths, x.Assists, x.Level))
 			}
 		}
 		w.line("Timeline: %s.", strings.Join(parts, "; "))
@@ -417,7 +416,7 @@ func writeDetail(w *writer, d *matchdata.Detail) {
 	if len(d.CoreItems) > 0 {
 		var items []string
 		for _, it := range d.CoreItems {
-			items = append(items, fmt.Sprintf("%s %s", it.Name, clock(it.Time)))
+			items = append(items, fmt.Sprintf("%s %s", it.Name, dota.Clock(it.Time)))
 		}
 		w.line("Item timings: %s.", strings.Join(items, ", "))
 	}
@@ -497,8 +496,6 @@ func withInstructions(system string, set config.AISettings, lang string) string 
 	return system
 }
 
-func roleName(role string) string { return strings.ReplaceAll(role, "_", " ") }
-
 func stage(sec int) string {
 	switch {
 	case sec < 0:
@@ -529,21 +526,11 @@ func abilityText(a coach.AbilityFact) string {
 	return text
 }
 
-var positionNumbers = map[string]int{"carry": 1, "mid": 2, "offlane": 3, "soft_support": 4, "hard_support": 5}
-
 func positionName(role string) string {
-	if n, ok := positionNumbers[role]; ok {
-		return fmt.Sprintf("%s (position %d)", roleName(role), n)
+	if n := dota.Position(role); n > 0 {
+		return fmt.Sprintf("%s (position %d)", dota.RoleName(role, "en"), n)
 	}
-	return roleName(role)
-}
-
-func clock(sec int) string {
-	sign := ""
-	if sec < 0 {
-		sign, sec = "-", -sec
-	}
-	return fmt.Sprintf("%s%d:%02d", sign, sec/60, sec%60)
+	return dota.RoleName(role, "en")
 }
 
 func dayNight(day bool) string {

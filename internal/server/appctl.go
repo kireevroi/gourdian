@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"maps"
 	"net/http"
 	"os/exec"
@@ -32,7 +31,7 @@ func (s *Server) handleAutostart(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		On bool `json:"on"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body); err != nil {
+	if err := readJSON(w, r, 1<<10, &body); err != nil {
 		http.Error(w, `send {"on": true} or {"on": false}`, http.StatusBadRequest)
 		return
 	}
@@ -90,7 +89,7 @@ func (s *Server) handleOverlayStatus(w http.ResponseWriter, r *http.Request) {
 		// HUDError is set by the Linux HUD: empty once its window is up, else why it isn't.
 		HUDError *string `json:"hud_error"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
+	if err := readJSON(w, r, 8<<10, &body); err != nil {
 		http.Error(w, "bad status", http.StatusBadRequest)
 		return
 	}
@@ -102,7 +101,7 @@ func (s *Server) handleOverlayStatus(w http.ResponseWriter, r *http.Request) {
 		s.hudError, s.hudReported = *body.HUDError, true
 	}
 	s.overlayMu.Unlock()
-	s.hub.publish("settings", s.settingsResponse())
+	s.publishSettings()
 	writeJSON(w, map[string]string{"status": "ok"})
 }
 

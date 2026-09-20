@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/hotkey"
 	"gourdian/internal/hud"
 )
@@ -283,7 +284,7 @@ func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 		case hotkeyDashboard:
 			OpenDashboard(u.opts.URL+"/", u.dashboardWindow)
 		default:
-			if i := int(wParam) - hotkeyPosition; i >= 0 && i < len(config.Roles) {
+			if i := int(wParam) - hotkeyPosition; i >= 0 && i < len(dota.Roles) {
 				u.pickPosition(i)
 			}
 		}
@@ -370,14 +371,7 @@ func (u *ui) savePosition() {
 // saveLayout applies a layout change right away and sends it to the trainer.
 func (u *ui) saveLayout(o config.OverlaySettings) {
 	u.applyLayout(o)
-	p := patch{"overlay": patch{"hud_placed": o.HUDPlaced, "hud_x": o.HUDX, "hud_y": o.HUDY, "hud_scale": o.HUDScale, "hud_background": o.HUDBackground}}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := u.api.do(ctx, "PUT", "/api/settings", p, nil); err != nil {
-			u.log.Warn("couldn't save the HUD layout", "err", err)
-		}
-	}()
+	sendLayout(u.api, u.log, o)
 }
 
 func (u *ui) toggleHUD() {
@@ -412,7 +406,7 @@ func (u *ui) setPositionKeys(on bool) {
 		return
 	}
 	u.positionKeys = on
-	for i := range config.Roles {
+	for i := range dota.Roles {
 		if on {
 			pRegisterHotKey.Call(u.hwnd, uintptr(hotkeyPosition+i), modControl|modShift|modNoRepeat, uintptr('1'+i))
 		} else {
@@ -421,16 +415,7 @@ func (u *ui) setPositionKeys(on bool) {
 	}
 }
 
-func (u *ui) pickPosition(i int) {
-	role := config.Roles[i]
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := u.api.do(ctx, "POST", "/api/role", map[string]string{"role": role}, nil); err != nil {
-			u.log.Warn("couldn't set the position", "err", err)
-		}
-	}()
-}
+func (u *ui) pickPosition(i int) { sendPosition(u.api, u.log, i) }
 
 func (u *ui) refresh() {
 	u.setPositionKeys(u.model.askingPosition())
@@ -464,7 +449,7 @@ type block struct {
 func (u *ui) draw(v View) int32 {
 	g, c := u.g, u.canvas
 	c.clear()
-	pad, gap, bar := g.px(12), g.px(4), g.px(5)
+	pad, gap, bar := g.px(hudPad), g.px(hudGap), g.px(hudBar)
 	textW := u.w - bar - 2*pad
 
 	var blocks []*block
@@ -492,12 +477,12 @@ func (u *ui) draw(v View) int32 {
 				b.height += gap
 			}
 		}
-		content += b.height + g.px(8)
+		content += b.height + g.px(hudSpacing)
 	}
 
 	total := content
 	if u.editing {
-		total = max(content+g.px(52), g.px(200))
+		total = max(content+g.px(editBottom), g.px(editMin))
 		c.fillRect(rect{0, 0, u.w, total}, colorRow, 170)
 	}
 	total = min(total, c.img.h)
@@ -509,14 +494,14 @@ func (u *ui) draw(v View) int32 {
 		if y+b.height > total {
 			break
 		}
-		c.fillRound(rect{0, y, u.w, y + b.height}, g.px(10), colorPanel, bg)
-		c.fillRect(rect{0, y + g.px(6), bar, y + b.height - g.px(6)}, b.accent, 255)
+		c.fillRound(rect{0, y, u.w, y + b.height}, g.px(hudRadius), colorPanel, bg)
+		c.fillRect(rect{0, y + g.px(hudBarInset), bar, y + b.height - g.px(hudBarInset)}, b.accent, 255)
 		ty := y + pad
 		for i, l := range b.lines {
 			c.text(l.Text, rect{bar + pad, ty, bar + pad + textW, ty + b.heights[i]}, b.font, kindColors[l.Kind], dtWordBreak, shadow)
 			ty += b.heights[i] + gap
 		}
-		y += b.height + g.px(8)
+		y += b.height + g.px(hudSpacing)
 	}
 	if u.editing {
 		u.h = total
@@ -532,16 +517,7 @@ func (u *ui) doneRect() rect {
 
 // hintFor is the edit-mode hint, shortened until it fits in width.
 func (u *ui) hintFor(width int32) string {
-	for _, s := range []string{
-		fmt.Sprintf("Drag to move · wheel: size %d%% · Ctrl+wheel: background %d%%", u.layout.HUDScale, u.layout.HUDBackground),
-		fmt.Sprintf("Drag · wheel: %d%% · Ctrl+wheel: %d%%", u.layout.HUDScale, u.layout.HUDBackground),
-		fmt.Sprintf("%d%% · %d%%", u.layout.HUDScale, u.layout.HUDBackground),
-	} {
-		if u.canvas.textWidth(s, u.fontSmall) <= width {
-			return s
-		}
-	}
-	return ""
+	return editHint(u.layout, func(s string) bool { return u.canvas.textWidth(s, u.fontSmall) <= width })
 }
 
 // overDone reports whether a WM_NCHITTEST position (screen coordinates) is on the Done button.

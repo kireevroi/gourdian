@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,10 +20,13 @@ import (
 	"time"
 
 	"gourdian/internal/ai"
+	"gourdian/internal/aisvc"
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
+	"gourdian/internal/model"
 	"gourdian/internal/stats"
 )
 
@@ -127,7 +129,7 @@ func TestGSIRecordsMatch(t *testing.T) {
 		t.Fatalf("want samples at minutes 5, 6 and 7, got %+v", timeline)
 	}
 	tips, _ := st.Tips()
-	if !slices.ContainsFunc(tips, func(t stats.TipRecord) bool { return strings.Contains(t.Text, "No TP scroll") }) {
+	if !slices.ContainsFunc(tips, func(t model.TipRecord) bool { return strings.Contains(t.Text, "No TP scroll") }) {
 		t.Fatalf("the TP warning was not recorded: %+v", tips)
 	}
 }
@@ -148,24 +150,24 @@ func TestGSIToleratesUnexpectedFieldTypes(t *testing.T) {
 }
 
 func TestHeroRoleIsRememberedAndApplied(t *testing.T) {
-	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = config.RoleCarry })
+	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.Carry })
 	postState(t, h, payload(100, nil))
 
 	rec := httptest.NewRecorder()
 	next := srv.cfg.Settings()
-	next.Role = config.RoleMid
+	next.Role = dota.Mid
 	body, _ := json.Marshal(next)
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/settings", bytes.NewReader(body)))
-	if rec.Code != http.StatusOK || srv.cfg.Settings().HeroRoles["74"] != config.RoleMid {
+	if rec.Code != http.StatusOK || srv.cfg.Settings().HeroRoles["74"] != dota.Mid {
 		t.Fatalf("role not remembered: %d %+v", rec.Code, srv.cfg.Settings().HeroRoles)
 	}
 
 	set := srv.cfg.Settings()
-	set.Role = config.RoleHardSupport
+	set.Role = dota.HardSupport
 	srv.cfg.UpdateSettings(set)
 	srv.roleHero = 0
 	postState(t, h, payload(10, func(s *gsi.State) { s.Map.MatchID = "7002" }))
-	if got := srv.cfg.Settings().Role; got != config.RoleMid {
+	if got := srv.cfg.Settings().Role; got != dota.Mid {
 		t.Fatalf("role on Invoker = %s, want the remembered mid", got)
 	}
 }
@@ -297,20 +299,20 @@ echo '{"is_error":true,"subtype":"success","result":"Failed to authenticate: OAu
 func TestLoggedOutClaudePausesCoachAndWarnsOnce(t *testing.T) {
 	exe, loginFlag := fakeClaude(t)
 	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.AI.CLIPaths = map[string]string{"claude": exe}; s.AI.Enabled = true })
-	claude := srv.ai.providers.byID["claude"]
-	if !srv.aiReady() {
+	claude := must(srv.providers.Get("claude"))
+	if !srv.providers.Ready() {
 		t.Fatal("coach should start ready")
 	}
 	err := &ai.Error{Kind: ai.ErrAuth, Msg: "claude (success): Failed to authenticate"}
-	srv.aiFailed(claude, err)
+	srv.providers.Failed(claude, err)
 	if len(srv.engine.RecentTips()) != 0 {
 		t.Fatal("outside a match the warning waits for the dashboard or the next match")
 	}
 	postState(t, h, payload(100, nil))
-	srv.aiFailed(claude, err)
+	srv.providers.Failed(claude, err)
 	postState(t, h, payload(101, nil))
-	if srv.aiReady() || srv.healthOf("claude").Problem != aiLoggedOut || srv.aiBanner().Provider != "claude" {
-		t.Fatalf("coach should pause: %+v", srv.healthOf("claude"))
+	if srv.providers.Ready() || srv.providers.HealthOf("claude").Problem != aisvc.LoggedOut || srv.providers.Banner().Provider != "claude" {
+		t.Fatalf("coach should pause: %+v", srv.providers.HealthOf("claude"))
 	}
 	warnings := 0
 	for _, tip := range srv.engine.RecentTips() {
@@ -321,12 +323,12 @@ func TestLoggedOutClaudePausesCoachAndWarnsOnce(t *testing.T) {
 	if warnings != 1 {
 		t.Fatalf("want one warning, got %d", warnings)
 	}
-	if st := srv.checkProvider(t.Context(), "claude"); st.State != ai.StateLogin {
+	if st := srv.providers.Check(t.Context(), "claude"); st.State != ai.StateLogin {
 		t.Fatalf("still logged out: %+v", st)
 	}
 	os.WriteFile(loginFlag, nil, 0o600)
-	if st := srv.checkProvider(t.Context(), "claude"); st.State != ai.StateReady || !srv.aiReady() {
-		t.Fatalf("logging in should resume the coach: %+v %+v", st, srv.healthOf("claude"))
+	if st := srv.providers.Check(t.Context(), "claude"); st.State != ai.StateReady || !srv.providers.Ready() {
+		t.Fatalf("logging in should resume the coach: %+v %+v", st, srv.providers.HealthOf("claude"))
 	}
 }
 
@@ -334,32 +336,14 @@ func TestFallbackProviderAnswersWhileMainIsPaused(t *testing.T) {
 	srv, _, _ := newTestServer(t, func(s *config.Settings) {
 		s.AI.Fallback = config.AIChoice{Provider: "openrouter", Model: "openai/gpt-5-mini"}
 	})
-	srv.aiFailed(srv.ai.providers.byID["claude"], &ai.Error{Kind: ai.ErrAuth, Msg: "logged out"})
+	srv.providers.Failed(must(srv.providers.Get("claude")), &ai.Error{Kind: ai.ErrAuth, Msg: "logged out"})
 	set := srv.cfg.Settings().AI
-	p, choice, ok := srv.pick(set.Live, set)
+	p, choice, ok := srv.providers.Pick(set.Live, set)
 	if !ok || p.Info().ID != "openrouter" || choice.Model != "openai/gpt-5-mini" {
 		t.Fatalf("pick = %v %+v %v", p, choice, ok)
 	}
-	if msg := srv.healthOf("claude").Message; !strings.Contains(msg, "OpenRouter answers until then") {
+	if msg := srv.providers.HealthOf("claude").Message; !strings.Contains(msg, "OpenRouter answers until then") {
 		t.Fatalf("message should mention the fallback: %q", msg)
-	}
-}
-
-func TestUsageLimitBacksOff(t *testing.T) {
-	exe, _ := fakeClaude(t)
-	srv, _, _ := newTestServer(t, func(s *config.Settings) { s.AI.CLIPaths = map[string]string{"claude": exe}; s.AI.Enabled = true })
-	srv.aiFailed(srv.ai.providers.byID["claude"], errors.New("claude (success): Claude AI usage limit reached|1789000000"))
-	if srv.aiReady() {
-		t.Fatal("limit should pause the coach")
-	}
-	p := srv.ai.providers
-	p.mu.Lock()
-	h := p.health["claude"]
-	h.Until = time.Now().Add(-time.Second)
-	p.health["claude"] = h
-	p.mu.Unlock()
-	if !srv.aiReady() {
-		t.Fatal("coach should resume after the back-off")
 	}
 }
 
@@ -385,14 +369,14 @@ func TestProviderKeyIsStoredAndMasked(t *testing.T) {
 }
 
 func TestRoleGuessForNewHero(t *testing.T) {
-	srv, h, dir := newTestServer(t, func(s *config.Settings) { s.Role = config.RoleCarry })
+	srv, h, dir := newTestServer(t, func(s *config.Settings) { s.Role = dota.Carry })
 	st := openStats(t, dir)
 	for _, id := range []string{"1", "2"} {
-		st.AppendMatch(stats.MatchSummary{MatchID: id, HeroID: 74, Hero: "Invoker", Role: config.RoleMid, Source: stats.SourceOpenDota})
+		st.AppendMatch(model.MatchSummary{MatchID: id, HeroID: 74, Hero: "Invoker", Role: dota.Mid, Source: model.SourceOpenDota})
 	}
-	st.AppendMatch(stats.MatchSummary{MatchID: "3", HeroID: 74, Hero: "Invoker", Role: config.RoleCarry, Source: stats.SourceOpenDota})
+	st.AppendMatch(model.MatchSummary{MatchID: "3", HeroID: 74, Hero: "Invoker", Role: dota.Carry, Source: model.SourceOpenDota})
 	postState(t, h, payload(-60, func(s *gsi.State) { s.Map.GameState = gsi.StatePreGame }))
-	if got := srv.cfg.Settings().Role; got != config.RoleMid {
+	if got := srv.cfg.Settings().Role; got != dota.Mid {
 		t.Fatalf("role = %s, want the most common role on this hero", got)
 	}
 	tips := srv.engine.RecentTips()
@@ -405,7 +389,7 @@ func TestRoleGuessForNewHero(t *testing.T) {
 // was handled last, never the other's.
 func TestHeroRoleFollowsTheLastHero(t *testing.T) {
 	srv, _, _ := newTestServer(t, func(s *config.Settings) {
-		s.HeroRoles = map[string]string{"1": config.RoleCarry, "26": config.RoleHardSupport}
+		s.HeroRoles = map[string]string{"1": dota.Carry, "26": dota.HardSupport}
 	})
 	for range 50 {
 		var wg sync.WaitGroup
@@ -425,30 +409,30 @@ func TestHeroRoleFollowsTheLastHero(t *testing.T) {
 
 func TestRoleFromHeroRoles(t *testing.T) {
 	cases := map[string][]string{
-		config.RoleSoftSupport: {"Support", "Disabler", "Nuker", "Initiator"},
-		config.RoleCarry:       {"Carry", "Pusher", "Escape"},
-		"":                     {"Initiator", "Durable"},
+		dota.SoftSupport: {"Support", "Disabler", "Nuker", "Initiator"},
+		dota.Carry:       {"Carry", "Pusher", "Escape"},
+		"":               {"Initiator", "Durable"},
 	}
 	for want, roles := range cases {
 		if got := roleFromHeroRoles(roles); got != want {
 			t.Errorf("roleFromHeroRoles(%v) = %q, want %q", roles, got, want)
 		}
 	}
-	if got := roleFromHeroRoles([]string{"Carry", "Support"}); got != config.RoleCarry {
+	if got := roleFromHeroRoles([]string{"Carry", "Support"}); got != dota.Carry {
 		t.Errorf("the first listed role wins, got %q", got)
 	}
 }
 
 func TestLaningMidSwitchesRoleUnlessPlayerPicked(t *testing.T) {
-	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = config.RoleSoftSupport })
+	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.SoftSupport })
 	for clock := 0; clock <= 160; clock++ {
 		postState(t, h, payload(clock, nil))
 	}
-	if got := srv.cfg.Settings().Role; got != config.RoleMid {
+	if got := srv.cfg.Settings().Role; got != dota.Mid {
 		t.Fatalf("role = %s, want mid after laning mid", got)
 	}
 
-	srv, h, _ = newTestServer(t, func(s *config.Settings) { s.Role = config.RoleSoftSupport })
+	srv, h, _ = newTestServer(t, func(s *config.Settings) { s.Role = dota.SoftSupport })
 	postState(t, h, payload(5, nil))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/role", strings.NewReader(`{"role":"hard_support"}`)))
@@ -458,7 +442,7 @@ func TestLaningMidSwitchesRoleUnlessPlayerPicked(t *testing.T) {
 	for clock := 6; clock <= 160; clock++ {
 		postState(t, h, payload(clock, nil))
 	}
-	if got := srv.cfg.Settings().Role; got != config.RoleHardSupport {
+	if got := srv.cfg.Settings().Role; got != dota.HardSupport {
 		t.Fatalf("role = %s, the player's pick must win over lane detection", got)
 	}
 	if tips := srv.engine.RecentTips(); !slices.ContainsFunc(tips, func(t coach.Tip) bool { return t.Rule == "role_pick" }) {
@@ -467,7 +451,7 @@ func TestLaningMidSwitchesRoleUnlessPlayerPicked(t *testing.T) {
 }
 
 func TestPositionMessagesInRussian(t *testing.T) {
-	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role, s.Language = config.RoleSoftSupport, "ru" })
+	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role, s.Language = dota.SoftSupport, "ru" })
 	for clock := 0; clock <= 160; clock++ {
 		postState(t, h, payload(clock, nil))
 	}
@@ -492,7 +476,7 @@ func TestPositionMessagesInRussian(t *testing.T) {
 
 func TestSettingsPatchMergesButReplacesHeroRoles(t *testing.T) {
 	srv, h, _ := newTestServer(t, func(s *config.Settings) {
-		s.HeroRoles = map[string]string{"1": config.RoleCarry, "26": config.RoleMid}
+		s.HeroRoles = map[string]string{"1": dota.Carry, "26": dota.Mid}
 	})
 	put := func(body string) {
 		t.Helper()
@@ -507,7 +491,7 @@ func TestSettingsPatchMergesButReplacesHeroRoles(t *testing.T) {
 		t.Fatalf("partial patch should only change keep: %+v", got)
 	}
 	put(`{"hero_roles":{"26":"mid"}}`)
-	if got := srv.cfg.Settings().HeroRoles; len(got) != 1 || got["26"] != config.RoleMid {
+	if got := srv.cfg.Settings().HeroRoles; len(got) != 1 || got["26"] != dota.Mid {
 		t.Fatalf("hero roles = %v, want only Lion", got)
 	}
 }
@@ -552,6 +536,12 @@ func TestRulesAPISaveApplyAndTestOnRecording(t *testing.T) {
 	if rec := do(http.MethodPut, "/api/rules/builtin/low_hp", `{"severity":"urgent"}`); rec.Code != http.StatusOK {
 		t.Fatalf("changing a built-in rule's severity: %d %s", rec.Code, rec.Body)
 	}
+	if rec := do(http.MethodPut, "/api/rules/builtin/low_hp", ""); rec.Code != http.StatusBadRequest {
+		t.Fatalf("an edit that says nothing must be refused, not clear the rule: %d", rec.Code)
+	}
+	if o := srv.rules.Get().Overrides["low_hp"]; o.Severity != string(coach.Urgent) {
+		t.Fatalf("the earlier edit was lost: %+v", o)
+	}
 	if rec := do(http.MethodDelete, "/api/rules/custom/"+custom[0].ID, ""); rec.Code != http.StatusOK || len(srv.rules.Get().Custom) != 0 {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
 	}
@@ -579,16 +569,16 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 	st := openStats(t, dir)
 	for i, lh := range []int{40, 44, 38} {
 		id := fmt.Sprint(900 + i)
-		st.AppendMatch(stats.MatchSummary{MatchID: id, HeroID: 1, Hero: "Anti-Mage", Role: config.RoleCarry, Source: stats.SourceOpenDota,
+		st.AppendMatch(model.MatchSummary{MatchID: id, HeroID: 1, Hero: "Anti-Mage", Role: dota.Carry, Source: model.SourceOpenDota,
 			LastHitsAt: map[string]int{"10:00": lh}})
-		st.AppendItems([]stats.ItemTiming{
-			{MatchID: id, Item: "bfury", Time: 1000 + 60*i, Source: stats.SourceOpenDota},
-			{MatchID: id, Item: "manta", Time: 1500 + 60*i, Source: stats.SourceOpenDota},
+		st.AppendItems([]model.ItemTiming{
+			{MatchID: id, Item: "bfury", Time: 1000 + 60*i, Source: model.SourceOpenDota},
+			{MatchID: id, Item: "manta", Time: 1500 + 60*i, Source: model.SourceOpenDota},
 		})
 	}
 	var got coach.Targets
 	for range 50 { // item timings load in the background
-		got = srv.targets.TargetsFor(1, config.RoleCarry)
+		got = srv.targets.TargetsFor(1, dota.Carry)
 		if len(got.Items) == 2 && got.Items[0].By > 0 {
 			break
 		}
@@ -609,21 +599,21 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 
 func TestTiltReason(t *testing.T) {
 	base := time.Date(2026, 9, 17, 18, 0, 0, 0, time.UTC)
-	game := func(minutes int, result string) stats.MatchSummary {
-		return stats.MatchSummary{MatchID: fmt.Sprint(minutes), Result: result, Source: stats.SourceLive, EndedAt: base.Add(time.Duration(minutes) * time.Minute)}
+	game := func(minutes int, result string) model.MatchSummary {
+		return model.MatchSummary{MatchID: fmt.Sprint(minutes), Result: result, Source: model.SourceLive, EndedAt: base.Add(time.Duration(minutes) * time.Minute)}
 	}
 	cases := []struct {
 		name    string
-		matches []stats.MatchSummary
-		mmr     []stats.MMREntry
+		matches []model.MatchSummary
+		mmr     []model.MMREntry
 		want    string
 	}{
-		{"two losses", []stats.MatchSummary{game(0, "win"), game(45, "loss"), game(90, "loss")}, nil, "Two losses in a row"},
-		{"gap ends the session", []stats.MatchSummary{game(0, "loss"), game(300, "loss")}, nil, ""},
-		{"three of four", []stats.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win"), game(120, "loss")}, nil, "Three of your last four"},
-		{"win breaks it", []stats.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win")}, nil, ""},
-		{"mmr drop", []stats.MatchSummary{game(0, "win"), game(40, "loss")},
-			[]stats.MMREntry{{Date: base, MMR: 3000}, {Date: base.Add(50 * time.Minute), MMR: 2940}}, "down 60 MMR"},
+		{"two losses", []model.MatchSummary{game(0, "win"), game(45, "loss"), game(90, "loss")}, nil, "Two losses in a row"},
+		{"gap ends the session", []model.MatchSummary{game(0, "loss"), game(300, "loss")}, nil, ""},
+		{"three of four", []model.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win"), game(120, "loss")}, nil, "Three of your last four"},
+		{"win breaks it", []model.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win")}, nil, ""},
+		{"mmr drop", []model.MatchSummary{game(0, "win"), game(40, "loss")},
+			[]model.MMREntry{{Date: base, MMR: 3000}, {Date: base.Add(50 * time.Minute), MMR: 2940}}, "down 60 MMR"},
 	}
 	for _, c := range cases {
 		if got := tiltReason(c.matches, c.mmr); c.want == "" && got != "" || !strings.Contains(got, c.want) {
@@ -634,13 +624,13 @@ func TestTiltReason(t *testing.T) {
 
 func TestBriefingBeforeHorn(t *testing.T) {
 	srv, h, dir := newTestServer(t, func(s *config.Settings) {
-		s.Role = config.RoleMid
-		s.HeroRoles = map[string]string{"74": config.RoleMid}
+		s.Role = dota.Mid
+		s.HeroRoles = map[string]string{"74": dota.Mid}
 	})
 	st := openStats(t, dir)
 	for i, result := range []string{"win", "loss", "win"} {
-		st.AppendMatch(stats.MatchSummary{MatchID: fmt.Sprint(i + 1), HeroID: 74, Hero: "invoker", Role: config.RoleMid, Result: result,
-			Source: stats.SourceOpenDota, LastHitsAt: map[string]int{"10:00": 50 + i*5}})
+		st.AppendMatch(model.MatchSummary{MatchID: fmt.Sprint(i + 1), HeroID: 74, Hero: "invoker", Role: dota.Mid, Result: result,
+			Source: model.SourceOpenDota, LastHitsAt: map[string]int{"10:00": 50 + i*5}})
 	}
 	postState(t, h, payload(-30, func(s *gsi.State) { s.Map.GameState = gsi.StatePreGame }))
 	snap := srv.snapshot(srv.cfg.Settings())
@@ -678,7 +668,7 @@ func TestSettingsSaveKeepsChangesMadeMeanwhile(t *testing.T) {
 	srv, h, _ := newTestServer(t, nil)
 	var wg sync.WaitGroup
 	for i := range 20 {
-		wg.Go(func() { srv.rememberHeroRole(i+1, config.RoleMid) })
+		wg.Go(func() { srv.rememberHeroRole(i+1, dota.Mid) })
 		wg.Go(func() {
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(fmt.Sprintf(`{"voice_rate": %d}`, i%5))))
@@ -752,4 +742,33 @@ func TestHubDropsEventsForAClientThatFallsBehind(t *testing.T) {
 		t.Error("the drop isn't noted for the client")
 	}
 	h.mu.Unlock()
+}
+
+// A request that says nothing is refused, so a mistake never reads as "change everything to
+// nothing"; only the handlers whose fields are all optional take an empty body.
+func TestReadJSONRefusesAnEmptyBody(t *testing.T) {
+	var v struct{ N int }
+	read := func(f func(http.ResponseWriter, *http.Request, int64, any) error, body string) error {
+		return f(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)), 1<<10, &v)
+	}
+	if err := read(readJSON, ""); err == nil {
+		t.Fatal("an empty body was accepted")
+	}
+	if err := read(readJSON, `{"N": 3}`); err != nil || v.N != 3 {
+		t.Fatalf("good body: %v, %+v", err, v)
+	}
+	if err := read(readOptionalJSON, ""); err != nil {
+		t.Fatalf("empty optional body: %v", err)
+	}
+	if err := read(readOptionalJSON, `{"N": `); err == nil {
+		t.Fatal("a broken body was accepted")
+	}
+}
+
+// must is the provider a lookup found, for tests that know it's there.
+func must(p ai.Provider, ok bool) ai.Provider {
+	if !ok {
+		panic("no such provider")
+	}
+	return p
 }

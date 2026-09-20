@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 
 	"gourdian/internal/config"
 	"gourdian/internal/matchdata"
+	"gourdian/internal/model"
 	"gourdian/internal/stats"
 )
 
@@ -21,7 +21,7 @@ const (
 	importTimeout = 30 * time.Minute
 )
 
-func isOpenDotaMatch(m stats.MatchSummary) bool {
+func isOpenDotaMatch(m model.MatchSummary) bool {
 	_, err := strconv.ParseInt(m.MatchID, 10, 64)
 	return err == nil && m.Real() && m.MatchID != "0"
 }
@@ -60,7 +60,7 @@ func (s *Server) checkRanked(matchID string) {
 // already marked stays ranked.
 func (s *Server) saveRanked(matchID string, lobbyType int) {
 	ranked := lobbyType == rankedLobby
-	if err := s.stats.UpdateMatch(matchID, func(row *stats.MatchSummary) {
+	if err := s.stats.UpdateMatch(matchID, func(row *model.MatchSummary) {
 		row.Ranked = row.Ranked || ranked
 		ranked = row.Ranked
 	}); err != nil {
@@ -69,13 +69,13 @@ func (s *Server) saveRanked(matchID string, lobbyType int) {
 	s.confirmRanked(matchID, ranked)
 }
 
-func (s *Server) afterMatch(m stats.MatchSummary, set config.Settings) {
+func (s *Server) afterMatch(m model.MatchSummary, set config.Settings) {
 	if !isOpenDotaMatch(m) {
 		s.reviewMatch(m, set, false, nil)
 		return
 	}
 	reviewing := set.AI.Review
-	if _, _, ok := s.pick(set.AI.Reviews, set.AI); !ok {
+	if _, _, ok := s.providers.Pick(set.AI.Reviews, set.AI); !ok {
 		reviewing = false
 	}
 	status := func(waited time.Duration) {
@@ -123,7 +123,7 @@ func (s *Server) resumePending() {
 		}
 	}
 	for _, m := range matches {
-		if m.Source == stats.SourceLive && !reviewed[m.MatchID] && time.Since(m.EndedAt) < resumeWithin && isOpenDotaMatch(m) {
+		if m.Source == model.SourceLive && !reviewed[m.MatchID] && time.Since(m.EndedAt) < resumeWithin && isOpenDotaMatch(m) {
 			s.log.Info("resuming match data and review", "match", m.MatchID)
 			s.afterMatch(m, s.cfg.Settings())
 		}
@@ -165,7 +165,10 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Count int `json:"count"`
 	}
-	json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body)
+	if err := readOptionalJSON(w, r, 1<<10, &body); err != nil {
+		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	count := min(max(body.Count, 1), 100)
 	if body.Count == 0 {
 		count = 50

@@ -179,33 +179,11 @@ func (r *recorder) close() error {
 	return err
 }
 
-// closeWait is how long Close waits for background work to stop once it's told to.
-const closeWait = 3 * time.Second
-
-// Close stops background work and waits for it (up to closeWait), then stops recording.
-func (s *Server) Close() error {
-	s.tasksMu.Lock()
-	s.closing = true
-	s.tasksMu.Unlock()
-	s.cancel()
-	done := make(chan struct{})
-	go func() {
-		s.tasks.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(closeWait):
-		s.log.Warn("background work still running at exit")
-	}
-	return s.StopRecording()
-}
-
 func (s *Server) handleRecording(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		On bool `json:"on"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body); err != nil {
+	if err := readJSON(w, r, 1<<10, &body); err != nil {
 		http.Error(w, `send {"on": true} or {"on": false}`, http.StatusBadRequest)
 		return
 	}
@@ -222,4 +200,16 @@ func (s *Server) handleRecording(w http.ResponseWriter, r *http.Request) {
 	resp := s.settingsResponse()
 	s.hub.publish("settings", resp)
 	writeJSON(w, resp)
+}
+
+func (s *Server) handleRecordings(w http.ResponseWriter, r *http.Request) {
+	files, _ := filepath.Glob(filepath.Join(s.recordingsDir(), "*.jsonl*"))
+	var out []recordingInfo
+	for _, f := range files {
+		if fi, err := os.Stat(f); err == nil && fi.Size() > 100 {
+			out = append(out, recordingInfo{Name: filepath.Base(f), Size: fi.Size(), Modified: fi.ModTime()})
+		}
+	}
+	slices.SortFunc(out, func(a, b recordingInfo) int { return b.Modified.Compare(a.Modified) })
+	writeJSON(w, out)
 }

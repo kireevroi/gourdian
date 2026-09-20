@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
 )
@@ -25,7 +26,7 @@ func readyHeal(c *Ctx) string {
 
 func spendableGold(c *Ctx) int {
 	h := c.S.Hero
-	if isCore(c.Settings.Role) && c.Clock >= c.T.BuybackFrom && h.BuybackCooldown == 0 {
+	if dota.Core(c.Settings.Role) && c.Clock >= c.T.BuybackFrom && h.BuybackCooldown == 0 {
 		return c.S.Player.Gold - h.BuybackCost
 	}
 	return c.S.Player.Gold

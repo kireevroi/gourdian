@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
 
@@ -114,7 +115,7 @@ func (r RuleSpec) Validate() error {
 		return errors.New("times can't be negative")
 	}
 	for _, role := range r.Roles {
-		if !slices.Contains(config.Roles, role) {
+		if !slices.Contains(dota.Roles, role) {
 			return fmt.Errorf("unknown position %q", role)
 		}
 	}
@@ -210,7 +211,7 @@ func (c *Ctx) runSpec(spec *RuleSpec) {
 		}
 		// GSI updates about once a second, so a 10-second window can't be missed.
 		if fire := at + w.After; c.Clock >= fire && c.Clock < fire+10 && c.conditions(spec) {
-			c.fireSpec(spec, fmt.Sprintf("after@%d", fire), map[string]string{"at": clockStr(fire), "since": strconv.Itoa(c.Clock - at)})
+			c.fireSpec(spec, fmt.Sprintf("after@%d", fire), map[string]string{"at": dota.Clock(fire), "since": strconv.Itoa(c.Clock - at)})
 		}
 	case WhenSchedule:
 		at, ok := nextPeriodic(c.Clock+w.Lead, w.First, w.Every)
@@ -218,7 +219,7 @@ func (c *Ctx) runSpec(spec *RuleSpec) {
 			at, ok = w.First, true
 		}
 		if ok && (w.Until == 0 || at <= w.Until) && c.Clock >= at-w.Lead && c.Clock < at-w.Lead+10 && c.conditions(spec) {
-			c.fireSpec(spec, fmt.Sprintf("at@%d", at), map[string]string{"at": clockStr(at), "in": strconv.Itoa(at - c.Clock)})
+			c.fireSpec(spec, fmt.Sprintf("at@%d", at), map[string]string{"at": dota.Clock(at), "in": strconv.Itoa(at - c.Clock)})
 		}
 	}
 }
@@ -364,7 +365,7 @@ func formatField(c *Ctx, f *Field, arg string) string {
 	case "number":
 		v := f.num(c, arg)
 		if f.Unit == "clock" {
-			return clockStr(int(v))
+			return dota.Clock(int(v))
 		}
 		return strconv.FormatFloat(v, 'f', -1, 64)
 	case "bool":

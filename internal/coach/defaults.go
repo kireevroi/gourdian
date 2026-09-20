@@ -1,8 +1,6 @@
 package coach
 
-import (
-	"gourdian/internal/config"
-)
+import "gourdian/internal/dota"
 
 // laningEnds is 10:00, when lanes break up and timed reminders give way to ones about where you are.
 const laningEnds = 600
@@ -20,7 +18,7 @@ func DefaultSpec(id string) (RuleSpec, bool) {
 // DefaultSpecs are the built-in rules, written the same way the player writes their own so
 // every part of them can be edited. The IDs match the older Go rules, keeping habit counts.
 func DefaultSpecs(lang string) []RuleSpec {
-	t := config.DefaultTimings()
+	t := dota.DefaultTimings()
 	specs := []RuleSpec{
 		{
 			ID: "role_check", Name: "Say which position you're coached as", Category: "focus",
@@ -128,19 +126,19 @@ func DefaultSpecs(lang string) []RuleSpec {
 		},
 		{
 			ID: "runes", Name: "Bounty rune spawns", Category: "timing",
-			Roles: []string{config.RoleMid, config.RoleSoftSupport, config.RoleHardSupport},
+			Roles: []string{dota.Mid, dota.SoftSupport, dota.HardSupport},
 			When:  Trigger{Type: WhenSchedule, First: 0, Every: t.BountyRuneEvery, Lead: 15},
 			Then:  AlertSpec{Text: "Bounty runes spawn in {in}s ({at})", Speech: "Bounty runes in {in} seconds", Severity: "info"},
 		},
 		{
 			ID: "water_runes", Name: "Water rune spawns", Category: "timing",
-			Roles: []string{config.RoleMid, config.RoleSoftSupport, config.RoleHardSupport},
+			Roles: []string{dota.Mid, dota.SoftSupport, dota.HardSupport},
 			When:  Trigger{Type: WhenSchedule, First: t.WaterRunes[0], Every: t.WaterRunes[0], Until: t.WaterRunes[len(t.WaterRunes)-1], Lead: 15},
 			Then:  AlertSpec{Text: "Water runes spawn in {in}s ({at})", Speech: "Water runes in {in} seconds", Severity: "info"},
 		},
 		{
 			ID: "power_runes", Name: "Power rune spawns while laning", Category: "timing",
-			Roles: []string{config.RoleMid},
+			Roles: []string{dota.Mid},
 			When:  Trigger{Type: WhenSchedule, First: t.PowerRuneFirst, Every: t.PowerRuneEvery, Until: laningEnds - 1, Lead: 15},
 			Then:  AlertSpec{Text: "Power runes spawn in {in}s ({at})", Speech: "Power runes in {in} seconds", Severity: "info"},
 		},
@@ -156,7 +154,7 @@ func DefaultSpecs(lang string) []RuleSpec {
 		},
 		{
 			ID: "wisdom_rune", Name: "Shrine of Wisdom activates", Category: "timing",
-			Roles: []string{config.RoleOfflane, config.RoleSoftSupport, config.RoleHardSupport},
+			Roles: []string{dota.Offlane, dota.SoftSupport, dota.HardSupport},
 			When:  Trigger{Type: WhenSchedule, First: t.WisdomRuneEvery, Every: t.WisdomRuneEvery, Lead: 30},
 			Then: AlertSpec{Text: "Shrines of Wisdom activate in {in}s ({at}). Stand in yours for 3 seconds; an enemy in it reverses the countdown",
 				Speech: "Wisdom shrine in {in} seconds", Severity: "info"},

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"gourdian/internal/buildinfo"
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 )
 
@@ -18,9 +18,6 @@ type Source struct {
 	Short string `json:"short,omitempty"`
 }
 
-// proDays is how far back the pro games behind builds and skill orders go.
-const proDays = 120
-
 type sourceWords struct{ lang string }
 
 // f formats the English or the Russian; Russian formats reorder arguments with %[n]d.
@@ -32,15 +29,15 @@ func (w sourceWords) f(en, ru string, args ...any) string {
 }
 
 func (w sourceWords) position(pos int) string {
-	return w.f("position %d (%s)", "позиция %d (%s)", pos, RoleName(positionRoles[pos], w.lang))
+	return w.f("position %d (%s)", "позиция %d (%s)", pos, dota.RoleName(dota.RoleAt(pos), w.lang))
 }
 
 func buildSource(b *dotadata.Build, hero, role string, w sourceWords) Source {
 	src := Source{ID: "build", What: w.f("Item build", "Сборка предметов")}
-	pos := dotadata.Positions[role]
+	pos := dota.Position(role)
 	where, short := w.f("in every position", " на всех позициях"), w.f("all positions", "все позиции")
 	if b.Position > 0 {
-		where, short = w.f("as %s", ", %s,", w.position(b.Position)), RoleName(positionRoles[b.Position], w.lang)
+		where, short = w.f("as %s", ", %s,", w.position(b.Position)), dota.RoleName(dota.RoleAt(b.Position), w.lang)
 	}
 	var notes []string
 	switch {
@@ -49,29 +46,29 @@ func buildSource(b *dotadata.Build, hero, role string, w sourceWords) Source {
 			"OpenDota: покупки про-игроков на %s в последних про-матчах (до 100), на всех позициях, победы и поражения.", hero)
 		src.Short = w.f("all positions, recent pro games", "все позиции, последние про-матчи")
 		if pos > 0 && !b.Loading {
-			notes = append(notes, w.f("Pros won fewer than 12 games with it in the last %d days.",
-				"За %d дней про-игроки выиграли на нём меньше 12 матчей.", proDays))
+			notes = append(notes, w.f("Pros won fewer than %d games with it in the last %d days.",
+				"За %[2]d дней про-игроки выиграли на нём меньше %[1]d матчей.", dotadata.MinProGames, dotadata.ProDays))
 		}
 	case b.Won:
 		src.From = w.f("OpenDota: what pros bought on %s %s in the %d games they won over the last %d days.",
-			"OpenDota: покупки про-игроков на %[1]s%[2]s в выигранных матчах за последние %[4]d дней, матчей: %[3]d.", hero, where, b.Games, proDays)
+			"OpenDota: покупки про-игроков на %[1]s%[2]s в выигранных матчах за последние %[4]d дней, матчей: %[3]d.", hero, where, b.Games, dotadata.ProDays)
 		src.Short = w.f("%s, %d won pro games", "%s, побед про: %d", short, b.Games)
 	default:
 		src.From = w.f("OpenDota: what pros bought on %s %s in all %d of their games there over the last %d days, won or lost.",
-			"OpenDota: покупки про-игроков на %[1]s%[2]s во всех их матчах за последние %[4]d дней, победы и поражения, матчей: %[3]d.", hero, where, b.Games, proDays)
+			"OpenDota: покупки про-игроков на %[1]s%[2]s во всех их матчах за последние %[4]d дней, победы и поражения, матчей: %[3]d.", hero, where, b.Games, dotadata.ProDays)
 		src.Short = w.f("%s, %d pro games", "%s, про-матчей: %d", short, b.Games)
 	}
 	switch {
 	case b.Position == 0 && b.Games > 0 && pos > 0 && !b.Loading:
-		notes = append(notes, w.f("Pros played it as %s in fewer than 12 games.", "На позиции «%s» у про-игроков меньше 12 матчей.", RoleName(role, w.lang)))
+		notes = append(notes, w.f("Pros played it as %s in fewer than %d games.", "На позиции «%s» у про-игроков меньше %d матчей.", dota.RoleName(role, w.lang), dotadata.MinProGames))
 	case b.Position > 0 && !b.Won:
-		notes = append(notes, w.f("They won fewer than 12 of them, too few for a build from wins alone.",
-			"Побед среди них меньше 12 — слишком мало для сборки только по победам."))
+		notes = append(notes, w.f("They won fewer than %d of them, too few for a build from wins alone.",
+			"Побед среди них меньше %d — слишком мало для сборки только по победам.", dotadata.MinProGames))
 	}
 	notes = append(notes, w.f("Items are grouped by when they were bought (before the horn, before 10:00, before 25:00, later) and listed by how many of those games had them.",
 		"Предметы разбиты по времени покупки (до начала, до 10:00, до 25:00, позже) и отсортированы по тому, в скольких матчах их купили."))
 	if b.Loading && pos > 0 {
-		notes = append(notes, w.f("The build for %s is still loading.", "Сборка для позиции «%s» ещё загружается.", RoleName(role, w.lang)))
+		notes = append(notes, w.f("The build for %s is still loading.", "Сборка для позиции «%s» ещё загружается.", dota.RoleName(role, w.lang)))
 		src.Short += w.f(" · loading", " · загрузка")
 	}
 	src.From += " " + strings.Join(notes, " ")
@@ -81,8 +78,9 @@ func buildSource(b *dotadata.Build, hero, role string, w sourceWords) Source {
 func skillsSource(b *dotadata.SkillBuild, hero, role string, w sourceWords) Source {
 	src := Source{ID: "skills", What: w.f("Skill order", "Порядок прокачки"), Short: skillSource(b, w.lang)}
 	if len(b.Order) == 0 {
-		src.From = w.f("No pro skill order: pros played %s in fewer than 12 games over the last %d days, so the skill point reminder just says to level up.",
-			"Порядка прокачки нет: за %[2]d дней у про-игроков меньше 12 матчей на %[1]s, поэтому напоминание просто просит прокачаться.", hero, proDays)
+		src.From = w.f("No pro skill order: pros played %[1]s in fewer than %[3]d games over the last %[2]d days, so the skill point reminder just says to level up.",
+			"Порядка прокачки нет: за %[2]d дней у про-игроков меньше %[3]d матчей на %[1]s, поэтому напоминание просто просит прокачаться.",
+			hero, dotadata.ProDays, dotadata.MinProGames)
 		return src
 	}
 	games := w.f("pro games, won or lost", "матчей про-игроков, победы и поражения")
@@ -92,11 +90,11 @@ func skillsSource(b *dotadata.SkillBuild, hero, role string, w sourceWords) Sour
 	if b.Position > 0 {
 		src.From = w.f("OpenDota: skill orders from the %d most recent %s on %s as %s, over the last %d days.",
 			"OpenDota: порядок прокачки из последних %[2]s на %[3]s, %[4]s, за %[5]d дней, матчей: %[1]d.",
-			b.Games, games, hero, w.position(b.Position), proDays)
+			b.Games, games, hero, w.position(b.Position), dotadata.ProDays)
 	} else {
 		src.From = w.f("OpenDota: skill orders from the %d most recent %s on %s in every position, over the last %d days, because too few were as %s.",
 			"OpenDota: порядок прокачки из последних %[2]s на %[3]s на всех позициях за %[4]d дней, матчей: %[1]d — на позиции «%[5]s» их слишком мало.",
-			b.Games, games, hero, proDays, RoleName(role, w.lang))
+			b.Games, games, hero, dotadata.ProDays, dota.RoleName(role, w.lang))
 	}
 	src.From += " " + w.f("Each point is the ability most of them took there, and the next one is worked out from your own ability levels.",
 		"На каждом уровне — способность, которую взяло большинство, а следующая считается от ваших текущих уровней.")
@@ -106,21 +104,21 @@ func skillsSource(b *dotadata.SkillBuild, hero, role string, w sourceWords) Sour
 func lastHitSource(t Targets, hero, role string, w sourceWords) Source {
 	src := Source{ID: "last_hits", What: w.f("Last-hit targets", "Цели по добиваниям")}
 	if t.Games > 0 {
-		src.From = w.f("Your own games: 10%% above your median at each checkpoint over your last %d games on %s as %s. Checkpoints with fewer than 3 of your games use the built-in targets.",
-			"Ваши матчи: на 10%% выше вашей медианы на каждой отметке за последние матчи на %[2]s (%[3]s), матчей: %[1]d. Где ваших матчей меньше 3, цели встроенные.",
-			t.Games, hero, RoleName(role, w.lang))
-		src.Short = w.f("your %d games +10%%", "ваши матчи: %d, +10%%", t.Games)
+		src.From = w.f("Your own games: %[4]d%% above your median at each checkpoint over your last %[1]d games on %[2]s as %[3]s. Checkpoints with fewer than %[5]d of your games use the built-in targets.",
+			"Ваши матчи: на %[4]d%% выше вашей медианы на каждой отметке за последние матчи на %[2]s (%[3]s), матчей: %[1]d. Где ваших матчей меньше %[5]d, цели встроенные.",
+			t.Games, hero, dota.RoleName(role, w.lang), stretchPercent, personalMinimum)
+		src.Short = w.f("your %d games +%d%%", "ваши матчи: %d, +%d%%", t.Games, stretchPercent)
 		return src
 	}
 	var marks []string
 	for i, cp := range paceCheckpoints {
 		if i < len(t.LastHits) {
-			marks = append(marks, w.f("%d by %s", "%d к %s", t.LastHits[i], clockStr(cp)))
+			marks = append(marks, w.f("%d by %s", "%d к %s", t.LastHits[i], dota.Clock(cp)))
 		}
 	}
 	src.From = w.f("Built into the trainer for %s: %s. After 3 of your games on %s in this position, the targets come from your own games.",
 		"Встроенные цели для позиции «%s»: %s. После 3 ваших матчей на %s на этой позиции цели считаются по вашим матчам.",
-		RoleName(role, w.lang), strings.Join(marks, ", "), hero)
+		dota.RoleName(role, w.lang), strings.Join(marks, ", "), hero)
 	src.Short = w.f("built-in", "встроенные")
 	return src
 }
@@ -131,22 +129,22 @@ func itemGoalSource(t Targets, hero string, w sourceWords) Source {
 		src.From = w.f("Items: the core items you finished first in at least 2 of your last %d games on %s.",
 			"Предметы: ядро, которое вы собирали первым хотя бы в 2 из последних матчей на %[2]s, матчей: %[1]d.", t.ItemGames, hero)
 	} else {
-		src.From = w.f("Items: the core items (2000 gold or more) of the pro build.", "Предметы: ключевые предметы (от 2000 золота) из про-сборки.")
+		src.From = w.f("Items: the core items (%d gold or more) of the pro build.", "Предметы: ключевые предметы (от %d золота) из про-сборки.", dota.GoalItemCost)
 	}
 	src.From += " " + w.f("Times: the earliest time that wins at least as often as the item does overall, from OpenDota's item timings (games it parsed in the last 4 weeks, every position). When your usual time is later than that, the goal is a minute before your usual.",
 		"Время: самое раннее, при котором предмет выигрывает не реже, чем в среднем, по таймингам OpenDota (матчи, разобранные за последние 4 недели, все позиции). Если вы обычно собираете его позже — цель на минуту раньше вашего обычного времени.")
 	return src
 }
 
-func timerSource(t config.Timings, w sourceWords) Source {
+func timerSource(t dota.Timings, w sourceWords) Source {
 	return Source{ID: "timers", What: w.f("Timers", "Таймеры"),
 		From: w.f("Built into Gourdian %s: bounty runes every %s, power runes from %s every %s, Shrines of Wisdom every %s. An app update brings new patch timings; the rules that use them show them.",
-			"Встроены в Gourdian %s: руны богатства каждые %s, руны силы с %s каждые %s, святыни мудрости каждые %s. Новые тайминги патча приходят с обновлением приложения; правила, которые их используют, их показывают.",
-			buildinfo.Version, clockStr(t.BountyRuneEvery), clockStr(t.PowerRuneFirst), clockStr(t.PowerRuneEvery), clockStr(t.WisdomRuneEvery))}
+			"Встроены в Gourdian %s: руны богатства каждые %s, руны силы с %s каждые %s, святилища мудрости каждые %s. Новые тайминги патча приходят с обновлением приложения; правила, которые их используют, их показывают.",
+			buildinfo.Version, dota.Clock(t.BountyRuneEvery), dota.Clock(t.PowerRuneFirst), dota.Clock(t.PowerRuneEvery), dota.Clock(t.WisdomRuneEvery))}
 }
 
 // sources lists where each part of the snapshot comes from.
-func sources(build *dotadata.Build, skills *dotadata.SkillBuild, t Targets, timings config.Timings, hero, role, lang string) []Source {
+func sources(build *dotadata.Build, skills *dotadata.SkillBuild, t Targets, timings dota.Timings, hero, role, lang string) []Source {
 	w := sourceWords{lang}
 	var out []Source
 	if build != nil {

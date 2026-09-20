@@ -4,18 +4,14 @@ import (
 	"math"
 	"strings"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
 
 var (
-	cores    = []string{config.RoleCarry, config.RoleMid, config.RoleOfflane}
-	supports = []string{config.RoleSoftSupport, config.RoleHardSupport}
+	cores    = []string{dota.Carry, dota.Mid, dota.Offlane}
+	supports = []string{dota.SoftSupport, dota.HardSupport}
 )
-
-func isCore(role string) bool {
-	return role == config.RoleCarry || role == config.RoleMid || role == config.RoleOfflane
-}
 
 // allRules compiles the rules that ship with the trainer, worded in lang.
 func allRules(lang string) []Rule {
@@ -50,24 +46,6 @@ func nextPeriodic(clock, first, period int) (int, bool) {
 func upcoming(clock, at, lead int) bool { return clock >= at-lead && clock < at }
 
 func within(clock, at, window int) bool { return clock >= at && clock < at+window }
-
-var roleNames = map[string]string{
-	config.RoleCarry: "carry", config.RoleMid: "mid", config.RoleOfflane: "offlane",
-	config.RoleSoftSupport: "soft support", config.RoleHardSupport: "hard support",
-}
-
-var roleNamesRU = map[string]string{
-	config.RoleCarry: "керри", config.RoleMid: "мид", config.RoleOfflane: "оффлейн",
-	config.RoleSoftSupport: "саппорт 4", config.RoleHardSupport: "хардсаппорт",
-}
-
-// RoleName is a position in words, in the player's language.
-func RoleName(role, lang string) string {
-	if lang == "ru" {
-		return roleNamesRU[role]
-	}
-	return roleNames[role]
-}
 
 // backpackActive is the first item in the backpack that does nothing there, or "".
 func backpackActive(s *gsi.State) string {

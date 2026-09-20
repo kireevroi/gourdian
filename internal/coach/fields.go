@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
 
@@ -48,7 +49,7 @@ var Fields = []Field{
 		})},
 	{ID: "role_name", Label: "Position, in words", Group: "Match", Type: "text",
 		Help: "carry, mid, offlane, soft support or hard support.",
-		text: func(c *Ctx, _ string) string { return RoleName(c.Settings.Role, c.Settings.Language) }},
+		text: func(c *Ctx, _ string) string { return dota.RoleName(c.Settings.Role, c.Settings.Language) }},
 	{ID: "role_why", Label: "Why that position", Group: "Match", Type: "text",
 		Help: "your pick, your usual on this hero, or the lane you played.",
 		text: func(c *Ctx, _ string) string { return c.RoleNote }},

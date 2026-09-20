@@ -1,13 +1,12 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
+	"gourdian/internal/model"
+	"gourdian/internal/stats"
 	"net/http"
 	"sync"
 	"time"
-
-	"gourdian/internal/stats"
 )
 
 // rankedLobby is OpenDota's lobby type for ranked matchmaking.
@@ -38,7 +37,7 @@ func (s *Server) pendingMMR() *mmrPrompt {
 }
 
 // askForMMR offers to log the MMR after a real match.
-func (s *Server) askForMMR(m *stats.MatchSummary) {
+func (s *Server) askForMMR(m *model.MatchSummary) {
 	if !m.Real() || !s.cfg.Settings().MMRPrompt {
 		return
 	}
@@ -54,7 +53,7 @@ func (s *Server) askForMMR(m *stats.MatchSummary) {
 
 // mmrBefore is the last MMR logged before a match, not counting the match's own entry, so
 // logging a match again doesn't add its win twice.
-func mmrBefore(entries []stats.MMREntry, matchID string, ended time.Time) (int, bool) {
+func mmrBefore(entries []model.MMREntry, matchID string, ended time.Time) (int, bool) {
 	for i := len(entries) - 1; i >= 0; i-- {
 		e := entries[i]
 		if matchID != "" && e.MatchID == matchID || !ended.IsZero() && e.Date.After(ended) {
@@ -99,12 +98,12 @@ func (s *Server) handleMatchRanked(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Ranked bool `json:"ranked"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil {
+	if err := readJSON(w, r, 4<<10, &body); err != nil {
 		http.Error(w, `send {"ranked": true}`, http.StatusBadRequest)
 		return
 	}
 	matchID := r.PathValue("id")
-	if err := s.stats.UpdateMatch(matchID, func(m *stats.MatchSummary) { m.Ranked = body.Ranked }); err != nil {
+	if err := s.stats.UpdateMatch(matchID, func(m *model.MatchSummary) { m.Ranked = body.Ranked }); err != nil {
 		http.Error(w, err.Error(), matchErrorStatus(err))
 		return
 	}
@@ -142,7 +141,7 @@ func (s *Server) handleMatchMMR(w http.ResponseWriter, r *http.Request) {
 		MMR    int `json:"mmr"`
 		Change int `json:"change"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil {
+	if err := readJSON(w, r, 4<<10, &body); err != nil {
 		http.Error(w, `send {"mmr": 3025} or {"change": 25}`, http.StatusBadRequest)
 		return
 	}
@@ -152,10 +151,10 @@ func (s *Server) handleMatchMMR(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	entry := stats.MMREntry{Date: m.EndedAt, MMR: body.MMR, Note: m.Result, MatchID: matchID}
+	entry := model.MMREntry{Date: m.EndedAt, MMR: body.MMR, Note: m.Result, MatchID: matchID}
 	if !m.Ranked {
 		// Logging MMR for a match says it was ranked, whatever OpenDota thought.
-		if err := s.stats.UpdateMatch(matchID, func(row *stats.MatchSummary) { row.Ranked = true }); err != nil {
+		if err := s.stats.UpdateMatch(matchID, func(row *model.MatchSummary) { row.Ranked = true }); err != nil {
 			s.log.Warn("mark the match ranked", "err", err)
 		}
 	}
@@ -198,7 +197,7 @@ func (s *Server) handleMMRChange(w http.ResponseWriter, r *http.Request) {
 		Change int    `json:"change"`
 		Note   string `json:"note"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil || body.Change == 0 {
+	if err := readJSON(w, r, 4<<10, &body); err != nil || body.Change == 0 {
 		http.Error(w, `send {"change": 25}`, http.StatusBadRequest)
 		return
 	}
@@ -213,7 +212,7 @@ func (s *Server) handleMMRChange(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "log your MMR once first, then the buttons can add and subtract", http.StatusBadRequest)
 		return
 	}
-	entry := stats.MMREntry{Date: time.Now(), MMR: before + body.Change, Note: body.Note, MatchID: p.MatchID}
+	entry := model.MMREntry{Date: time.Now(), MMR: before + body.Change, Note: body.Note, MatchID: p.MatchID}
 	if entry.MMR <= 0 {
 		http.Error(w, "that would take your MMR below zero", http.StatusBadRequest)
 		return
@@ -233,4 +232,34 @@ func matchErrorStatus(err error) int {
 		return http.StatusNotFound
 	}
 	return http.StatusInternalServerError
+}
+
+// handleMMRList returns every MMR entry, so the match lists can show what was logged.
+func (s *Server) handleMMRList(w http.ResponseWriter, r *http.Request) {
+	entries, err := s.stats.MMR()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if entries == nil {
+		entries = []model.MMREntry{}
+	}
+	writeJSON(w, entries)
+}
+
+func (s *Server) handleMMR(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		MMR  int    `json:"mmr"`
+		Note string `json:"note"`
+	}
+	if err := readJSON(w, r, 4<<10, &body); err != nil || body.MMR <= 0 || body.MMR > 20000 {
+		http.Error(w, "send {\"mmr\": 1234}", http.StatusBadRequest)
+		return
+	}
+	entry := model.MMREntry{Date: time.Now(), MMR: body.MMR, Note: body.Note}
+	if err := s.stats.AppendMMR(entry); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, entry)
 }

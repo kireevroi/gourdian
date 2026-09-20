@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -62,7 +61,7 @@ func (s *Server) rulesChanged(w http.ResponseWriter) {
 	s.applyRules()
 	resp := s.rulesResponse()
 	s.hub.publish("rules", true)
-	s.hub.publish("settings", s.settingsResponse())
+	s.publishSettings()
 	writeJSON(w, resp)
 }
 
@@ -70,7 +69,7 @@ func (s *Server) handleRules(w http.ResponseWriter, r *http.Request) { writeJSON
 
 func decodeSpec(w http.ResponseWriter, r *http.Request) (coach.RuleSpec, bool) {
 	var spec coach.RuleSpec
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&spec); err != nil {
+	if err := readJSON(w, r, 64<<10, &spec); err != nil {
 		http.Error(w, "bad rule: "+err.Error(), http.StatusBadRequest)
 		return spec, false
 	}
@@ -99,7 +98,7 @@ func (s *Server) handleDeleteRule(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleOverride(w http.ResponseWriter, r *http.Request) {
 	var o coach.RuleOverride
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&o); err != nil {
+	if err := readJSON(w, r, 16<<10, &o); err != nil {
 		http.Error(w, "bad change: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -144,18 +143,6 @@ type recordingInfo struct {
 	Modified time.Time `json:"modified"`
 }
 
-func (s *Server) handleRecordings(w http.ResponseWriter, r *http.Request) {
-	files, _ := filepath.Glob(filepath.Join(s.recordingsDir(), "*.jsonl*"))
-	var out []recordingInfo
-	for _, f := range files {
-		if fi, err := os.Stat(f); err == nil && fi.Size() > 100 {
-			out = append(out, recordingInfo{Name: filepath.Base(f), Size: fi.Size(), Modified: fi.ModTime()})
-		}
-	}
-	slices.SortFunc(out, func(a, b recordingInfo) int { return b.Modified.Compare(a.Modified) })
-	writeJSON(w, out)
-}
-
 type testFire struct {
 	Clock    int    `json:"clock"`
 	Text     string `json:"text"`
@@ -168,7 +155,7 @@ func (s *Server) handleTestRule(w http.ResponseWriter, r *http.Request) {
 		Rule      coach.RuleSpec `json:"rule"`
 		Recording string         `json:"recording"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&body); err != nil {
+	if err := readJSON(w, r, 64<<10, &body); err != nil {
 		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -219,7 +206,7 @@ func (s *Server) handleExportRules(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleImportRules(w http.ResponseWriter, r *http.Request) {
 	var f rules.File
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&f); err != nil {
+	if err := readJSON(w, r, 1<<20, &f); err != nil {
 		http.Error(w, "that isn't an exported rules file: "+err.Error(), http.StatusBadRequest)
 		return
 	}

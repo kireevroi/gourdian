@@ -13,7 +13,7 @@ import (
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
 	"gourdian/internal/matchdata"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 func TestPromptIncludesLiveStateAndHistory(t *testing.T) {
@@ -33,10 +33,10 @@ func TestPromptIncludesLiveStateAndHistory(t *testing.T) {
 			Timers: []coach.Timer{{Label: "Power rune", At: 840}},
 		},
 		Tips:     []coach.Tip{{Clock: 700, Text: "No TP scroll. Buy one (100g)"}},
-		Timeline: []stats.Sample{{Clock: 600, LastHits: 45, GPM: 420}, {Clock: 660, LastHits: 50, GPM: 430}},
+		Timeline: []model.Sample{{Clock: 600, LastHits: 45, GPM: 420}, {Clock: 660, LastHits: 50, GPM: 430}},
 		Context: Context{
 			History: History{Matches: 8, WinRate: 0.375, AvgDeaths: 7.25, AvgGPM: 402, AvgLH10: 41, Habits: []string{"No TP scroll 2.1"}},
-			MMR:     []stats.MMREntry{{Date: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), MMR: 2310}},
+			MMR:     []model.MMREntry{{Date: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), MMR: 2310}},
 			Focus:   "Carry a TP scroll at all times",
 			Profile: "Archon 3, mostly mid",
 		},
@@ -58,10 +58,10 @@ func TestPromptIncludesLiveStateAndHistory(t *testing.T) {
 
 func TestReviewPrompt(t *testing.T) {
 	p := ReviewPrompt(ReviewInput{
-		Match: stats.MatchSummary{Hero: "Lina", Role: "mid", Team: "dire", Result: "loss", DurationSec: 2100, Deaths: 9,
+		Match: model.MatchSummary{Hero: "Lina", Role: "mid", Team: "dire", Result: "loss", DurationSec: 2100, Deaths: 9,
 			LastHitsAt: map[string]int{"10:00": 38}, DeathClocks: []int{312, 1500}},
 		Targets:  map[string]int{"10:00": 60},
-		Timeline: []stats.Sample{{Clock: 60}, {Clock: 120}, {Clock: 360, LastHits: 20}},
+		Timeline: []model.Sample{{Clock: 60}, {Clock: 120}, {Clock: 360, LastHits: 20}},
 		Warnings: []string{"No TP scroll ×3"},
 	})
 	for _, want := range []string{"Lina as mid (dire), loss after 35:00", "10:00 38 (target 60)", "Died at: 5:12, 25:00", "No TP scroll ×3", "6:00: 20 LH"} {
@@ -78,14 +78,14 @@ func TestReviewPromptWithParsedReplay(t *testing.T) {
 		LaneRoleName: "mid lane", LaneOpponents: []string{"Storm Spirit"}, Allies: []string{"Axe"}, Enemies: []string{"Storm Spirit", "Lion"},
 		CoreItems: []matchdata.ItemTime{{Name: "Black King Bar", Time: 1150}},
 	}
-	p := ReviewPrompt(ReviewInput{Match: stats.MatchSummary{Hero: "Lina", Role: "mid"}, Detail: detail})
+	p := ReviewPrompt(ReviewInput{Match: model.MatchSummary{Hero: "Lina", Role: "mid"}, Detail: detail})
 	for _, want := range []string{"played mid lane against Storm Spirit", "Enemies: Storm Spirit, Lion", "Net worth 14200 (#2 on the team)",
 		"teamfight participation 61%", "GPM 34", "deaths (higher means dying more) 81", "Black King Bar 19:10"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt missing %q:\n%s", want, p)
 		}
 	}
-	p = ReviewPrompt(ReviewInput{Match: stats.MatchSummary{Hero: "Lina"}, Detail: &matchdata.Detail{}})
+	p = ReviewPrompt(ReviewInput{Match: model.MatchSummary{Hero: "Lina"}, Detail: &matchdata.Detail{}})
 	if !strings.Contains(p, "hadn't parsed the replay") {
 		t.Errorf("unparsed replay should be called out:\n%s", p)
 	}
@@ -181,7 +181,7 @@ func TestEveryRequestOpensWithHeroAndPosition(t *testing.T) {
 	if !strings.HasPrefix(live, want) {
 		t.Errorf("live prompt should open with %q:\n%s", want, live)
 	}
-	review := ReviewPrompt(ReviewInput{Match: stats.MatchSummary{Hero: "Chen", Role: "soft_support"}})
+	review := ReviewPrompt(ReviewInput{Match: model.MatchSummary{Hero: "Chen", Role: "soft_support"}})
 	if want := "The player played Chen as soft support (position 4)."; !strings.HasPrefix(review, want) {
 		t.Errorf("review prompt should open with %q:\n%s", want, review)
 	}

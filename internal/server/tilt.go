@@ -7,6 +7,7 @@ import (
 
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
+	"gourdian/internal/model"
 	"gourdian/internal/stats"
 )
 
@@ -18,14 +19,14 @@ const (
 
 // tiltReason looks at the session the latest match ended and says why a break would help,
 // or returns "".
-func tiltReason(matches []stats.MatchSummary, mmr []stats.MMREntry) string {
-	var decided []stats.MatchSummary
+func tiltReason(matches []model.MatchSummary, mmr []model.MMREntry) string {
+	var decided []model.MatchSummary
 	for _, m := range matches {
 		if m.Real() && m.Result != "unknown" {
 			decided = append(decided, m)
 		}
 	}
-	slices.SortFunc(decided, func(a, b stats.MatchSummary) int { return a.EndedAt.Compare(b.EndedAt) })
+	slices.SortFunc(decided, func(a, b model.MatchSummary) int { return a.EndedAt.Compare(b.EndedAt) })
 	n := len(decided)
 	if n == 0 {
 		return ""
@@ -53,7 +54,7 @@ func tiltReason(matches []stats.MatchSummary, mmr []stats.MMREntry) string {
 			return "Three of your last four games were losses. Take a break before the next one"
 		}
 	}
-	var first, last *stats.MMREntry
+	var first, last *model.MMREntry
 	for i := range mmr {
 		if e := &mmr[i]; !e.Date.Before(session[0].EndedAt.Add(-3 * time.Hour)) {
 			if first == nil {
@@ -69,7 +70,7 @@ func tiltReason(matches []stats.MatchSummary, mmr []stats.MMREntry) string {
 }
 
 // tiltCheck warns after a match that ends a losing run.
-func (s *Server) tiltCheck(m stats.MatchSummary, set config.Settings) {
+func (s *Server) tiltCheck(m model.MatchSummary, set config.Settings) {
 	if !set.TiltCheck || !m.Real() {
 		return
 	}

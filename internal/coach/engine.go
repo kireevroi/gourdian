@@ -3,7 +3,6 @@ package coach
 
 import (
 	"cmp"
-	"fmt"
 	"io"
 	"log/slog"
 	"slices"
@@ -12,9 +11,10 @@ import (
 	"time"
 
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
-	"gourdian/internal/stats"
+	"gourdian/internal/model"
 )
 
 type Severity string
@@ -214,8 +214,8 @@ type Result struct {
 	// doesn't fit the current role; DetectedLane says which lane.
 	DetectedRole string
 	DetectedLane string
-	Samples      []stats.Sample
-	Finished     *stats.MatchSummary
+	Samples      []model.Sample
+	Finished     *model.MatchSummary
 	NewMatch     bool
 }
 
@@ -350,7 +350,7 @@ func (e *Engine) SetFocus(focus string) {
 
 // Expire closes a match that stopped sending updates without reaching the post-game
 // screen, such as when the player leaves early, so its stats still get recorded.
-func (e *Engine) Expire(idle time.Duration) *stats.MatchSummary {
+func (e *Engine) Expire(idle time.Duration) *model.MatchSummary {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.match == nil || e.match.finished || e.now().Sub(e.lastInMatch) < idle {
@@ -396,7 +396,7 @@ func resultFor(team, winTeam string) string {
 	}
 }
 
-func (e *Engine) finish(result string) *stats.MatchSummary {
+func (e *Engine) finish(result string) *model.MatchSummary {
 	m := e.match
 	m.finished = true
 	s := m.last
@@ -404,14 +404,14 @@ func (e *Engine) finish(result string) *stats.MatchSummary {
 		return nil
 	}
 	simulated := strings.HasPrefix(m.id, "sim-")
-	source := stats.SourceLive
+	source := model.SourceLive
 	switch {
 	case simulated:
-		source = stats.SourceSim
+		source = model.SourceSim
 	case strings.HasPrefix(m.id, LocalMatchPrefix):
-		source = stats.SourcePractice
+		source = model.SourcePractice
 	}
-	return &stats.MatchSummary{
+	return &model.MatchSummary{
 		MatchID:     m.id,
 		Source:      source,
 		HeroID:      s.Hero.ID,
@@ -437,7 +437,7 @@ func (e *Engine) finish(result string) *stats.MatchSummary {
 }
 
 // matchItems lists the core items bought during the match with when they first appeared.
-func (e *Engine) matchItems(m *match, h *gsi.Hero) []stats.ItemTiming {
+func (e *Engine) matchItems(m *match, h *gsi.Hero) []model.ItemTiming {
 	if e.data == nil || e.data.Items() == nil {
 		return nil
 	}
@@ -447,11 +447,11 @@ func (e *Engine) matchItems(m *match, h *gsi.Hero) []stats.ItemTiming {
 			times[name] = at
 		}
 	}
-	var out []stats.ItemTiming
-	for name, at := range dotadata.CoreItemTimes(times, e.data.Items(), 1500) {
-		out = append(out, stats.ItemTiming{MatchID: m.id, Hero: e.heroName(h), Item: name, Time: at, Source: stats.SourceGSI})
+	var out []model.ItemTiming
+	for name, at := range dotadata.CoreItemTimes(times, e.data.Items(), dota.CoreItemCost) {
+		out = append(out, model.ItemTiming{MatchID: m.id, Hero: e.heroName(h), Item: name, Time: at, Source: model.SourceGSI})
 	}
-	slices.SortFunc(out, func(a, b stats.ItemTiming) int { return a.Time - b.Time })
+	slices.SortFunc(out, func(a, b model.ItemTiming) int { return a.Time - b.Time })
 	return out
 }
 
@@ -550,15 +550,15 @@ func newMatch(gsiID string, now time.Time) *match {
 	}
 }
 
-func (m *match) sample(s *gsi.State) (stats.Sample, bool) {
+func (m *match) sample(s *gsi.State) (model.Sample, bool) {
 	clock := s.Map.ClockTime
 	// Only near the top of a minute, so a trainer started mid-minute doesn't skew per-minute curves.
 	if clock < 0 || clock/60 <= m.sampledMinute || clock%60 > 10 {
-		return stats.Sample{}, false
+		return model.Sample{}, false
 	}
 	m.sampledMinute = clock / 60
 	p, h := s.Player, s.Hero
-	return stats.Sample{
+	return model.Sample{
 		MatchID: m.id, Clock: clock, Gold: p.Gold, GPM: p.GPM, XPM: p.XPM, LastHits: p.LastHits, Denies: p.Denies,
 		Kills: p.Kills, Deaths: p.Deaths, Assists: p.Assists, Level: h.Level, Alive: h.Alive,
 	}, true
@@ -612,12 +612,12 @@ func (m *match) skillSpare() int {
 	return max(m.skillSeen-m.skillGap, 0)
 }
 
-func (m *match) observe(s, prev *gsi.State, t config.Timings) {
+func (m *match) observe(s, prev *gsi.State, t dota.Timings) {
 	clock := s.Map.ClockTime
 	m.last = s
 	m.team = s.Player.TeamName
 	for _, cp := range paceCheckpoints {
-		key := clockStr(cp)
+		key := dota.Clock(cp)
 		if _, ok := m.lhAt[key]; !ok && clock >= cp && clock < cp+60 {
 			m.lhAt[key] = s.Player.LastHits
 		}
@@ -686,7 +686,7 @@ type Ctx struct {
 	Prev     *gsi.State
 	Clock    int
 	Settings config.Settings
-	T        config.Timings
+	T        dota.Timings
 	Focus    string
 	RoleNote string
 	Targets  Targets
@@ -760,12 +760,4 @@ func (c *Ctx) itemName(short string) string {
 		return info.DName
 	}
 	return strings.ReplaceAll(short, "_", " ")
-}
-
-func clockStr(sec int) string {
-	sign := ""
-	if sec < 0 {
-		sign, sec = "-", -sec
-	}
-	return fmt.Sprintf("%s%d:%02d", sign, sec/60, sec%60)
 }

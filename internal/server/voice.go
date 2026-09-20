@@ -8,7 +8,9 @@ import (
 	"slices"
 	"time"
 
+	"gourdian/internal/config"
 	"gourdian/internal/hidewin"
+	"gourdian/internal/platform"
 	"gourdian/internal/speech"
 )
 
@@ -23,7 +25,7 @@ type voiceStatus struct {
 // handleVoiceInstall adds Windows' voice for the trainer's language. Windows asks for an
 // administrator's OK first; when that doesn't work, Windows Settings opens at the speech page.
 func (s *Server) handleVoiceInstall(w http.ResponseWriter, r *http.Request) {
-	if nativeLinux() {
+	if platform.LinuxDesktop() {
 		if !s.installPiper() {
 			http.Error(w, "the natural voice is already downloading", http.StatusConflict)
 			return
@@ -73,7 +75,7 @@ func (s *Server) recheckVoices(lang string) bool {
 	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); time.Sleep(250 * time.Millisecond) {
 		if langs := s.speaker.Languages(); langs != nil {
 			found := slices.Contains(langs, lang)
-			s.hub.publish("settings", s.settingsResponse())
+			s.publishSettings()
 			return found
 		}
 	}
@@ -85,11 +87,24 @@ func (s *Server) handleVoiceRecheck(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "nothing speaks on this machine", http.StatusBadRequest)
 		return
 	}
-	if nativeLinux() {
+	if platform.LinuxDesktop() {
 		s.usePiper()
 		writeJSON(w, s.settingsResponse())
 		return
 	}
 	s.recheckVoices(s.cfg.Settings().Language)
 	writeJSON(w, s.settingsResponse())
+}
+
+func (s *Server) handleVoiceTest(w http.ResponseWriter, r *http.Request) {
+	set := s.cfg.Settings()
+	if set.Voice == config.VoiceSystem && s.speaker != nil {
+		english := "Gourdian voice check. Power rune in 15 seconds."
+		if set.Language == "ru" {
+			s.speaker.SayIn("ru", "Проверка голоса. Руна силы через 15 секунд.", english, true)
+		} else {
+			s.speaker.Say(english, true)
+		}
+	}
+	writeJSON(w, map[string]string{"voice": set.Voice})
 }

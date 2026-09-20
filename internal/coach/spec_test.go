@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
 
@@ -34,14 +34,14 @@ func bkbRule() RuleSpec {
 
 func TestStateRuleHoldsThenRespectsCooldown(t *testing.T) {
 	e := customEngine(t, bkbRule())
-	tips := byRule(play(e, settings(config.RoleCarry), 1070, 1160, func(s *gsi.State) { s.Player.Gold = 4200 }), "custom-bkb")
+	tips := byRule(play(e, settings(dota.Carry), 1070, 1160, func(s *gsi.State) { s.Player.Gold = 4200 }), "custom-bkb")
 	if len(tips) != 2 || tips[0].Clock != 1085 || tips[1].Clock != 1145 {
 		t.Fatalf("tips = %+v", tips)
 	}
 	if tips[0].Text != "Buy BKB now (4200g) at 18:05" || tips[0].Speech != "Buy B K B" || tips[0].Severity != Warn || !tips[0].Habit {
 		t.Fatalf("tip = %+v", tips[0])
 	}
-	owned := byRule(play(customEngine(t, bkbRule()), settings(config.RoleCarry), 1080, 1120, func(s *gsi.State) {
+	owned := byRule(play(customEngine(t, bkbRule()), settings(dota.Carry), 1080, 1120, func(s *gsi.State) {
 		s.Player.Gold = 4200
 		s.Items["slot0"] = gsi.Item{Name: "item_black_king_bar"}
 	}), "custom-bkb")
@@ -54,7 +54,7 @@ func TestChangeRuleFiresOnEachEdge(t *testing.T) {
 	spec := RuleSpec{ID: "custom-low-mana", Name: "Low mana", Enabled: true, Category: "survival",
 		When: Trigger{Type: WhenChange}, Match: "any", If: []Cond{{Field: "mana_pct", Op: "lt", Num: 20}},
 		Then: AlertSpec{Text: "Mana at {mana_pct}%", Severity: "info", Silent: true}}
-	tips := byRule(play(customEngine(t, spec), settings(config.RoleMid), 100, 160, func(s *gsi.State) {
+	tips := byRule(play(customEngine(t, spec), settings(dota.Mid), 100, 160, func(s *gsi.State) {
 		if s.Map.ClockTime >= 110 && s.Map.ClockTime < 130 || s.Map.ClockTime >= 150 {
 			s.Hero.ManaPercent = 10
 		}
@@ -71,7 +71,7 @@ func TestEventAndScheduleRules(t *testing.T) {
 	lotus := RuleSpec{ID: "custom-lotus", Name: "Lotus pool", Enabled: true, Category: "timing",
 		When: Trigger{Type: WhenSchedule, First: 180, Every: 180, Lead: 10, Until: 540}, Match: "all",
 		Then: AlertSpec{Text: "Lotus at {at}, in {in}s", Severity: "info"}}
-	tips := play(customEngine(t, died, lotus), settings(config.RoleSoftSupport), 160, 600, func(s *gsi.State) {
+	tips := play(customEngine(t, died, lotus), settings(dota.SoftSupport), 160, 600, func(s *gsi.State) {
 		s.Player.Gold = 700
 		if s.Map.ClockTime >= 200 && s.Map.ClockTime < 230 {
 			s.Hero.Alive, s.Hero.RespawnSeconds = false, 30-(s.Map.ClockTime-200)
@@ -122,9 +122,9 @@ func TestOverridesChangeBuiltinRules(t *testing.T) {
 	edited.When.For, edited.Cooldown = 2, 30
 	e.SetOverrides(map[string]RuleOverride{
 		"no_tp": {Severity: "urgent", Voice: "silent", Spec: &edited},
-		"stash": {Roles: []string{config.RoleHardSupport}},
+		"stash": {Roles: []string{dota.HardSupport}},
 	})
-	tips := play(e, settings(config.RoleCarry), 100, 140, func(s *gsi.State) {
+	tips := play(e, settings(dota.Carry), 100, 140, func(s *gsi.State) {
 		s.Items["teleport0"] = gsi.Item{Name: "empty"}
 		s.Items["stash0"] = gsi.Item{Name: "item_branches"}
 		s.Player.Gold = 500
@@ -140,7 +140,7 @@ func TestOverridesChangeBuiltinRules(t *testing.T) {
 
 func TestCheckAndTestSpec(t *testing.T) {
 	e := customEngine(t)
-	set := settings(config.RoleCarry)
+	set := settings(dota.Carry)
 	if _, _, err := e.CheckSpec(bkbRule(), set); err == nil {
 		t.Fatal("checking needs a match")
 	}
@@ -170,7 +170,7 @@ func TestCheckAndTestSpec(t *testing.T) {
 func TestCheckSpecSeesWhatTheEngineSees(t *testing.T) {
 	e := newEngine(nil)
 	e.SetTargetSource(fixedTargets{LastHits: []int{40, 80, 120, 160, 200}})
-	set := settings(config.RoleCarry)
+	set := settings(dota.Carry)
 	before := state(599)
 	before.Player.Gold, before.Player.GoldReliable = 900, 100
 	e.Update(before, set)
