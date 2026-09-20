@@ -7,6 +7,13 @@ import (
 	"gourdian/internal/gsi"
 )
 
+// talentSpec is a rule over the talent values, the way a player's rule would use them.
+var talentSpec = RuleSpec{ID: "custom-talent", Name: "Talent", Enabled: true, Category: "skills", Match: "all",
+	When:     Trigger{Type: WhenState, For: 20},
+	If:       []Cond{{Field: "talent_points", Op: "ge", Num: 1}},
+	Then:     AlertSpec{Text: "Your level {talent_level} talent is unspent", Severity: "warn"},
+	Cooldown: 60}
+
 // atLevel is a hero standing at a level with talents taken, and nothing else going on.
 func atLevel(level, taken int) func(*gsi.State) {
 	return func(s *gsi.State) {
@@ -18,29 +25,31 @@ func atLevel(level, taken int) func(*gsi.State) {
 	}
 }
 
-// A talent costs nothing but a click, so the trainer says which level's talent is waiting.
-func TestUnspentTalentIsNoticed(t *testing.T) {
-	got := byRule(play(newEngine(nil), settings(dota.Carry), 600, 700, atLevel(10, 0)), "talent")
+func talentTips(t *testing.T, level, taken, from, to int) []Tip {
+	t.Helper()
+	return byRule(play(customEngine(t, talentSpec), settings(dota.Carry), from, to, atLevel(level, taken)), "custom-talent")
+}
+
+// A talent point the player never spent is there to be seen, level by level.
+func TestTalentValuesCountWhatIsWaiting(t *testing.T) {
+	got := talentTips(t, 10, 0, 600, 700)
 	if len(got) != 2 || got[0].Clock != 620 || got[1].Clock != 680 {
-		t.Fatalf("want a talent alert at 620 and 680, got %+v", got)
+		t.Fatalf("want an alert at 620 and 680, got %+v", got)
 	}
-	if got[0].Text != "Your level 10 talent is unspent. Take one from the talent tree" {
+	if got[0].Text != "Your level 10 talent is unspent" {
 		t.Errorf("text = %q", got[0].Text)
-	}
-	if got[0].Speech != "Take your level 10 talent" {
-		t.Errorf("speech = %q", got[0].Speech)
 	}
 }
 
-// The alert names the talent that is actually waiting, not the first one the hero ever got.
-func TestTalentAlertNamesTheWaitingLevel(t *testing.T) {
-	got := byRule(play(newEngine(nil), settings(dota.Mid), 1200, 1230, atLevel(20, 2)), "talent")
-	if len(got) != 1 || got[0].Text != "Your level 20 talent is unspent. Take one from the talent tree" {
+// The level named is the talent actually waiting, not the first one the hero ever got.
+func TestTalentLevelIsTheOneWaiting(t *testing.T) {
+	got := talentTips(t, 20, 2, 1200, 1230)
+	if len(got) != 1 || got[0].Text != "Your level 20 talent is unspent" {
 		t.Fatalf("want the level 20 talent named once, got %+v", got)
 	}
 }
 
-func TestTalentsTakenSaysNothing(t *testing.T) {
+func TestNoTalentPointsWhenThereAreNone(t *testing.T) {
 	for _, c := range []struct {
 		name         string
 		level, taken int
@@ -49,7 +58,7 @@ func TestTalentsTakenSaysNothing(t *testing.T) {
 		{"talent taken", 10, 1},
 		{"every talent taken", 25, 4},
 	} {
-		if got := byRule(play(newEngine(nil), settings(dota.Carry), 600, 700, atLevel(c.level, c.taken)), "talent"); len(got) > 0 {
+		if got := talentTips(t, c.level, c.taken, 600, 700); len(got) > 0 {
 			t.Errorf("%s: %+v", c.name, got)
 		}
 	}
@@ -65,8 +74,5 @@ func TestTalentIsNotCountedAsASkillPoint(t *testing.T) {
 	})
 	if got := byRule(tips, "skill_points"); len(got) > 0 {
 		t.Errorf("an unspent talent was reported as a skill point: %+v", got)
-	}
-	if got := byRule(tips, "talent"); len(got) == 0 {
-		t.Error("the unspent talent went unnoticed")
 	}
 }

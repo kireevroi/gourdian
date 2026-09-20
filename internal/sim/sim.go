@@ -269,8 +269,8 @@ func (g *game) step(clock int) {
 	}
 
 	g.level = min(25, 1+max(clock, 0)/75)
-	// Two deliberate mistakes: the level 6 skill point and the level 10 talent sit unspent for
-	// a while, so the reminder for each can be seen in a simulated match.
+	// A deliberate mistake: the level 6 skill point sits unspent for half a minute, so that
+	// reminder can be seen in a simulated match.
 	if !(g.level == 6 && clock < levelAt(6)+30) {
 		for g.spent() < coach.SkillPointsAtLevel(g.level) {
 			if !g.spendPoint() {
@@ -278,9 +278,7 @@ func (g *game) step(clock int) {
 			}
 		}
 	}
-	if !(g.level == 10 && clock < levelAt(10)+40) {
-		g.takeTalents()
-	}
+	g.takeTalents()
 }
 
 // levelAt is the clock the scripted player reaches a level at.
