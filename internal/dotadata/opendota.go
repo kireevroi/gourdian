@@ -197,7 +197,7 @@ func (c *Client) fetchBuild(heroID int) {
 		c.failedAt[heroID] = time.Now()
 		return
 	}
-	c.builds[heroID] = BuildFromPopularity(heroID, pop, c.items)
+	c.builds[heroID] = BuildFromPopularity(heroID, pop, nil, c.items)
 	c.log.Info("item build loaded", "hero_id", heroID, "items", len(c.builds[heroID].Items))
 }
 

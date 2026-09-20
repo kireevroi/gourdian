@@ -68,6 +68,28 @@ type Build struct {
 // Popularity is OpenDota's itemPopularity response: phase key -> item id -> purchase count.
 type Popularity map[string]map[string]int
 
+// BuyTimes is when pros bought an item: phase key -> item id -> median game clock second.
+// OpenDota's itemPopularity reports no times, so a build that falls back to it has none.
+type BuyTimes map[string]map[string]int
+
+// mergeGap is how long an item can sit in the bag before it is combined away and still count as
+// a step of the build in its own right. A Force Staff bought 40 seconds before it turns into a
+// Hurricane Pike was never the plan; a Dragon Lance carried for six minutes was.
+const mergeGap = 240
+
+// minShare is the percentage of the phase's most bought item an item has to match to count as
+// part of the build. The phase limits used to do this work by accident, spending their slots on
+// components that were dropped later; with the steps gone the share has to say it outright.
+const minShare = 33
+
+// cand is one item pros bought in a phase, with the games behind it and when they bought it.
+type cand struct {
+	name  string
+	count int
+	at    int
+	timed bool
+}
+
 var phaseSpecs = []struct {
 	phase, key string
 	limit      int
@@ -80,18 +102,13 @@ var phaseSpecs = []struct {
 	{PhaseLate, "late_game_items", 6, 2000, false},
 }
 
-func BuildFromPopularity(heroID int, pop Popularity, items map[string]ItemInfo) *Build {
+func BuildFromPopularity(heroID int, pop Popularity, at BuyTimes, items map[string]ItemInfo) *Build {
 	byID := make(map[int]string, len(items))
 	for name, it := range items {
 		byID[it.ID] = name
 	}
-	type cand struct {
-		name  string
-		count int
-	}
-	seen := map[string]bool{}
-	var phases [][]BuildItem
-	for _, spec := range phaseSpecs {
+	phases := make([][]cand, len(phaseSpecs))
+	for i, spec := range phaseSpecs {
 		var cands []cand
 		for idStr, count := range pop[spec.key] {
 			id, err := strconv.Atoi(idStr)
@@ -113,42 +130,63 @@ func BuildFromPopularity(heroID int, pop Popularity, items map[string]ItemInfo) 
 			case spec.minCost > 0 && isPart(name, info):
 				continue
 			}
-			cands = append(cands, cand{name, count})
+			c := cand{name: name, count: count}
+			c.at, c.timed = at[spec.key][idStr]
+			cands = append(cands, c)
 		}
 		slices.SortFunc(cands, func(a, b cand) int {
 			return cmp.Or(cmp.Compare(b.count, a.count), cmp.Compare(a.name, b.name))
 		})
-		var chosen []BuildItem
-		for _, c := range cands {
-			if len(chosen) == spec.limit || c.count*100 < cands[0].count*15 {
+		// Anything far rarer than the phase's most bought item is one team's read, not the build.
+		for j, c := range cands {
+			if c.count*100 < cands[0].count*minShare {
+				cands = cands[:j]
 				break
 			}
-			if seen[c.name] {
+		}
+		phases[i] = cands
+	}
+
+	// The steps go before the limit, so a phase spends its slots on items that survive it.
+	b := &Build{HeroID: heroID}
+	seen := map[string]bool{}
+	for i, spec := range phaseSpecs {
+		var chosen []cand
+		for _, c := range phases[i] {
+			if len(chosen) == spec.limit {
+				break
+			}
+			// Starting items are a shopping list, so they stay even though they are combined later.
+			if seen[c.name] || (i > 0 && stepToward(c, phases[i:], items)) {
 				continue
 			}
 			seen[c.name] = true
-			info := items[c.name]
-			chosen = append(chosen, BuildItem{Name: c.name, DName: info.DName, Cost: info.Cost, Phase: spec.phase, Img: info.Img})
+			chosen = append(chosen, c)
 		}
-		slices.SortStableFunc(chosen, func(a, b BuildItem) int { return cmp.Compare(a.Cost, b.Cost) })
-		phases = append(phases, chosen)
-	}
-
-	b := &Build{HeroID: heroID}
-	for i, phase := range phases {
-		for _, it := range phase {
-			if i == 0 || !componentOfLater(it.Name, phases[i:], items) {
-				b.Items = append(b.Items, it)
-			}
+		slices.SortStableFunc(chosen, func(a, b cand) int {
+			return cmp.Or(cmp.Compare(a.at, b.at), cmp.Compare(b.count, a.count),
+				cmp.Compare(items[a.name].Cost, items[b.name].Cost))
+		})
+		for _, c := range chosen {
+			info := items[c.name]
+			b.Items = append(b.Items, BuildItem{Name: c.name, DName: info.DName, Cost: info.Cost, Phase: spec.phase, Img: info.Img})
 		}
 	}
 	return b
 }
 
-func componentOfLater(name string, phases [][]BuildItem, items map[string]ItemInfo) bool {
+// stepToward reports whether an item is only a stop on the way to a bigger one bought in this
+// phase or a later one: either a part nobody buys for its own sake, or an item combined away
+// within mergeGap of being bought. An item carried longer than that is a step of the build
+// itself and stays. Without purchase times every component counts as a step, which is as much
+// as OpenDota's itemPopularity can say.
+func stepToward(c cand, phases [][]cand, items map[string]ItemInfo) bool {
 	for _, phase := range phases {
-		for _, other := range phase {
-			if other.Name != name && Contains(other.Name, name, items) {
+		for _, into := range phase {
+			if into.name == c.name || !Contains(into.name, c.name, items) {
+				continue
+			}
+			if isPart(c.name, items[c.name]) || !c.timed || !into.timed || into.at-c.at <= mergeGap {
 				return true
 			}
 		}

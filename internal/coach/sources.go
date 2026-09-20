@@ -65,8 +65,13 @@ func buildSource(b *dotadata.Build, hero, role string, w sourceWords) Source {
 		notes = append(notes, w.f("They won fewer than %d of them, too few for a build from wins alone.",
 			"Побед среди них меньше %d — слишком мало для сборки только по победам.", dotadata.MinProGames))
 	}
-	notes = append(notes, w.f("Items are grouped by when they were bought (before the horn, before 10:00, before 25:00, later) and listed by how many of those games had them.",
-		"Предметы разбиты по времени покупки (до начала, до 10:00, до 25:00, позже) и отсортированы по тому, в скольких матчах их купили."))
+	order := w.f("listed in the order pros bought them", "идут в том порядке, в каком их покупали про-игроки")
+	if b.Games == 0 {
+		// The itemPopularity fallback counts purchases without saying when they happened.
+		order = w.f("listed by how many of those games had them", "отсортированы по тому, в скольких матчах их купили")
+	}
+	notes = append(notes, w.f("Items are grouped by when they were bought (before the horn, before 10:00, before 25:00, later) and %s.",
+		"Предметы разбиты по времени покупки (до начала, до 10:00, до 25:00, позже) и %s.", order))
 	if b.Loading && pos > 0 {
 		notes = append(notes, w.f("The build for %s is still loading.", "Сборка для позиции «%s» ещё загружается.", dota.RoleName(role, w.lang)))
 		src.Short += w.f(" · loading", " · загрузка")
