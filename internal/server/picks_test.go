@@ -56,8 +56,9 @@ func roleSet(srv *Server, role string) config.Settings {
 	return set
 }
 
-// Pick help is for the draft: it used to wait for a match in progress without a hero, which
-// Dota never sends, so it never showed.
+// Pick help is for the draft, and only once the player has said which position they are
+// playing: which heroes are worth taking depends entirely on that, and the trainer asks
+// rather than offering heroes for whatever they happened to play last.
 func TestPickBoardShowsDuringTheDraft(t *testing.T) {
 	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.HardSupport })
 	seed(t, srv, 10)
@@ -66,9 +67,25 @@ func TestPickBoardShowsDuringTheDraft(t *testing.T) {
 		s.Map.GameState = gsi.StateHeroSelection
 	})
 	postState(t, h, draft)
-	if snap := srv.snapshot(srv.cfg.Settings()); snap.Picks == nil || len(snap.Picks.Best)+len(snap.Picks.Avoid) == 0 {
-		t.Fatalf("no pick help during the draft: %+v", snap.Picks)
+	snap := srv.snapshot(srv.cfg.Settings())
+	switch {
+	case snap.Picks == nil:
+		t.Fatal("nothing at all during the draft; it should be asking for a position")
+	case !snap.Picks.NeedPosition:
+		t.Errorf("didn't ask for a position: %+v", snap.Picks)
+	case len(snap.Picks.Best)+len(snap.Picks.Fresh)+len(snap.Picks.Avoid) != 0:
+		t.Errorf("named heroes without being told the position: %+v", snap.Picks)
 	}
+
+	setRole(t, srv, dota.HardSupport)
+	snap = srv.snapshot(srv.cfg.Settings())
+	if snap.Picks == nil || len(snap.Picks.Best)+len(snap.Picks.Avoid) == 0 {
+		t.Fatalf("no pick help after the position was given: %+v", snap.Picks)
+	}
+	if snap.Picks.NeedPosition {
+		t.Error("still asking for a position after being given one")
+	}
+
 	postState(t, h, payload(10, func(s *gsi.State) { s.Hero.ID = 26 })) // picked and playing
 	if snap := srv.snapshot(srv.cfg.Settings()); snap.Picks != nil {
 		t.Fatal("pick help still shown once the hero is picked")
@@ -90,7 +107,9 @@ func TestPickBoardIsSpokenOnceADraft(t *testing.T) {
 		})
 	}
 	postState(t, h, draft(-90))
+	setRole(t, srv, dota.Mid)
 	postState(t, h, draft(-89))
+	postState(t, h, draft(-88))
 	spoken := picksSpoken(srv)
 	if len(spoken) != 1 {
 		t.Fatalf("picks spoken %d times, want once: %+v", len(spoken), spoken)
@@ -106,6 +125,8 @@ func TestPickBoardIsSpokenOnceADraft(t *testing.T) {
 	}
 	// So the next draft speaking again shows up as one fresh tip.
 	postState(t, h, draft(-90))
+	setRole(t, srv, dota.Mid)
+	postState(t, h, draft(-89))
 	if got := picksSpoken(srv); len(got) != 1 {
 		t.Fatalf("the next draft spoke %d times, want once", len(got))
 	}
@@ -192,6 +213,7 @@ func TestTheDraftStaysOnScreenAfterYouPick(t *testing.T) {
 		s.Map.MatchID = "m1"
 	}
 	postState(t, h, payload(-90, choosing))
+	setRole(t, srv, dota.Mid)
 	postDraft(t, srv, `{"ours":[17],"theirs":[35,26]}`)
 
 	before := srv.snapshot(srv.cfg.Settings()).Picks
@@ -327,6 +349,8 @@ func TestTheAdviceIsReadAgainWhenThePositionChanges(t *testing.T) {
 		})
 	}
 	postState(t, h, draft(-90))
+	setRole(t, srv, dota.Mid)
+	postState(t, h, draft(-89))
 	first := picksSpoken(srv)
 	if len(first) != 1 || !strings.Contains(first[0].Text, "Storm Spirit") {
 		t.Fatalf("the mid advice wasn't read out: %+v", first)

@@ -118,12 +118,21 @@ type Board struct {
 	// Notes are what the two line-ups are short of or heavy in, once enough of them is known
 	// to say anything.
 	Notes []string `json:"notes,omitempty"`
+	// NeedPosition says the player hasn't named the position they are about to play, so
+	// there is no advice about which hero to take -- only a question. Which heroes are worth
+	// taking depends entirely on the position, and the trainer would rather ask than guess
+	// from whatever was played last.
+	NeedPosition bool `json:"need_position,omitempty"`
 }
 
-// AfterYourPick is what is left of the board once the player has taken a hero: which hero to
-// take is settled, but who the other side took and what the two line-ups are short of is only
-// getting clearer, and is what tells them what to buy and what to expect.
-func (b *Board) AfterYourPick() *Board {
+// WithoutSuggestions is the board with the advice about which hero to take taken out, leaving
+// what the draft looks like: who the other side took and what the two line-ups are short of.
+//
+// It is what is left in the two cases where naming heroes would be wrong. Once the player has
+// taken one, their pick is settled but the rest of the draft is not, and knowing it is what
+// tells them what to buy. Before they have said which position they are playing, the trainer
+// has nothing to base a hero on and asks instead.
+func (b *Board) WithoutSuggestions() *Board {
 	if b == nil {
 		return nil
 	}
@@ -136,7 +145,10 @@ func (b *Board) AfterYourPick() *Board {
 
 // Empty reports whether the board has nothing to show.
 func (b *Board) Empty() bool {
-	return b == nil || len(b.Best)+len(b.Fresh)+len(b.Avoid)+len(b.Enemies)+len(b.Notes) == 0
+	if b == nil {
+		return true
+	}
+	return !b.NeedPosition && len(b.Best)+len(b.Fresh)+len(b.Avoid)+len(b.Enemies)+len(b.Notes) == 0
 }
 
 type Hero struct {

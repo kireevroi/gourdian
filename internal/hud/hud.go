@@ -267,6 +267,10 @@ func pickLines(p *picks.Board, l words) []Line {
 	if names := heroNames(p.Enemies); names != "" {
 		lines = append(lines, Line{l.f("Against: %s", names), KindWarn})
 	}
+	// Which heroes are worth taking depends on the position, so it asks rather than guessing.
+	if p.NeedPosition {
+		lines = append(lines, Line{l.s("Ctrl+Shift+1–5 for your position, then hero advice"), KindCoach})
+	}
 	if len(p.Best) > 0 {
 		lines = append(lines, Line{l.f("Your best %s heroes:", l.role(p.Role)), KindCoach})
 	}

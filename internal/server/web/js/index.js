@@ -315,9 +315,12 @@ function renderPicks(p) {
     ? `<div class="label">${t('The other side has taken')}</div><div class="enemies">` +
       p.enemies.map((h) => `<span class="enemy">${h.img ? `<img src="${esc(imgURL(h.img))}" alt="">` : ''}${esc(h.hero)}</span>`).join('') + '</div>'
     : '';
+  const ask = p.need_position
+    ? `<div class="notes">${t('Press Ctrl+Shift+1 to 5 in game to say which position you are playing, and the heroes worth taking will appear.')}</div>`
+    : '';
   const notes = (p.notes || []).length
     ? `<div class="notes">${p.notes.map((n) => `<div>${esc(n)}</div>`).join('')}</div>` : '';
-  $('picks').innerHTML = enemies + notes
+  $('picks').innerHTML = enemies + ask + notes
     + list(p.best, 'Your best on this position', false)
     + list(p.fresh, 'Strong right now, new to you', false)
     + list(p.avoid, 'Losing on this position', true);

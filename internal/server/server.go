@@ -360,10 +360,7 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 	if st.InMatch() && st.Map.ClockTime < 0 && !strings.HasPrefix(matchID, "sim-") {
 		s.briefMatch(matchID, cfg.Settings)
 	}
-	if s.draftWorthSaying(&st, cfg.Settings.Role) {
-		s.speakPicks(cfg.Settings)
-		s.askDraft(cfg.Settings, false)
-	}
+	s.speakPicks(&st, cfg.Settings)
 	if res.NewMatch {
 		s.hub.publish("tips", []coach.Tip{})
 		s.tiltReminder(matchID, cfg.Settings)

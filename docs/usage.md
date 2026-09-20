@@ -55,7 +55,9 @@ Look settings: width, text size, background opacity (0% shows text only), whole-
 
 ## Pick help
 
-While you're still choosing a hero, the HUD and the dashboard rank the heroes worth taking in your position, and each line says why it's there.
+While you're still choosing a hero, press **Ctrl+Shift+1…5** to say which position you're playing. The HUD and the dashboard then rank the heroes worth taking in it, and each line says why it's there.
+
+Nothing is offered until you say. Which heroes are worth taking depends entirely on the position, and the trainer would rather ask than hand you carry heroes because that's what you played last night. Saying a different position while you're still choosing swaps the advice over and reads it out again.
 
 A hero's score starts at an even game and moves with three things:
 
@@ -78,7 +80,7 @@ All of those numbers are yours to change, on Settings › **Pick help**, because
 
 **Reset** puts them all back. How much each part of the score is allowed to move a hero — your record against the patch against the hero's roles — is fixed, since that's the shape of the model rather than a matter of taste.
 
-The top of the list is read aloud once as the draft opens, and the AI coach can add a sentence on which to take (AI page › **A word on your pick**).
+The top of the list is read aloud once for each position you name, and the AI coach can add a sentence on which to take (AI page › **A word on your pick**).
 
 Once you take a hero the advice about which to take goes, since it is settled, but the draft stays up: who the other side has taken and what the two line-ups are short of keep filling in while the rest of them pick, which is what tells you what to buy and what to expect. It all goes when the game starts.
 

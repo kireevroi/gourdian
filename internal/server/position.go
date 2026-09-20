@@ -17,6 +17,14 @@ import (
 // A draft runs a couple of minutes; anything older belongs to a game that never started.
 const roleChosenFor = 10 * time.Minute
 
+// rolePickedInDraft reports whether the player has named the position they are about to play.
+// Until they have, there is no advice to give about which hero to take.
+func (s *Server) rolePickedInDraft() bool {
+	s.roleMu.Lock()
+	defer s.roleMu.Unlock()
+	return s.roleChosen != "" && time.Since(s.roleChosenAt) < roleChosenFor
+}
+
 // lockRole records that the player picked the role for this match, so lane detection leaves it alone.
 func (s *Server) lockRole(matchID string) {
 	s.roleMu.Lock()
