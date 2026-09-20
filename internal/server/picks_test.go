@@ -173,3 +173,51 @@ func TestChangingTheTuningRebuildsTheBoard(t *testing.T) {
 		t.Errorf("taking records at face value still ranks %q first, want Lucky", first)
 	}
 }
+
+// A player picks early and then watches the rest of the draft. Which hero to take is settled
+// by then, but who the other side is taking is not, and it is what tells them what to buy.
+func TestTheDraftStaysOnScreenAfterYouPick(t *testing.T) {
+	srv, h, _ := newTestServer(t, func(s *config.Settings) {
+		s.Role = dota.Mid
+		s.Screen.Draft = true
+	})
+	for i := range 5 {
+		srv.stats.AppendMatch(model.MatchSummary{
+			MatchID: "storm" + string(rune('a'+i)), Hero: "Storm Spirit", HeroID: 17, Role: dota.Mid,
+			Result: "win", Source: model.SourceLive, EndedAt: time.Now().Add(-time.Duration(i+1) * time.Hour)})
+	}
+	choosing := func(s *gsi.State) {
+		s.Hero = &gsi.Hero{} // Dota's hero block before the pick: id 0
+		s.Map.GameState = gsi.StateHeroSelection
+		s.Map.MatchID = "m1"
+	}
+	postState(t, h, payload(-90, choosing))
+	postDraft(t, srv, `{"ours":[17],"theirs":[35,26]}`)
+
+	before := srv.snapshot(srv.cfg.Settings()).Picks
+	if before == nil || len(before.Best) == 0 {
+		t.Fatalf("no pick advice while choosing: %+v", before)
+	}
+
+	// Now they have taken a hero, and the draft goes on around them.
+	postState(t, h, payload(-60, func(s *gsi.State) {
+		choosing(s)
+		s.Hero.ID = 17
+	}))
+	after := srv.snapshot(srv.cfg.Settings()).Picks
+	if after == nil {
+		t.Fatal("the draft vanished the moment a hero was taken")
+	}
+	if len(after.Best)+len(after.Fresh)+len(after.Avoid) != 0 {
+		t.Errorf("still advising which hero to take after one was taken: %+v", after)
+	}
+	if len(after.Enemies) != 2 {
+		t.Errorf("the other side's heroes went with it: %+v", after.Enemies)
+	}
+
+	// Once the game is under way it goes entirely.
+	postState(t, h, payload(30, func(s *gsi.State) { s.Hero.ID = 17; s.Map.MatchID = "m1" }))
+	if snap := srv.snapshot(srv.cfg.Settings()); snap.Picks != nil {
+		t.Errorf("the draft is still shown in the match: %+v", snap.Picks)
+	}
+}

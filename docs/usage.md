@@ -78,6 +78,8 @@ All of those numbers are yours to change, on Settings › **Pick help**, because
 
 The top of the list is read aloud once as the draft opens, and the AI coach can add a sentence on which to take (AI page › **A word on your pick**).
 
+Once you take a hero the advice about which to take goes, since it is settled, but the draft stays up: who the other side has taken and what the two line-ups are short of keep filling in while the rest of them pick, which is what tells you what to buy and what to expect. It all goes when the game starts.
+
 ### Where the enemy picks come from
 
 Valve sends the draft to spectators and not to players, so Dota's own feed tells your tools nothing about who the other side took. `gourdian doctor` says so, and will say otherwise if that ever changes.
