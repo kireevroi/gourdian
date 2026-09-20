@@ -153,12 +153,6 @@ func DefaultSpecs(lang string) []RuleSpec {
 				Speech: "Power rune near you in {in} seconds", Severity: "info"},
 		},
 		{
-			ID: "night", Name: "Night falls", Category: "timing",
-			When: Trigger{Type: WhenSchedule, First: t.DayNightEvery, Every: 2 * t.DayNightEvery, Lead: 15},
-			Then: AlertSpec{Text: "Night falls in {in}s ({at}). Vision shortens for both sides: ward, group up or back off",
-				Speech: "Night in {in} seconds", Severity: "info"},
-		},
-		{
 			ID: "wisdom_rune", Name: "Shrine of Wisdom activates", Category: "timing",
 			Roles: []string{dota.Offlane, dota.SoftSupport, dota.HardSupport},
 			When:  Trigger{Type: WhenSchedule, First: t.WisdomRuneEvery, Every: t.WisdomRuneEvery, Lead: 30},

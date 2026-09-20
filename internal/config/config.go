@@ -159,11 +159,8 @@ const (
 )
 
 var (
-	TimerKinds = []string{"rune", "neutral", "objective", "stack", "daynight"}
-	// timerKindsAdded are the kinds newer versions brought. A saved layout that kept every kind
-	// there was keeps the new ones too, instead of quietly hiding them.
-	timerKindsAdded = []string{"daynight"}
-	TipSeverities   = []string{"info", "warn", "urgent"}
+	TimerKinds    = []string{"rune", "neutral", "objective", "stack", "daynight"}
+	TipSeverities = []string{"info", "warn", "urgent"}
 )
 
 func DefaultWidgets() []HUDWidget {
@@ -205,27 +202,7 @@ func normalizeWidgets(list []HUDWidget) []HUDWidget {
 			out = append(out, w)
 		}
 	}
-	for i, w := range out {
-		if w.ID == WidgetTimers {
-			out[i].Kinds = widenTimerKinds(w.Kinds)
-		}
-	}
 	return out
-}
-
-// widenTimerKinds adds the kinds newer versions brought to a layout that was showing every
-// kind. A layout with kinds ticked off is the player's choice, and is left alone; so is an
-// empty list, which already means every kind.
-func widenTimerKinds(kinds []string) []string {
-	if len(kinds) == 0 {
-		return kinds
-	}
-	for _, k := range TimerKinds {
-		if !slices.Contains(timerKindsAdded, k) && !slices.Contains(kinds, k) {
-			return kinds
-		}
-	}
-	return slices.Clone(TimerKinds)
 }
 
 // HotkeySettings are the in-game shortcuts, written like "Ctrl+Shift+F10".

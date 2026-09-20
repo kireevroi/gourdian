@@ -112,27 +112,6 @@ func TestNormalizeWidgetsKeepsOrderAndAddsNewOnes(t *testing.T) {
 	}
 }
 
-// A layout saved before a timer kind existed was showing every kind there was, so it shows the
-// new one too. A layout with kinds ticked off is a choice, and stays as it is.
-func TestNewTimerKindsReachOldLayouts(t *testing.T) {
-	before := []string{"rune", "neutral", "objective", "stack"}
-	for _, c := range []struct {
-		name  string
-		saved []string
-		want  []string
-	}{
-		{"was showing everything", before, TimerKinds},
-		{"kinds ticked off", []string{"rune", "objective"}, []string{"rune", "objective"}},
-		{"empty already means every kind", nil, nil},
-		{"nothing to add", slices.Clone(TimerKinds), TimerKinds},
-	} {
-		got := normalizeWidgets([]HUDWidget{{ID: WidgetTimers, On: true, Count: 3, Kinds: c.saved}})
-		if !slices.Equal(got[0].Kinds, c.want) {
-			t.Errorf("%s: kinds = %v, want %v", c.name, got[0].Kinds, c.want)
-		}
-	}
-}
-
 func TestOldClaudeSettingsMigrate(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"settings":{"ai":{"enabled":true,"model":"claude-sonnet-5","effort":"high","claude_path":"C:\\claude.exe"}}}`), 0o600)

@@ -8,24 +8,6 @@ import (
 	"gourdian/internal/dota"
 )
 
-// Vision shortens at night for both sides, so the trainer says it's coming.
-func TestNightIsAnnouncedBeforeItFalls(t *testing.T) {
-	got := byRule(play(newEngine(nil), settings(dota.HardSupport), 0, 1500, nil), "night")
-	var at []int
-	for _, tip := range got {
-		at = append(at, tip.Clock)
-	}
-	if !slices.Equal(at, []int{285, 885, 1485}) {
-		t.Fatalf("want a heads-up 15 seconds before 5:00, 15:00 and 25:00, got %v", at)
-	}
-	if got[0].Text != "Night falls in 15s (5:00). Vision shortens for both sides: ward, group up or back off" {
-		t.Errorf("text = %q", got[0].Text)
-	}
-	if got[0].Speech != "Night in 15 seconds" {
-		t.Errorf("speech = %q", got[0].Speech)
-	}
-}
-
 func timerLabels(clock int, daytime bool) []string {
 	set := config.Default().Settings
 	set.Role = dota.Carry
