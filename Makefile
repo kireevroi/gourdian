@@ -2,8 +2,10 @@
 GOFLAGS := -buildvcs=false
 VERSION := $(shell cat VERSION)
 LDFLAGS := -X gourdian/internal/buildinfo.Version=$(VERSION)
+# The architecture the .deb is built for, in Debian's spelling: amd64 or arm64.
+DEBARCH ?= amd64
 
-.PHONY: all linux windows test version-check lint notices release install winres cert cert-github installer app clean linux-dist linux-install linux-uninstall
+.PHONY: all linux windows test version-check lint notices release install winres cert cert-github installer app clean linux-dist linux-deb linux-install linux-uninstall
 
 all: linux windows
 
@@ -57,8 +59,8 @@ lint:
 
 # Publishes VERSION: tags the current main commit v$(VERSION) and pushes it. The tag is what
 # decides the version built and published, so tagging in the GitHub UI works the same way.
-# GitHub then
-# builds the installer and the Linux tarball and attaches them to a release.
+# GitHub then builds the installer, the Linux tarball and the .deb and attaches them to a
+# release.
 release: test
 	@git diff --quiet HEAD || { echo "commit your changes first" >&2; exit 1; }
 	@[ "$$(git branch --show-current)" = main ] || { echo "release from main" >&2; exit 1; }
@@ -78,6 +80,23 @@ linux-dist:
 	cp winres/icon.png dist/linux/gourdian.png
 	tar -C dist -czf dist/gourdian-$(VERSION)-linux-x86_64.tar.gz --transform 's,^linux,gourdian-$(VERSION),' linux
 	@echo "linux release: dist/gourdian-$(VERSION)-linux-x86_64.tar.gz"
+
+# A .deb for Debian, Ubuntu and their derivatives, installed with
+# `sudo apt install ./dist/gourdian_<version>_amd64.deb`. The program is static, so the
+# package only wants xdg-utils; voice and notifications are Recommends.
+linux-deb:
+	rm -rf dist/deb
+	mkdir -p dist/deb/usr/bin
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(DEBARCH) go build $(GOFLAGS) -trimpath -ldflags "-s -w $(LDFLAGS)" -o dist/deb/usr/bin/gourdian .
+	install -Dm644 packaging/linux/gourdian.desktop dist/deb/usr/share/applications/gourdian.desktop
+	install -Dm644 winres/icon.png dist/deb/usr/share/icons/hicolor/256x256/apps/gourdian.png
+	install -Dm644 LICENSE dist/deb/usr/share/doc/gourdian/copyright
+	install -Dm644 THIRD_PARTY_NOTICES.txt dist/deb/usr/share/doc/gourdian/THIRD_PARTY_NOTICES.txt
+	@size=$$(du -ks dist/deb | cut -f1); mkdir -p dist/deb/DEBIAN; \
+		sed -e 's/@VERSION@/$(VERSION)/' -e 's/@ARCH@/$(DEBARCH)/' -e "s/@SIZE@/$$size/" \
+			packaging/debian/control > dist/deb/DEBIAN/control
+	dpkg-deb --build --root-owner-group dist/deb dist/gourdian_$(VERSION)_$(DEBARCH).deb
+	@echo "debian package: dist/gourdian_$(VERSION)_$(DEBARCH).deb"
 
 # Installs into your home folder on this Linux machine (not for WSL, where Windows runs the app).
 linux-install: linux-dist

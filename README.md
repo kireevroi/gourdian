@@ -16,13 +16,13 @@ It reads Valve's official Game State Integration feed, which only describes your
 
 ## Install
 
-Downloads are on the [Releases page](https://github.com/kireevroi/gourdian/releases): the Windows installer, the Linux tarball and `SHA256SUMS`.
+Downloads are on the [Releases page](https://github.com/kireevroi/gourdian/releases): the Windows installer, the Debian package, the Linux tarball and `SHA256SUMS`.
 
 **Windows** — run **Gourdian-Setup-\<version\>.exe**. It installs to `%LOCALAPPDATA%\Programs\Gourdian` without admin rights, adds shortcuts, can start the app when you sign in, and connects Dota 2. Upgrades close a running copy first and keep your settings and statistics, including upgrades from Dota Trainer. Uninstall from Windows Settings › Apps; you're asked whether to keep your statistics.
 
 The build is signed with a self-signed **Gourdian** certificate ([`installer/gourdian.cer`](installer/gourdian.cer)), so SmartScreen says "Unknown publisher": choose **More info › Run anyway**. Every release file carries a GitHub attestation — `gh attestation verify Gourdian-Setup-<version>.exe --repo kireevroi/gourdian`.
 
-**Linux** — `cd packaging/arch && makepkg -si` on Arch and its derivatives, or unpack the tarball and run `./install.sh` on any distribution. See [Linux](docs/linux.md) for the in-game view and what else differs.
+**Linux** — `sudo apt install ./gourdian_<version>_amd64.deb` on Debian, Ubuntu and their derivatives, `cd packaging/arch && makepkg -si` on Arch and its derivatives, or unpack the tarball and run `./install.sh` on any distribution. See [Linux](docs/linux.md) for the in-game view and what else differs.
 
 Then:
 

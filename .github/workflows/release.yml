@@ -2,8 +2,8 @@ name: Release
 
 # A tag vX.Y.Z is what makes a release, whether it comes from `make release` or from the
 # GitHub UI: the version in it is the version built, stamped and published. This workflow
-# tests that commit, builds the Windows installer and the Linux tarball, and publishes them
-# with checksums as a GitHub release.
+# tests that commit, builds the Windows installer, the Linux tarball and the .deb, and
+# publishes them with checksums as a GitHub release.
 on:
   push:
     tags: ['v*']
@@ -28,7 +28,7 @@ jobs:
           echo "${GITHUB_REF_NAME#v}" > VERSION
       - run: make test
       # winres stamps the exe's version info from VERSION
-      - run: make winres windows linux-dist
+      - run: make winres windows linux-dist linux-deb
       - uses: actions/upload-artifact@v7
         with:
           name: exe
@@ -37,7 +37,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: release-linux
-          path: dist/gourdian-*-linux-x86_64.tar.gz
+          path: |
+            dist/gourdian-*-linux-x86_64.tar.gz
+            dist/gourdian_*_amd64.deb
           if-no-files-found: error
 
   installer:
