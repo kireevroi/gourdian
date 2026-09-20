@@ -128,7 +128,7 @@ func TestEveryHeroReadsAsItself(t *testing.T) {
 func TestAMisplacedBarReadsNothing(t *testing.T) {
 	shot := screenshot(bar, [2 * Slots]int{1, 8, 14, 26, 35, 44, 53, 74, 86, 101})
 	wrong := Bar{Left: Box{X: 560, Y: 400, W: 380, H: 46}, Right: Box{X: 1000, Y: 400, W: 380, H: 46}}
-	if n := Found(wrong.Read(shot, table(heroes))); n != 0 {
+	if n := ReadCount(wrong.Read(shot, table(heroes))); n != 0 {
 		t.Errorf("a bar over empty screen read %d heroes", n)
 	}
 }
@@ -145,5 +145,44 @@ func TestABarMustDescribeTenReadablePortraits(t *testing.T) {
 	}
 	if !bar.Ready() {
 		t.Error("a sound bar was rejected")
+	}
+}
+
+// The trainer finds the bar by looking for the one portrait it is sure of: in a match it
+// knows its own hero and which of the ten slots that hero sits in.
+func TestFindingTheBarFromOneKnownPortrait(t *testing.T) {
+	tab := table(heroes)
+	want := [2 * Slots]int{1, 8, 14, 26, 35, 44, 53, 74, 86, 101}
+	shot := screenshot(bar, want)
+
+	const slot = 2 // the third portrait on the left run
+	found, ok := Find(shot, tab[want[slot]][0])
+	if !ok {
+		t.Fatal("the portrait wasn't found at all")
+	}
+	// Find lands on the art, which sits inside the slot the portraits are spaced by; Fit is
+	// what turns that into the geometry.
+	if truth := bar.Cell(slot); !found.Cell.In(truth) {
+		t.Errorf("found the portrait at %v, which is not inside its slot %v", found.Cell, truth)
+	}
+
+	got, read, ok := Fit(shot, tab, found.Cell, slot)
+	if !ok {
+		t.Fatalf("no bar could be fitted around %v", found.Cell)
+	}
+	if read != 2*Slots {
+		t.Errorf("the bar it worked out reads %d of the ten heroes: %+v", read, got)
+	}
+}
+
+// A screen with no portrait on it must not yield a bar that reads anything.
+func TestFindingNothingOnAnEmptyScreen(t *testing.T) {
+	shot := screenshot(bar, [2 * Slots]int{})
+	found, ok := Find(shot, table(heroes)[26][0])
+	if !ok {
+		return // nothing found at all is a fine answer
+	}
+	if _, read, ok := Fit(shot, table(heroes), found.Cell, 0); ok {
+		t.Errorf("a bar fitted to an empty screen read %d heroes", read)
 	}
 }
