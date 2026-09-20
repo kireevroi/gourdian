@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"gourdian/internal/dota"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,7 +21,7 @@ func TestOpenCreatesTokenAndKeepsDefaultsForMissingKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := st.Get()
-	if c.Token == "" || c.Listen != "127.0.0.1:4570" || c.Settings.Role != RoleMid {
+	if c.Token == "" || c.Listen != "127.0.0.1:4570" || c.Settings.Role != dota.Mid {
 		t.Fatalf("config = %+v", c)
 	}
 	if !c.Settings.AI.Enabled || c.Settings.Recording.Keep != 20 {
@@ -160,7 +161,7 @@ func TestUpdateKeepsConcurrentChanges(t *testing.T) {
 				if s.HeroRoles == nil {
 					s.HeroRoles = map[string]string{}
 				}
-				s.HeroRoles[strconv.Itoa(i+1)] = RoleCarry
+				s.HeroRoles[strconv.Itoa(i+1)] = dota.Carry
 				return nil
 			}); err != nil {
 				t.Error(err)
@@ -189,7 +190,7 @@ func TestUpdateLeavesSettingsAloneWhenTheChangeIsBad(t *testing.T) {
 	if _, err := store.Update(func(s *Settings) error { s.Role = "jungler"; return nil }); err == nil {
 		t.Fatal("an invalid role was accepted")
 	}
-	if _, err := store.Update(func(s *Settings) error { s.Role = RoleMid; return errors.New("changed my mind") }); err == nil {
+	if _, err := store.Update(func(s *Settings) error { s.Role = dota.Mid; return errors.New("changed my mind") }); err == nil {
 		t.Fatal("the change's error was lost")
 	}
 	if got := store.Settings(); got.Role != before.Role {

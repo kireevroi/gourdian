@@ -3,7 +3,7 @@ package coach
 import (
 	"testing"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
 
@@ -13,7 +13,7 @@ var nagSpec = RuleSpec{ID: "custom-nag", Name: "Nag", Enabled: true, Category: "
 	Then: AlertSpec{Text: "Spend it", Severity: "info"}, Cooldown: 5}
 
 func TestFightsHoldBackSpokenReminders(t *testing.T) {
-	set := settings(config.RoleHardSupport)
+	set := settings(dota.HardSupport)
 	set.QuietInFights = true
 	hurt := func(s *gsi.State) {
 		s.Player.Gold = 900

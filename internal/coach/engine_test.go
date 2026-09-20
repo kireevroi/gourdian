@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
 	"gourdian/internal/stats"
@@ -79,7 +80,7 @@ func byRule(tips []Tip, rule string) []Tip {
 
 func TestNoTPWaitsThenRespectsCooldown(t *testing.T) {
 	e := newEngine(nil)
-	tips := play(e, settings(config.RoleCarry), 100, 205, func(s *gsi.State) {
+	tips := play(e, settings(dota.Carry), 100, 205, func(s *gsi.State) {
 		s.Items["teleport0"] = gsi.Item{Name: "empty"}
 		s.Player.Gold = 500
 	})
@@ -91,12 +92,12 @@ func TestNoTPWaitsThenRespectsCooldown(t *testing.T) {
 
 func TestNoTPSilentWithoutGoldOrWhenInStash(t *testing.T) {
 	e := newEngine(nil)
-	tips := play(e, settings(config.RoleCarry), 100, 200, func(s *gsi.State) {
+	tips := play(e, settings(dota.Carry), 100, 200, func(s *gsi.State) {
 		s.Items["teleport0"] = gsi.Item{Name: "empty"}
 		s.Player.Gold = 500
 		s.Items["stash0"] = gsi.Item{Name: "item_tpscroll"}
 	})
-	tips = append(tips, play(newEngine(nil), settings(config.RoleCarry), 100, 200, func(s *gsi.State) {
+	tips = append(tips, play(newEngine(nil), settings(dota.Carry), 100, 200, func(s *gsi.State) {
 		s.Items["teleport0"] = gsi.Item{Name: "empty"}
 		s.Player.Gold = 40
 	})...)
@@ -106,15 +107,15 @@ func TestNoTPSilentWithoutGoldOrWhenInStash(t *testing.T) {
 }
 
 func TestRunesOnlyForRolesThatTakeThem(t *testing.T) {
-	if got := byRule(play(newEngine(nil), settings(config.RoleCarry), 220, 250, nil), "runes"); len(got) != 0 {
+	if got := byRule(play(newEngine(nil), settings(dota.Carry), 220, 250, nil), "runes"); len(got) != 0 {
 		t.Fatalf("carry should not get rune reminders: %+v", got)
 	}
 	// Patch 7.41: bounty runes at 0:00 and every 4:00 after, power runes from 6:00 every 2:00.
-	bounty := byRule(play(newEngine(nil), settings(config.RoleMid), 220, 250, nil), "runes")
+	bounty := byRule(play(newEngine(nil), settings(dota.Mid), 220, 250, nil), "runes")
 	if len(bounty) != 1 || bounty[0].Clock != 225 || !strings.Contains(bounty[0].Text, "Bounty runes spawn in 15s (4:00)") {
 		t.Fatalf("want a bounty reminder at 3:45, got %+v", bounty)
 	}
-	tips := play(newEngine(nil), settings(config.RoleMid), 340, 360, nil)
+	tips := play(newEngine(nil), settings(dota.Mid), 340, 360, nil)
 	if got := byRule(tips, "runes"); len(got) != 0 {
 		t.Fatalf("no bounty runes at 6:00 any more: %+v", got)
 	}
@@ -125,7 +126,7 @@ func TestRunesOnlyForRolesThatTakeThem(t *testing.T) {
 }
 
 func TestDisabledRuleDoesNotFire(t *testing.T) {
-	set := settings(config.RoleMid)
+	set := settings(dota.Mid)
 	set.DisabledRules = []string{"runes"}
 	if got := byRule(play(newEngine(nil), set, 340, 360, nil), "runes"); len(got) != 0 {
 		t.Fatalf("disabled rule fired: %+v", got)
@@ -133,7 +134,7 @@ func TestDisabledRuleDoesNotFire(t *testing.T) {
 }
 
 func TestPausedGameProducesNoTips(t *testing.T) {
-	tips := play(newEngine(nil), settings(config.RoleCarry), 100, 200, func(s *gsi.State) {
+	tips := play(newEngine(nil), settings(dota.Carry), 100, 200, func(s *gsi.State) {
 		s.Map.Paused = true
 		s.Items["teleport0"] = gsi.Item{Name: "empty"}
 		s.Player.Gold = 500
@@ -157,10 +158,10 @@ func TestSkillPointIgnoresInnateOffset(t *testing.T) {
 			}
 		}
 	}
-	if got := byRule(play(newEngine(nil), settings(config.RoleCarry), 60, 160, levelUp(3)), "skill_points"); len(got) != 0 {
+	if got := byRule(play(newEngine(nil), settings(dota.Carry), 60, 160, levelUp(3)), "skill_points"); len(got) != 0 {
 		t.Fatalf("prompt level-up should not warn: %+v", got)
 	}
-	got := byRule(play(newEngine(nil), settings(config.RoleCarry), 60, 160, levelUp(40)), "skill_points")
+	got := byRule(play(newEngine(nil), settings(dota.Carry), 60, 160, levelUp(40)), "skill_points")
 	if len(got) != 1 || got[0].Clock != 115 {
 		t.Fatalf("want one skill point warning at 115, got %+v", got)
 	}
@@ -169,7 +170,7 @@ func TestSkillPointIgnoresInnateOffset(t *testing.T) {
 func TestSkillPointIgnoresAnAbilityLevelAheadOfTheHeroLevel(t *testing.T) {
 	// Recorded in a Chen game: one update had the ability levelled while the hero was still a
 	// level behind, and every later level-up looked like an unspent point.
-	got := byRule(play(newEngine(nil), settings(config.RoleCarry), 60, 300, func(s *gsi.State) {
+	got := byRule(play(newEngine(nil), settings(dota.Carry), 60, 300, func(s *gsi.State) {
 		s.Hero.Level = 2
 		s.Abilities["ability1"] = gsi.Ability{Name: "antimage_blink", Level: 1}
 		if s.Map.ClockTime == 100 {
@@ -190,7 +191,7 @@ func TestSkillPointIgnoresAnAbilityLevelAheadOfTheHeroLevel(t *testing.T) {
 }
 
 func TestSkillPointStopsNagging(t *testing.T) {
-	got := byRule(play(newEngine(nil), settings(config.RoleCarry), 60, 400, func(s *gsi.State) {
+	got := byRule(play(newEngine(nil), settings(dota.Carry), 60, 400, func(s *gsi.State) {
 		if s.Map.ClockTime >= 100 {
 			s.Hero.Level = 2
 		}
@@ -201,7 +202,7 @@ func TestSkillPointStopsNagging(t *testing.T) {
 }
 
 func TestLowHPSuggestsWand(t *testing.T) {
-	got := byRule(play(newEngine(nil), settings(config.RoleCarry), 300, 301, func(s *gsi.State) {
+	got := byRule(play(newEngine(nil), settings(dota.Carry), 300, 301, func(s *gsi.State) {
 		s.Hero.HealthPercent, s.Hero.Health = 20, 120
 		s.Items["slot2"] = gsi.Item{Name: "item_magic_wand", CanCast: true, Charges: 9}
 	}), "low_hp")
@@ -211,7 +212,7 @@ func TestLowHPSuggestsWand(t *testing.T) {
 }
 
 func TestLowHPWithoutAnItemJustSaysBackOff(t *testing.T) {
-	got := byRule(play(newEngine(nil), settings(config.RoleCarry), 300, 301, func(s *gsi.State) {
+	got := byRule(play(newEngine(nil), settings(dota.Carry), 300, 301, func(s *gsi.State) {
 		s.Hero.HealthPercent, s.Hero.Health = 20, 120
 	}), "low_hp")
 	if len(got) != 1 || !strings.HasSuffix(got[0].Text, "). Back off") {
@@ -220,7 +221,7 @@ func TestLowHPWithoutAnItemJustSaysBackOff(t *testing.T) {
 }
 
 func TestLowHPIsSaidOnceWhenYouUseTheItem(t *testing.T) {
-	tips := play(newEngine(nil), settings(config.RoleCarry), 300, 305, func(s *gsi.State) {
+	tips := play(newEngine(nil), settings(dota.Carry), 300, 305, func(s *gsi.State) {
 		s.Hero.HealthPercent, s.Hero.Health = 18, 108
 		if s.Map.ClockTime < 302 {
 			s.Items["slot2"] = gsi.Item{Name: "item_faerie_fire", CanCast: true}
@@ -240,7 +241,7 @@ func TestLowHPIsSaidOnceWhenYouUseTheItem(t *testing.T) {
 }
 
 func TestNoLowHPWarningAtZeroHealth(t *testing.T) {
-	got := byRule(play(newEngine(nil), settings(config.RoleCarry), 300, 301, func(s *gsi.State) {
+	got := byRule(play(newEngine(nil), settings(dota.Carry), 300, 301, func(s *gsi.State) {
 		s.Hero.HealthPercent, s.Hero.Health = 0, 2 // burst down; Dota says dead a moment later
 	}), "low_hp")
 	if len(got) != 0 {
@@ -249,14 +250,14 @@ func TestNoLowHPWarningAtZeroHealth(t *testing.T) {
 }
 
 func TestEmptyReasonLeavesNoBrackets(t *testing.T) {
-	got := byRule(play(newEngine(nil), settings(config.RoleMid), -60, -58, nil), "role_check")
+	got := byRule(play(newEngine(nil), settings(dota.Mid), -60, -58, nil), "role_check")
 	if len(got) != 1 || strings.Contains(got[0].Text, "()") || !strings.HasPrefix(got[0].Text, "Coaching you as mid. ") {
 		t.Fatalf("role check = %+v", got)
 	}
 }
 
 func TestRoshanEventTimers(t *testing.T) {
-	tips := play(newEngine(nil), settings(config.RoleCarry), 1200, 1700, func(s *gsi.State) {
+	tips := play(newEngine(nil), settings(dota.Carry), 1200, 1700, func(s *gsi.State) {
 		if s.Map.ClockTime >= 1205 {
 			s.Events = []gsi.Event{{GameTime: 1205 + 90, EventType: "roshan_killed", KilledByTeam: "dire"}}
 		}
@@ -272,13 +273,13 @@ func TestRoshanEventTimers(t *testing.T) {
 }
 
 func TestIdleNeedsNoMovementAndNoFarm(t *testing.T) {
-	farming := play(newEngine(nil), settings(config.RoleCarry), 700, 800, func(s *gsi.State) {
+	farming := play(newEngine(nil), settings(dota.Carry), 700, 800, func(s *gsi.State) {
 		s.Player.LastHits = s.Map.ClockTime / 10
 	})
 	if got := byRule(farming, "idle"); len(got) != 0 {
 		t.Fatalf("farming in place should not count as idle: %+v", got)
 	}
-	got := byRule(play(newEngine(nil), settings(config.RoleCarry), 700, 800, nil), "idle")
+	got := byRule(play(newEngine(nil), settings(dota.Carry), 700, 800, nil), "idle")
 	if len(got) != 2 || got[0].Clock != 730 || got[1].Clock != 790 {
 		t.Fatalf("want idle at 730 and 790, got %+v", got)
 	}
@@ -286,7 +287,7 @@ func TestIdleNeedsNoMovementAndNoFarm(t *testing.T) {
 
 func TestMatchSummaryOnPostGame(t *testing.T) {
 	e := newEngine(fakeData{})
-	set := settings(config.RoleCarry)
+	set := settings(dota.Carry)
 	play(e, set, 590, 700, func(s *gsi.State) {
 		s.Player.LastHits = 40
 		if s.Map.ClockTime >= 650 {
@@ -311,11 +312,11 @@ func TestMatchSummaryOnPostGame(t *testing.T) {
 }
 
 func TestRoleCheckBeforeHorn(t *testing.T) {
-	got := byRule(play(newEngine(nil), settings(config.RoleSoftSupport), -40, 30, nil), "role_check")
+	got := byRule(play(newEngine(nil), settings(dota.SoftSupport), -40, 30, nil), "role_check")
 	if len(got) != 1 || got[0].Clock != -40 || !strings.Contains(got[0].Text, "soft support") {
 		t.Fatalf("role check = %+v", got)
 	}
-	if got := byRule(play(newEngine(nil), settings(config.RoleCarry), 10, 30, nil), "role_check"); len(got) != 0 {
+	if got := byRule(play(newEngine(nil), settings(dota.Carry), 10, 30, nil), "role_check"); len(got) != 0 {
 		t.Fatalf("no role check after the horn, got %+v", got)
 	}
 }
@@ -323,7 +324,7 @@ func TestRoleCheckBeforeHorn(t *testing.T) {
 func TestFocusAtHorn(t *testing.T) {
 	e := newEngine(nil)
 	e.SetFocus("Carry a TP scroll")
-	got := byRule(play(e, settings(config.RoleCarry), -5, 60, nil), "focus")
+	got := byRule(play(e, settings(dota.Carry), -5, 60, nil), "focus")
 	if len(got) != 1 || got[0].Clock != 0 || got[0].Text != "Focus this game: Carry a TP scroll" {
 		t.Fatalf("focus tips = %+v", got)
 	}
@@ -333,7 +334,7 @@ func TestExpireRecordsAbandonedMatch(t *testing.T) {
 	e := newEngine(fakeData{})
 	now := time.Now()
 	e.now = func() time.Time { return now }
-	play(e, settings(config.RoleCarry), 590, 700, nil)
+	play(e, settings(dota.Carry), 590, 700, nil)
 	if e.Expire(3*time.Minute) != nil {
 		t.Fatal("expired while updates are fresh")
 	}
@@ -362,17 +363,17 @@ func TestNextPeriodic(t *testing.T) {
 }
 
 func TestExpectedLastHitsInterpolates(t *testing.T) {
-	if got, _ := expectedLastHits(RoleTargets(config.RoleCarry).LastHits, 450); got != 47 {
+	if got, _ := expectedLastHits(RoleTargets(dota.Carry).LastHits, 450); got != 47 {
 		t.Fatalf("expected 47 at 7:30 for carry, got %d", got)
 	}
-	if _, ok := expectedLastHits(RoleTargets(config.RoleHardSupport).LastHits, 450); ok {
+	if _, ok := expectedLastHits(RoleTargets(dota.HardSupport).LastHits, 450); ok {
 		t.Fatal("supports have no last-hit pace")
 	}
 }
 
 func TestLobbyGamesAreRecordedAsPractice(t *testing.T) {
 	e := newEngine(fakeData{})
-	set := settings(config.RoleCarry)
+	set := settings(dota.Carry)
 	var res Result
 	for clock := 290; clock <= 320; clock++ {
 		s := state(clock)
@@ -396,7 +397,7 @@ func TestLobbyGamesAreRecordedAsPractice(t *testing.T) {
 func TestRoleCheckSaysWhereTheRoleCameFrom(t *testing.T) {
 	e := newEngine(nil)
 	e.SetRoleNote("your usual role on Lion")
-	got := byRule(play(e, settings(config.RoleSoftSupport), -40, -39, nil), "role_check")
+	got := byRule(play(e, settings(dota.SoftSupport), -40, -39, nil), "role_check")
 	if len(got) != 1 || !strings.Contains(got[0].Text, "soft support (your usual role on Lion)") {
 		t.Fatalf("role check = %+v", got)
 	}

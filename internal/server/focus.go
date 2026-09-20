@@ -1,10 +1,10 @@
 package server
 
 import (
-	"gourdian/internal/coach"
 	"strings"
 
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/stats"
 )
 
@@ -59,7 +59,7 @@ func (s *Server) lastFocusFor(role string, heroID int) string {
 
 // fromRole says which game a focus came from when it wasn't this position.
 func fromRole(r stats.Review, lang string) string {
-	name := coach.RoleName(r.Role, lang)
+	name := dota.RoleName(r.Role, lang)
 	switch {
 	case name != "" && r.Hero != "":
 		return roleSay(lang, "%s (from your %s game as %s)", r.NextGameFocus, r.Hero, name)

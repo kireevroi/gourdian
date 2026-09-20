@@ -9,6 +9,7 @@ import (
 	"gourdian/internal/ai"
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 )
 
 // TestLiveCoachOnStormSpirit asks the real coach one question; it only runs when asked to.
@@ -24,9 +25,9 @@ func TestLiveCoachOnStormSpirit(t *testing.T) {
 			"late":  {"Mystic Staff", "Parasma", "Black King Bar", "Kaya and Sange", "Aghanim's Scepter"},
 		},
 		Owned: []string{"Bottle", "Power Treads", "Soul Ring", "Null Talisman"}}
-	snap := coach.Snapshot{InMatch: true, Clock: 720, Team: "radiant", Role: config.RoleMid,
+	snap := coach.Snapshot{InMatch: true, Clock: 720, Team: "radiant", Role: dota.Mid,
 		Hero: &coach.HeroView{Name: "Storm Spirit", Level: 11, Alive: true, HealthPercent: 85, ManaPercent: 60}}
-	prompt := Prompt(Input{Context: Context{Hero: facts}, Reason: "a regular check-in; the player has 2400 gold", Role: config.RoleMid, Snapshot: snap})
+	prompt := Prompt(Input{Context: Context{Hero: facts}, Reason: "a regular check-in; the player has 2400 gold", Role: dota.Mid, Snapshot: snap})
 	env := ai.Env{WorkDir: t.TempDir(), CLIPath: func(string) string { return "" }, Key: func(string) string { return "" }, CustomURL: func() string { return "" }}
 	var claude ai.Provider
 	for _, p := range ai.NewProviders(env) {

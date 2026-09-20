@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
 
@@ -38,7 +38,7 @@ func TestUsedAegisIsNeitherADeathNorAnExpiry(t *testing.T) {
 			s.Hero.Alive, s.Hero.RespawnSeconds = false, 1130-c
 		}
 	}
-	tips := play(newEngine(nil), settings(config.RoleCarry), 970, 1300, withAegis(2, reincarnate))
+	tips := play(newEngine(nil), settings(dota.Carry), 970, 1300, withAegis(2, reincarnate))
 	if got := byRule(tips, "aegis"); len(got) != 0 {
 		t.Fatalf("the Aegis was used at 17:14, so it can't expire at 21:20: %+v", got)
 	}
@@ -49,16 +49,16 @@ func TestUsedAegisIsNeitherADeathNorAnExpiry(t *testing.T) {
 }
 
 func TestAegisAlertSaysWhoseItIs(t *testing.T) {
-	tips := play(newEngine(nil), settings(config.RoleCarry), 970, 1260, withAegis(4, nil))
+	tips := play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(4, nil))
 	got := byRule(tips, "aegis")
 	if len(got) != 1 || !strings.HasPrefix(got[0].Text, "Your team's Aegis expires at 21:20") || !strings.Contains(got[0].Text, "if it wasn't used") {
 		t.Fatalf("a teammate's Aegis: %+v", got)
 	}
-	tips = play(newEngine(nil), settings(config.RoleCarry), 970, 1260, withAegis(7, nil))
+	tips = play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(7, nil))
 	if got := byRule(tips, "aegis"); len(got) != 1 || !strings.HasPrefix(got[0].Text, "The enemy's Aegis") {
 		t.Fatalf("the enemy's Aegis: %+v", got)
 	}
-	tips = play(newEngine(nil), settings(config.RoleCarry), 970, 1260, withAegis(2, func(s *gsi.State) {
+	tips = play(newEngine(nil), settings(dota.Carry), 970, 1260, withAegis(2, func(s *gsi.State) {
 		if s.Map.ClockTime >= 980 {
 			s.Items["slot2"] = gsi.Item{Name: "item_aegis"}
 		}
@@ -71,7 +71,7 @@ func TestAegisAlertSaysWhoseItIs(t *testing.T) {
 func TestRoshanKillerInRussian(t *testing.T) {
 	e := newEngine(nil)
 	e.SetLanguage("ru")
-	set := settings(config.RoleCarry)
+	set := settings(dota.Carry)
 	set.Language = "ru"
 	got := byRule(play(e, set, 970, 990, withAegis(4, nil)), "roshan")
 	if len(got) != 1 || !strings.Contains(got[0].Text, "Рошан убит вашей командой") {

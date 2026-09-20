@@ -28,6 +28,7 @@ import (
 	"gourdian/internal/buildinfo"
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
 	"gourdian/internal/hud"
@@ -470,7 +471,7 @@ func (s *Server) roleFor(heroID int, set config.Settings) (role, note string) {
 }
 
 func (s *Server) usualRole(heroID int) string {
-	role, err := s.stats.UsualRole(heroID, config.Roles)
+	role, err := s.stats.UsualRole(heroID, dota.Roles)
 	if err != nil {
 		s.log.Warn("read the usual role", "hero", heroID, "err", err)
 	}
@@ -482,9 +483,9 @@ func roleFromHeroRoles(roles []string) string {
 	support, carry := slices.Index(roles, "Support"), slices.Index(roles, "Carry")
 	switch {
 	case support >= 0 && (carry < 0 || support < carry):
-		return config.RoleSoftSupport
+		return dota.SoftSupport
 	case carry >= 0:
-		return config.RoleCarry
+		return dota.Carry
 	}
 	return ""
 }
@@ -586,7 +587,7 @@ func (s *Server) settingsResponse() settingsResponse {
 	return settingsResponse{
 		Settings:       s.cfg.Settings(),
 		Rules:          s.engine.Rules(),
-		Roles:          config.Roles,
+		Roles:          dota.Roles,
 		SystemVoice:    s.speaker != nil,
 		ConfigPath:     s.cfg.Path(),
 		StatsDir:       s.stats.Dir(),

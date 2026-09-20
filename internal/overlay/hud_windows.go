@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/hotkey"
 	"gourdian/internal/hud"
 )
@@ -283,7 +284,7 @@ func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 		case hotkeyDashboard:
 			OpenDashboard(u.opts.URL+"/", u.dashboardWindow)
 		default:
-			if i := int(wParam) - hotkeyPosition; i >= 0 && i < len(config.Roles) {
+			if i := int(wParam) - hotkeyPosition; i >= 0 && i < len(dota.Roles) {
 				u.pickPosition(i)
 			}
 		}
@@ -412,7 +413,7 @@ func (u *ui) setPositionKeys(on bool) {
 		return
 	}
 	u.positionKeys = on
-	for i := range config.Roles {
+	for i := range dota.Roles {
 		if on {
 			pRegisterHotKey.Call(u.hwnd, uintptr(hotkeyPosition+i), modControl|modShift|modNoRepeat, uintptr('1'+i))
 		} else {
@@ -422,7 +423,7 @@ func (u *ui) setPositionKeys(on bool) {
 }
 
 func (u *ui) pickPosition(i int) {
-	role := config.Roles[i]
+	role := dota.Roles[i]
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

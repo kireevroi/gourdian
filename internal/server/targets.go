@@ -9,15 +9,13 @@ import (
 	"time"
 
 	"gourdian/internal/coach"
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/stats"
 )
 
 const (
-	coreGoalCost   = 2000
 	incompleteWait = 10 * time.Second // retry while OpenDota data is still loading
-	goalHistory    = 10               // games on the hero in the position that targets are made from
 )
 
 // targetCache builds personal targets from the match history and OpenDota's item timings. The
@@ -58,14 +56,14 @@ func (tc *targetCache) TargetsFor(heroID int, role string) coach.Targets {
 
 func (tc *targetCache) build(heroID int, role string) (coach.Targets, bool) {
 	s := tc.s
-	matches, err := s.stats.MatchesWhere(stats.MatchFilter{HeroID: heroID, Role: role, Real: true, Limit: goalHistory})
+	matches, err := s.stats.MatchesWhere(stats.MatchFilter{HeroID: heroID, Role: role, Real: true, Limit: dota.PersonalGames})
 	if err != nil {
 		return coach.RoleTargets(role), false
 	}
 	history := slices.Clone(matches)
 	slices.Reverse(history) // newest first
 	t := coach.PersonalLastHits(role, history)
-	if role != config.RoleCarry && role != config.RoleMid && role != config.RoleOfflane || s.data == nil {
+	if !dota.Core(role) || s.data == nil {
 		return t, true
 	}
 	var complete bool
@@ -83,14 +81,14 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []stats.MatchS
 	}
 	ids := map[string]bool{}
 	var idList []string
-	for _, m := range history[:min(len(history), goalHistory)] {
+	for _, m := range history[:min(len(history), dota.PersonalGames)] {
 		ids[m.MatchID] = true
 		idList = append(idList, m.MatchID)
 	}
 	rows, _ := s.stats.ItemsIn(idList)
 	perMatch := map[string]map[string]int{}
 	for _, r := range rows {
-		if !ids[r.MatchID] || items[r.Item].Cost < coreGoalCost {
+		if !ids[r.MatchID] || items[r.Item].Cost < dota.GoalItemCost {
 			continue
 		}
 		if perMatch[r.MatchID] == nil {
@@ -124,7 +122,7 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []stats.MatchS
 			}
 		}
 		slices.SortFunc(chosen, func(a, b string) int {
-			return cmp.Or(counts[b]-counts[a], coach.Median(times[a])-coach.Median(times[b]))
+			return cmp.Or(counts[b]-counts[a], dota.Median(times[a])-dota.Median(times[b]))
 		})
 		if len(chosen) > 0 {
 			fromGames = len(perMatch)
@@ -136,7 +134,7 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []stats.MatchS
 			return nil, 0, false
 		}
 		for _, it := range build.Items {
-			if (it.Phase == dotadata.PhaseMid || it.Phase == dotadata.PhaseLate) && it.Cost >= coreGoalCost {
+			if (it.Phase == dotadata.PhaseMid || it.Phase == dotadata.PhaseLate) && it.Cost >= dota.GoalItemCost {
 				chosen = append(chosen, it.Name)
 			}
 		}
@@ -153,7 +151,7 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []stats.MatchS
 		good, hasGood := dotadata.GoodTiming(buckets)
 		usual := 0
 		if len(times[name]) >= 3 {
-			usual = coach.Median(times[name])
+			usual = dota.Median(times[name])
 		}
 		by := good
 		// Aim a minute under your usual, but never earlier than the timing that wins most.

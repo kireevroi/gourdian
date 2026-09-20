@@ -3,12 +3,12 @@ package coach
 import (
 	"testing"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 )
 
 func TestTowerDefenceAndWards(t *testing.T) {
-	tips := play(newEngine(nil), settings(config.RoleHardSupport), 600, 660, func(s *gsi.State) {
+	tips := play(newEngine(nil), settings(dota.HardSupport), 600, 660, func(s *gsi.State) {
 		hp := 1800
 		if s.Map.ClockTime >= 610 {
 			hp = 900

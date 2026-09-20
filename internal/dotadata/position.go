@@ -14,13 +14,13 @@ import (
 // Pudge's wards end up in a mid Pudge's build. Its SQL explorer over parsed pro matches can split
 // them and keep only the games the hero's team won.
 const (
-	positionMinGames = 12
-	positionDays     = 120
+	// MinProGames is the fewest pro games a build is made from; below it the trainer falls back.
+	MinProGames = 12
+	// ProDays is how far back the pro games behind builds and skill orders go.
+	ProDays = 120
 )
 
-// Positions numbers the trainer's roles the way players do.
-var Positions = map[string]int{"carry": 1, "mid": 2, "offlane": 3, "soft_support": 4, "hard_support": 5}
-
+// positionKey is one hero in one position, as the builds and skill orders are looked up.
 type positionKey struct {
 	hero, pos int
 	won       bool // only games the hero's team won
@@ -65,7 +65,7 @@ func positionSQL(key positionKey) string {
 SELECT CASE WHEN (e->>'time')::int <= 0 THEN 'start_game_items' WHEN (e->>'time')::int < 600 THEN 'early_game_items'
     WHEN (e->>'time')::int < 1500 THEN 'mid_game_items' ELSE 'late_game_items' END AS phase,
   e->>'key' AS item, count(DISTINCT match_id)::int AS games, (SELECT count(*) FROM q)::int AS total
-FROM q, unnest(purchase_log) e GROUP BY 1, 2`, positionDays, hero, hero, key.filter(), pos, pos)
+FROM q, unnest(purchase_log) e GROUP BY 1, 2`, ProDays, hero, hero, key.filter(), pos, pos)
 }
 
 // proBuild is the hero's build from pro games in one position (0 for every position), won
@@ -109,7 +109,7 @@ func (c *Client) fetchPositionBuild(key positionKey) {
 		return
 	}
 	var b *Build
-	if data.Games >= positionMinGames {
+	if data.Games >= MinProGames {
 		b = BuildFromPopularity(key.hero, data.Pop, c.items)
 		b.Position, b.Games, b.Won = key.pos, data.Games, key.won
 	}

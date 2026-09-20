@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/gsi"
 	"gourdian/internal/stats"
@@ -18,18 +18,18 @@ func TestPersonalLastHits(t *testing.T) {
 		lh(map[string]int{"5:00": 20, "10:00": 40}), lh(map[string]int{"10:00": 44}),
 		lh(map[string]int{"10:00": 38}), lh(map[string]int{"5:00": 25, "10:00": 50}),
 	}
-	got := PersonalLastHits(config.RoleCarry, history)
+	got := PersonalLastHits(dota.Carry, history)
 	// 10:00: median of 38, 40, 44, 50 is 42, so the target is 46. 5:00 has only two games.
 	if !slices.Equal(got.LastHits, []int{30, 46, 110, 160, 270}) || got.Usual[1] != 42 || got.Games != 4 {
 		t.Fatalf("targets = %+v", got)
 	}
-	high := PersonalLastHits(config.RoleCarry, []stats.MatchSummary{
+	high := PersonalLastHits(dota.Carry, []stats.MatchSummary{
 		lh(map[string]int{"5:00": 40}), lh(map[string]int{"5:00": 40}), lh(map[string]int{"5:00": 40}),
 	})
 	if high.LastHits[0] != 44 || high.LastHits[1] != 65 {
 		t.Fatalf("5:00 target 44 and 10:00 from the table: %+v", high.LastHits)
 	}
-	if PersonalLastHits(config.RoleHardSupport, history).LastHits != nil {
+	if PersonalLastHits(dota.HardSupport, history).LastHits != nil {
 		t.Fatal("supports have no last-hit targets")
 	}
 }
@@ -40,11 +40,11 @@ func (f fixedTargets) TargetsFor(int, string) Targets { return Targets(f) }
 
 func TestItemTimingGoal(t *testing.T) {
 	items := map[string]dotadata.ItemInfo{"bfury": {DName: "Battle Fury", Cost: 4100}, "mjollnir": {DName: "Mjollnir", Cost: 5500}}
-	goal := fixedTargets{LastHits: RoleTargets(config.RoleCarry).LastHits, Items: []ItemGoal{{Item: "bfury", Name: "Battle Fury", By: 900}}}
+	goal := fixedTargets{LastHits: RoleTargets(dota.Carry).LastHits, Items: []ItemGoal{{Item: "bfury", Name: "Battle Fury", By: 900}}}
 	runRule := func(rule string, mutate func(*gsi.State)) []Tip {
 		e := newEngine(fakeData{items: items})
 		e.SetTargetSource(goal)
-		return byRule(play(e, settings(config.RoleCarry), 0, 1000, mutate), rule)
+		return byRule(play(e, settings(dota.Carry), 0, 1000, mutate), rule)
 	}
 	run := func(mutate func(*gsi.State)) []Tip { return runRule("item_timing", mutate) }
 	soon := run(nil)
@@ -77,23 +77,10 @@ func TestSnapshotShowsPersonalPaceAndItemGoals(t *testing.T) {
 	items := map[string]dotadata.ItemInfo{"bfury": {DName: "Battle Fury", Cost: 4100}}
 	e := newEngine(fakeData{items: items})
 	e.SetTargetSource(fixedTargets{LastHits: []int{33, 72, 110, 160, 270}, Usual: []int{30, 65, 0, 0, 0}, Items: []ItemGoal{{Item: "bfury", Name: "Battle Fury", By: 900}}})
-	play(e, settings(config.RoleCarry), 400, 401, nil)
-	snap := e.Snapshot(settings(config.RoleCarry))
+	play(e, settings(dota.Carry), 400, 401, nil)
+	snap := e.Snapshot(settings(dota.Carry))
 	if snap.Pace == nil || snap.Pace.Target != 72 || snap.Pace.Usual != 65 || len(snap.ItemGoals) != 1 || snap.ItemGoals[0].Remaining != 4100 {
 		t.Fatalf("pace %+v goals %+v", snap.Pace, snap.ItemGoals)
-	}
-}
-
-// The item timing goals used their own median, which took the upper middle value; every
-// target now uses the same one.
-func TestMedian(t *testing.T) {
-	for _, c := range []struct {
-		in   []int
-		want int
-	}{{nil, 0}, {[]int{7}, 7}, {[]int{3, 1, 2}, 2}, {[]int{600, 900}, 750}, {[]int{4, 1, 3, 2}, 2}} {
-		if got := Median(c.in); got != c.want {
-			t.Errorf("Median(%v) = %d, want %d", c.in, got, c.want)
-		}
 	}
 }
 
@@ -101,7 +88,7 @@ type slowTargets struct{ release chan struct{} }
 
 func (s slowTargets) TargetsFor(int, string) Targets {
 	<-s.release // working targets out from the data file
-	return RoleTargets(config.RoleCarry)
+	return RoleTargets(dota.Carry)
 }
 
 // Working out targets can read the data file; the dashboard and HUD mustn't wait for it on
@@ -112,7 +99,7 @@ func TestTargetsAreAskedForOutsideTheEngineLock(t *testing.T) {
 	e.SetTargetSource(src)
 	done := make(chan struct{})
 	go func() {
-		e.Update(state(60), settings(config.RoleCarry))
+		e.Update(state(60), settings(dota.Carry))
 		close(done)
 	}()
 	time.Sleep(50 * time.Millisecond) // Update is waiting for the targets now

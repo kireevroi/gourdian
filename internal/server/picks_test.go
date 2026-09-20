@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"gourdian/internal/config"
+	"gourdian/internal/dota"
 	"gourdian/internal/gsi"
 	"gourdian/internal/stats"
 )
@@ -20,14 +21,14 @@ func TestPickHelpUsesYourOwnRecord(t *testing.T) {
 			})
 		}
 	}
-	add("Storm Spirit", 17, config.RoleMid, "win", 4)
-	add("Storm Spirit", 17, config.RoleMid, "loss", 1)
-	add("Invoker", 74, config.RoleMid, "loss", 4)
-	add("Invoker", 74, config.RoleMid, "win", 1)
-	add("Lion", 26, config.RoleHardSupport, "win", 3)
-	add("Puck", 13, config.RoleMid, "win", 1) // too few games to say anything
+	add("Storm Spirit", 17, dota.Mid, "win", 4)
+	add("Storm Spirit", 17, dota.Mid, "loss", 1)
+	add("Invoker", 74, dota.Mid, "loss", 4)
+	add("Invoker", 74, dota.Mid, "win", 1)
+	add("Lion", 26, dota.HardSupport, "win", 3)
+	add("Puck", 13, dota.Mid, "win", 1) // too few games to say anything
 
-	p := srv.pickHelp(config.RoleMid)
+	p := srv.pickHelp(dota.Mid)
 	if p == nil || len(p.Best) != 1 || p.Best[0].Hero != "Storm Spirit" || p.Best[0].WinPct != 80 {
 		t.Fatalf("best = %+v", p)
 	}
@@ -37,7 +38,7 @@ func TestPickHelpUsesYourOwnRecord(t *testing.T) {
 	if p.Best[0].AvgLH10 != 50 {
 		t.Fatalf("last hits = %d", p.Best[0].AvgLH10)
 	}
-	if other := srv.pickHelp(config.RoleCarry); other != nil {
+	if other := srv.pickHelp(dota.Carry); other != nil {
 		t.Fatalf("no carry games, so no help: %+v", other)
 	}
 }
@@ -45,7 +46,7 @@ func TestPickHelpUsesYourOwnRecord(t *testing.T) {
 // Pick help is for the draft: it used to wait for a match in progress without a hero, which
 // Dota never sends, so it never showed.
 func TestPickHelpShowsDuringTheDraft(t *testing.T) {
-	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = config.RoleHardSupport })
+	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.HardSupport })
 	seed(t, srv, 10)
 	draft := payload(-60, func(s *gsi.State) {
 		s.Hero = &gsi.Hero{} // Dota's hero block before the pick: id 0
