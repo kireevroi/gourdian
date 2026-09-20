@@ -15,14 +15,15 @@ type Reading struct {
 	heroes [2 * Slots]int
 }
 
-// Add reads the bar in one frame and returns how many slots that settled.
+// Add reads the bar in one frame. It returns how many slots it made out, and how many of
+// them that settled: a slot can be read for several frames before it is believed.
 //
 // A frame only counts when it shows several portraits at once. One rectangle of a screen can
 // resemble a hero by chance -- a menu, a loading screen, the desktop -- but a whole row of
 // them resembling heroes in the places the bar's portraits go is the bar.
-func (r *Reading) Add(shot image.Image, bar Bar, t Table) int {
+func (r *Reading) Add(shot image.Image, bar Bar, t Table) (read, settled int) {
 	if !bar.Ready() || len(t) == 0 {
-		return 0
+		return 0, 0
 	}
 	var seen [2 * Slots]int
 	found := 0
@@ -40,7 +41,7 @@ func (r *Reading) Add(shot image.Image, bar Bar, t Table) int {
 		}
 	}
 	if found < LeastRead {
-		return 0
+		return 0, 0
 	}
 	// Dota lets nobody take a hero someone else has, so the same hero in two slots is a
 	// mistake in at least one of them, and there is no telling which.
@@ -58,11 +59,11 @@ func (r *Reading) Add(shot image.Image, bar Bar, t Table) int {
 			twice[id] = true
 		}
 	}
-	settled := 0
 	for slot, id := range seen {
 		if id == 0 || twice[id] {
 			continue
 		}
+		read++
 		if r.votes[slot] == nil {
 			r.votes[slot] = map[int]int{}
 		}
@@ -71,7 +72,7 @@ func (r *Reading) Add(shot image.Image, bar Bar, t Table) int {
 			r.heroes[slot], settled = id, settled+1
 		}
 	}
-	return settled
+	return read, settled
 }
 
 // taken reports whether a hero has already settled in some other slot.

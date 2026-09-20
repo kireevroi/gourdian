@@ -29,6 +29,12 @@ var games = map[string][]string{
 		"npc_dota_hero_skeleton_king", "npc_dota_hero_zuus", "npc_dota_hero_drow_ranger",
 		"npc_dota_hero_lion", "npc_dota_hero_warlock",
 	},
+	"3": {
+		"npc_dota_hero_windrunner", "npc_dota_hero_earthshaker", "npc_dota_hero_necrolyte",
+		"npc_dota_hero_drow_ranger", "npc_dota_hero_warlock",
+		"npc_dota_hero_lion", "npc_dota_hero_death_prophet", "npc_dota_hero_skeleton_king",
+		"npc_dota_hero_lich", "npc_dota_hero_juggernaut",
+	},
 }
 
 func init() {

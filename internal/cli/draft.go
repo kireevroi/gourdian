@@ -54,6 +54,7 @@ func draftCmd(args []string) error {
 	fmt.Printf("expecting the portraits at %+v and %+v\n", bar.Left, bar.Right)
 	var seen screen.Reading
 	searched := false
+	blind := 0
 	for shot := 1; time.Now().Before(deadline); shot++ {
 		time.Sleep(*every)
 		img, err := screen.Grab(size)
@@ -65,18 +66,22 @@ func draftCmd(args []string) error {
 				return err
 			}
 		}
-		fresh := seen.Add(img, bar, table)
-		// Dota's interface can be scaled by hand, and then the guess reads nothing. Look for
-		// the bar properly before giving up on it.
-		if seen.Settled() == 0 && !searched {
+		read, fresh := seen.Add(img, bar, table)
+		// Dota's interface can be scaled by hand, and then the guess points at the wrong part
+		// of the screen and reads nothing at all. Give it a couple of frames -- the draft may
+		// simply not have started -- and then look for the bar properly.
+		if read == 0 {
+			blind++
+		}
+		if read == 0 && blind >= 2 && !searched {
 			searched = true
-			if found, read, ok := screen.Locate(img, table); ok {
-				fmt.Printf("frame %2d: the guess read nothing; the bar is at %+v and %+v (%d heroes)\n",
-					shot, found.Left, found.Right, read)
+			if found, n, ok := screen.Locate(img, table); ok {
+				fmt.Printf("frame %2d: the guess reads nothing; the bar is at %+v and %+v (%d heroes)\n",
+					shot, found.Left, found.Right, n)
 				bar = found
 			}
 		}
-		fmt.Printf("frame %2d: %d of 10 known%s\n", shot, seen.Settled(), more(fresh))
+		fmt.Printf("frame %2d: read %d, %d of 10 known%s\n", shot, read, seen.Settled(), more(fresh))
 		if fresh > 0 || seen.Settled() == 2*screen.Slots {
 			printBoard(seen.Heroes(), names)
 		}
