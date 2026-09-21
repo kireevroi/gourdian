@@ -84,7 +84,8 @@ func TestAgainstARealFrame(t *testing.T) {
 	right, unknown, wrong := 0, 0, 0
 	for slot, want := range truth {
 		cell := measuredBar.Cell(slot)
-		s := Of(img, cell)
+		raw := Of(img, cell)
+		s := raw.Level()
 		type scored struct {
 			hero string
 			dist int
@@ -101,7 +102,7 @@ func TestAgainstARealFrame(t *testing.T) {
 		}
 		sort.Slice(all, func(a, b int) bool { return all[a].dist < all[b].dist })
 		ratio := float64(all[0].dist) / float64(all[1].dist)
-		id, ok := table.Match(s)
+		id, ok := table.Match(raw)
 		switch {
 		case ok && names[id] == want:
 			right++
@@ -121,7 +122,7 @@ func TestAgainstARealFrame(t *testing.T) {
 	for _, r := range []image.Rectangle{
 		image.Rect(1150, 4, 1315, 100), image.Rect(600, 700, 765, 796), image.Rect(60, 4, 225, 100),
 	} {
-		s := Of(img, r)
+		s := Of(img, r).Level()
 		best, bestName := -1, ""
 		for id, arts := range table {
 			for _, a := range arts {

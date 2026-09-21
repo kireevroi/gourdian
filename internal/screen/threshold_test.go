@@ -10,7 +10,7 @@ import (
 
 // ratioOf is how much closer the nearest hero is than the nearest other hero.
 func ratioOf(img image.Image, r image.Rectangle, t Table) float64 {
-	s := Of(img, r)
+	s := Of(img, r).Level()
 	best, second := -1, -1
 	for _, arts := range t {
 		near := -1

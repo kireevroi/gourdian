@@ -54,7 +54,7 @@ func TestWhereTheLineGoes(t *testing.T) {
 					if !cell.In(img.Bounds()) {
 						continue
 					}
-					if id, ok := matchAt(table, Of(img, cell), cut); ok {
+					if id, ok := matchAt(table, Of(img, cell).Level(), cut); ok {
 						votes[slot][id]++
 						if votes[slot][id] >= agree {
 							settled[slot] = id
