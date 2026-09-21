@@ -23,11 +23,8 @@ import (
 	"gourdian/internal/sys/hidewin"
 )
 
-// The script answers every line at once with one line: "ok", or for !voices the languages
-// of the installed voices, for !lang whether a voice for it exists ("ok" or "none"), and for
-// !busy whether it is still talking ("yes" or "no"). Speaking is asynchronous so that !cancel
-// can cut a line short for something urgent. Voices Windows 10 and 11 add from Settings,
-// Russian included, are only visible to WinRT, so that speaks when SAPI has no voice.
+// script answers each line with one: "ok"; !voices the installed languages; !lang "ok" or "none";
+// !busy "yes" or "no". It speaks asynchronously for !cancel, and via WinRT for Settings-added voices.
 const script = `
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Speech
@@ -121,22 +118,16 @@ type Speaker struct {
 	rate   int
 	wake   chan struct{}
 	closed bool
-
-	cmd   *exec.Cmd
-	stdin io.WriteCloser
-	acks  *bufio.Scanner
-
-	// voices are the languages Windows has voices for, learned when the process starts.
+	// voices are the languages Windows has voices for, learned from the running process.
 	voices  map[string]bool
 	recheck bool
-	gen     int // processes started, so the loop knows to set the voice up again
 
 	lastText string // the last line said, and when, so it isn't said twice in a row
 	lastAt   time.Time
-	// current is the line just taken off the queue: until it's said, it's in neither the
-	// queue nor lastText, and asking for it again must not queue it twice.
+	// current is taken off the queue but not yet said, so asking for it again mustn't requeue it.
 	current string
 
+	proc  sapiProcess  // only the speaking loop touches it, so mu does not guard it
 	piper *piperEngine // natural voices on Linux, once downloaded
 }
 
@@ -361,15 +352,15 @@ func (s *Speaker) loop() {
 				}
 				continue
 			}
-			if s.cmd == nil {
-				if err := s.start(); err != nil {
+			if !s.proc.running() {
+				if err := s.proc.start(s.exe); err != nil {
 					s.log.Warn("speech unavailable", "err", err)
 					continue
 				}
 			}
-			if s.gen != appliedGen {
+			if s.proc.gen != appliedGen {
 				// A new process starts with the default voice and rate.
-				appliedRate, appliedLang, appliedGen = 1<<30, "", s.gen
+				appliedRate, appliedLang, appliedGen = 1<<30, "", s.proc.gen
 			}
 			if rate != appliedRate {
 				if _, err := s.send(fmt.Sprintf("!rate %d", rate)); err != nil {
@@ -422,20 +413,16 @@ func (s *Speaker) waitSpoken(urgent bool) {
 
 // send writes one line to the speech process and returns its one-line reply.
 func (s *Speaker) send(line string) (string, error) {
-	if s.cmd == nil {
-		if err := s.start(); err != nil {
+	if !s.proc.running() {
+		if err := s.proc.start(s.exe); err != nil {
 			return "", err
 		}
 	}
-	if _, err := io.WriteString(s.stdin, line+"\n"); err != nil {
+	reply, err := s.proc.exchange(line)
+	if err != nil {
 		s.stop()
-		return "", err
 	}
-	if !s.acks.Scan() {
-		s.stop()
-		return "", errors.New("speech process exited")
-	}
-	return strings.TrimSpace(s.acks.Text()), nil
+	return reply, err
 }
 
 // hasVoice reports whether there is a voice for lang. Linux speech tools carry their own
@@ -475,8 +462,6 @@ func hasLetters(text, lang string) bool {
 	return false
 }
 
-// Languages lists the languages this machine can speak, once speech has started. Nil means
-// it isn't known yet, or that any language works.
 // Recheck asks Windows for its voices again, after one was installed.
 func (s *Speaker) Recheck() {
 	s.mu.Lock()
@@ -485,6 +470,8 @@ func (s *Speaker) Recheck() {
 	s.signal()
 }
 
+// Languages lists the languages this machine can speak, once speech has started. Nil means
+// it isn't known yet, or that any language works.
 func (s *Speaker) Languages() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -498,8 +485,28 @@ func (s *Speaker) Languages() []string {
 	return out
 }
 
-func (s *Speaker) start() error {
-	cmd := exec.Command(s.exe, "-NoProfile", "-NonInteractive", "-EncodedCommand", EncodePowerShell(script))
+// stop ends the voice process and forgets the voices it reported.
+func (s *Speaker) stop() {
+	if !s.proc.stop() {
+		return
+	}
+	s.mu.Lock()
+	s.voices = nil
+	s.mu.Unlock()
+}
+
+// sapiProcess is the PowerShell process speaking with Windows voices, one line per exchange.
+type sapiProcess struct {
+	cmd   *exec.Cmd
+	stdin io.WriteCloser
+	acks  *bufio.Scanner
+	gen   int // processes started, so the loop knows to set the voice up again
+}
+
+func (p *sapiProcess) running() bool { return p.cmd != nil }
+
+func (p *sapiProcess) start(exe string) error {
+	cmd := exec.Command(exe, "-NoProfile", "-NonInteractive", "-EncodedCommand", EncodePowerShell(script))
 	hidewin.Apply(cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -512,27 +519,37 @@ func (s *Speaker) start() error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	s.cmd, s.stdin, s.acks = cmd, stdin, bufio.NewScanner(stdout)
-	s.gen++
+	p.cmd, p.stdin, p.acks = cmd, stdin, bufio.NewScanner(stdout)
+	p.gen++
 	return nil
 }
 
-func (s *Speaker) stop() {
-	if s.cmd == nil {
-		return
+func (p *sapiProcess) exchange(line string) (string, error) {
+	if _, err := io.WriteString(p.stdin, line+"\n"); err != nil {
+		return "", err
 	}
-	s.stdin.Close()
+	if !p.acks.Scan() {
+		return "", errors.New("speech process exited")
+	}
+	return strings.TrimSpace(p.acks.Text()), nil
+}
+
+// stop reports whether there was a process to stop.
+func (p *sapiProcess) stop() bool {
+	cmd := p.cmd
+	if cmd == nil {
+		return false
+	}
+	p.stdin.Close()
 	done := make(chan struct{})
-	go func() { s.cmd.Wait(); close(done) }()
+	go func() { cmd.Wait(); close(done) }()
 	select {
 	case <-done:
 	case <-time.After(3 * time.Second):
-		s.cmd.Process.Kill()
+		cmd.Process.Kill()
 	}
-	s.cmd = nil
-	s.mu.Lock()
-	s.voices = nil
-	s.mu.Unlock()
+	p.cmd = nil
+	return true
 }
 
 // sayOnce speaks one line with a Linux speech tool and waits for it to finish, so lines

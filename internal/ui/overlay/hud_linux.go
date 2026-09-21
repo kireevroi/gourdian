@@ -52,10 +52,7 @@ type grab struct {
 // xui is the HUD on Linux: an override-redirect window with a 32-bit visual over the game,
 // which X11 desktops and XWayland (where Dota itself runs on Wayland desktops) both show.
 type xui struct {
-	model *model
-	opts  Options
-	api   api
-	log   *slog.Logger
+	hudState
 
 	conn     *xgb.Conn
 	root     xproto.Window
@@ -69,21 +66,15 @@ type xui struct {
 
 	base    float64
 	p       *painter
-	layout  config.OverlaySettings
 	x, y    int
 	w, h    int
 	mapped  bool
-	hidden  bool
-	editing bool
 	last    *image.RGBA
 	lastKey string
 	pixels  []byte
 
-	hotkeys         config.HotkeySettings
-	grabs           map[grab]action
-	positionKeys    bool
-	dashboardWindow bool
-	lastOpen        time.Time
+	grabs    map[grab]action
+	lastOpen time.Time
 
 	drag *drag
 
@@ -95,7 +86,7 @@ type xui struct {
 type drag struct{ rootX, rootY, x, y int }
 
 func Run(ctx context.Context, o Options) error {
-	u := &xui{model: newModel(time.Now(), o.Quiet), opts: o, api: newAPI(o.URL), log: o.logger(),
+	u := &xui{hudState: hudState{model: newModel(time.Now(), o.Quiet), opts: o, api: newAPI(o.URL), log: o.logger()},
 		wake: make(chan struct{}, 1), settings: make(chan settingsView, 1), editReq: make(chan struct{}, 1), grabs: map[grab]action{}}
 	defaults := config.Default().Settings
 	u.layout, u.dashboardWindow, u.editing = defaults.Overlay, defaults.DashboardWindow, o.SnapshotEditing

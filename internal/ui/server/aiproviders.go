@@ -131,8 +131,6 @@ func (s *Server) handleProviderLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"status": "Finish logging in in the window that opened. The dashboard updates when it's done."})
 }
 
-// handleProviderInstall sets up one provider through the same job as "Set up all", so the
-// dashboard sees its progress.
 // handleProviderSwitch signs out of a CLI and opens its login, for using another account.
 func (s *Server) handleProviderSwitch(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.provider(w, r)
@@ -155,6 +153,8 @@ func (s *Server) handleProviderSwitch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"status": "Sign in as the other account in the window that opened. The dashboard updates when it's done."})
 }
 
+// handleProviderInstall sets up one provider through the same job as "Set up all", so the
+// dashboard sees its progress.
 func (s *Server) handleProviderInstall(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.provider(w, r)
 	if !ok {
@@ -227,7 +227,7 @@ func (s *Server) handleProviderTest(w http.ResponseWriter, r *http.Request) {
 	tips, err := prompts.Suggest(ctx, p, choice, set.AI, set.Language, prompt)
 	if err != nil {
 		if k := ai.KindOf(err); k == ai.ErrAuth || k == ai.ErrLimit {
-			s.providers.Check(s.baseCtx, choice.Provider)
+			s.providers.Check(s.bg.Context(), choice.Provider)
 		}
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return

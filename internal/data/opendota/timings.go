@@ -30,15 +30,11 @@ func (c *Client) ItemTimings(heroID int, item string) ([]ItemTiming, bool) {
 	key := timingsKey{heroID, item}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if t, ok := c.timings[key]; ok {
-		return t, true
+	t, ok, fetch := c.timings.get(key)
+	if fetch {
+		go c.fetchTimings(key)
 	}
-	if c.timingsPending[key] || time.Since(c.timingsFailed[key]) < buildRetry {
-		return nil, false
-	}
-	c.timingsPending[key] = true
-	go c.fetchTimings(key)
-	return nil, false
+	return t, ok
 }
 
 func (c *Client) fetchTimings(key timingsKey) {
@@ -53,10 +49,9 @@ func (c *Client) fetchTimings(key timingsKey) {
 	err := c.getJSON(ctx, path, filepath.Join("timings", fmt.Sprintf("%d_%s.json", key.hero, key.item)), timingsMaxAge, &raw)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.timingsPending, key)
 	if err != nil {
 		c.log.Warn("no item timings; will retry", "hero_id", key.hero, "item", key.item, "err", err)
-		c.timingsFailed[key] = time.Now()
+		c.timings.fail(key)
 		return
 	}
 	out := make([]ItemTiming, 0, len(raw))
@@ -66,12 +61,11 @@ func (c *Client) fetchTimings(key timingsKey) {
 		out = append(out, ItemTiming{Time: r.Time, Games: games, Wins: wins})
 	}
 	slices.SortFunc(out, func(a, b ItemTiming) int { return a.Time - b.Time })
-	c.timings[key] = out
+	c.timings.done(key, out)
 }
 
-// GoodTiming picks a timing worth aiming for: the earliest bucket holding at least a tenth of
-// the games that wins at least as often as the item does overall. Without one, it's the
-// median timing. It needs enough games to mean something.
+// GoodTiming is the earliest bucket with a tenth of the games that wins as often as the item does
+// overall, else the median timing; it needs enough games to mean something.
 func GoodTiming(buckets []ItemTiming) (int, bool) {
 	var games, wins int
 	for _, b := range buckets {
@@ -95,10 +89,8 @@ func GoodTiming(buckets []ItemTiming) (int, bool) {
 	return 0, false
 }
 
-// CoreItemTimes keeps the timings of finished items costing at least minCost, dropping the
-// components that were combined away soon after they were bought. An item carried for minutes
-// before it became something bigger was a timing of its own, the way the pro builds read it,
-// so the trainer can hold a player to their usual Yasha and not only their usual Manta.
+// CoreItemTimes keeps finished items costing at least minCost, dropping components combined away
+// soon after; one carried for minutes was a timing of its own, so a usual Yasha counts, not only Manta.
 func CoreItemTimes(times map[string]int, items map[string]ItemInfo, minCost int) map[string]int {
 	upgraded := map[string]bool{}
 	for name, t := range times {

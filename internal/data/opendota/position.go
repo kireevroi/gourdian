@@ -11,9 +11,8 @@ import (
 	"time"
 )
 
-// OpenDota's itemPopularity mixes every position a hero is played in, won or lost, so a support
-// Pudge's wards end up in a mid Pudge's build. Its SQL explorer over parsed pro matches can split
-// them and keep only the games the hero's team won.
+// itemPopularity mixes every position, won or lost, so a support Pudge's wards land in a mid
+// Pudge's build; the SQL explorer over pro matches can split positions and keep only wins.
 const (
 	// MinProGames is the fewest pro games a build is made from; below it the trainer falls back.
 	MinProGames = 12
@@ -81,14 +80,14 @@ func (c *Client) proBuild(heroID, pos int, won bool, fallback *Build) *Build {
 	key := positionKey{heroID, pos, won}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if b, ok := c.posBuilds[key]; ok {
+	b, ok, fetch := c.posBuilds.get(key)
+	if ok {
 		if b != nil {
 			return b
 		}
 		return fallback
 	}
-	if !c.posPending[key] && time.Since(c.posFailed[key]) >= buildRetry {
-		c.posPending[key] = true
+	if fetch {
 		go c.fetchPositionBuild(key)
 	}
 	if fallback == nil {
@@ -106,10 +105,9 @@ func (c *Client) fetchPositionBuild(key positionKey) {
 	data, err := c.loadPositionData(ctx, key)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.posPending, key)
 	if err != nil || c.items == nil {
 		c.log.Warn("no pro build; will retry", "hero_id", key.hero, "position", key.pos, "won_only", key.won, "err", err)
-		c.posFailed[key] = time.Now()
+		c.posBuilds.fail(key)
 		return
 	}
 	var b *Build
@@ -117,7 +115,7 @@ func (c *Client) fetchPositionBuild(key positionKey) {
 		b = BuildFromPopularity(key.hero, data.Pop, data.At, c.items)
 		b.Position, b.Games, b.Won = key.pos, data.Games, key.won
 	}
-	c.posBuilds[key] = b
+	c.posBuilds.done(key, b)
 	c.log.Info("pro build loaded", "hero_id", key.hero, "position", key.pos, "won_only", key.won, "pro_games", data.Games, "used", b != nil)
 }
 

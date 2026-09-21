@@ -116,3 +116,60 @@ func skillSource(b *opendota.SkillBuild, lang string) string {
 	}
 	return w.f("%s, %d pro games", "%s, про-матчей: %d", where, b.Games)
 }
+
+// skillPoints counts unspent points against the fewest the hero has had, since innate abilities
+// skew the raw count; a rise the player never spends becomes the new normal, not a warning.
+type skillPoints struct {
+	gapSet  bool
+	gap     int
+	seen    int
+	spareAt int
+	low     int
+	lowSet  bool
+	lowAt   int
+}
+
+func (p *skillPoints) see(s *gsi.State) {
+	if s.Hero.Level == 0 || len(s.Abilities) == 0 {
+		return
+	}
+	// Talents are not counted: they spend their own talent points, not skill points.
+	spent := s.Hero.AttributesLevel
+	for _, a := range s.Abilities {
+		spent += a.Level
+	}
+	gap := SkillPointsAtLevel(s.Hero.Level) - spent
+	clock := s.Map.ClockTime
+	if gap >= p.gap || gap != p.low {
+		p.lowSet = false
+	}
+	switch {
+	case !p.gapSet:
+		p.gapSet, p.gap, p.spareAt = true, gap, 0
+	case gap < p.gap:
+		// A level-up can show the new ability level one update before the new hero level.
+		p.spareAt = 0
+		if !p.lowSet {
+			p.low, p.lowSet, p.lowAt = gap, true, clock
+		} else if clock-p.lowAt >= skillSettle {
+			p.gap, p.lowSet = gap, false
+		}
+	case gap > p.gap:
+		if p.spareAt == 0 {
+			p.spareAt = clock
+		} else if clock-p.spareAt >= skillAccept {
+			p.gap, p.spareAt = gap, 0
+		}
+	default:
+		p.spareAt = 0
+	}
+	p.seen = gap
+}
+
+// spare is how many points are unspent beyond the hero's usual gap.
+func (p *skillPoints) spare() int {
+	if !p.gapSet {
+		return 0
+	}
+	return max(p.seen-p.gap, 0)
+}

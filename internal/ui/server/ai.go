@@ -93,7 +93,7 @@ func (s *Server) askAI(reason, matchID string, set config.Settings, live bool) b
 	}
 	prompt := prompts.Prompt(s.aiInput(reason, matchID, set))
 	s.hub.publish("ai_status", "thinking")
-	s.spawn(func(ctx context.Context) {
+	s.bg.Go(func(ctx context.Context) {
 		defer s.ai.busy.Store(false)
 		defer s.hub.publish("ai_status", "idle")
 		ctx, cancel := context.WithTimeout(ctx, aiTimeout)
@@ -228,7 +228,7 @@ func (s *Server) reviewMatch(m model.MatchSummary, set config.Settings, force bo
 		LastFocus: s.lastFocusFor(reviewRole(m, set), m.HeroID),
 	})
 	s.hub.publish("review_status", reviewStatus{Text: provider.Info().Name + " is writing your match review…", MatchID: m.MatchID})
-	s.spawn(func(ctx context.Context) {
+	s.bg.Go(func(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(ctx, reviewTimeout)
 		defer cancel()
 		r, err := prompts.RequestReview(ctx, provider, choice, set.AI, set.Language, prompt, slices.Sorted(maps.Keys(metrics)))
@@ -293,7 +293,7 @@ func (s *Server) handleReviewMatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.hub.publish("review_status", reviewStatus{Text: "Preparing the match review…", MatchID: id})
-	s.spawn(func(ctx context.Context) {
+	s.bg.Go(func(ctx context.Context) {
 		var detail *ingest.Detail
 		if isOpenDotaMatch(m) {
 			ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
@@ -331,7 +331,7 @@ func (s *Server) askDraft(set config.Settings, forced bool) bool {
 	}
 	prompt := prompts.DraftPrompt(prompts.DraftInput{Context: s.aiContext(set), Role: set.Role, Board: snap.Picks})
 	s.hub.publish("ai_status", "thinking")
-	s.spawn(func(ctx context.Context) {
+	s.bg.Go(func(ctx context.Context) {
 		defer s.ai.busy.Store(false)
 		defer s.hub.publish("ai_status", "idle")
 		ctx, cancel := context.WithTimeout(ctx, aiTimeout)

@@ -26,8 +26,6 @@ func isOpenDotaMatch(m model.MatchSummary) bool {
 	return err == nil && m.Real() && m.MatchID != "0"
 }
 
-// afterMatch waits for OpenDota to parse a real match, stores the parsed data and then
-// writes the review with it. Waiting happens in the background; the trainer keeps coaching.
 // reviewStatus tells the dashboard what the review is doing; Waiting means the replay parse
 // hasn't arrived yet, so the dashboard offers to review with live data instead.
 type reviewStatus struct {
@@ -39,7 +37,7 @@ type reviewStatus struct {
 // checkRanked asks OpenDota what kind of match it was, so the MMR prompt only stays for
 // ranked games. The summary is there within a couple of minutes, long before the replay parse.
 func (s *Server) checkRanked(matchID string) {
-	ctx, cancel := context.WithTimeout(s.baseCtx, 10*time.Minute)
+	ctx, cancel := context.WithTimeout(s.bg.Context(), 10*time.Minute)
 	defer cancel()
 	for wait := 30 * time.Second; ; wait *= 2 {
 		select {
@@ -56,10 +54,8 @@ func (s *Server) checkRanked(matchID string) {
 	}
 }
 
-// saveMatchKind records what OpenDota says the match was. The lobby type can only mark a
-// match ranked: one the player already marked stays ranked. The mode is kept because Turbo
-// pays about twice the gold and experience, and everything worked out from history leaves it
-// out rather than letting it drag the numbers.
+// saveMatchKind records what OpenDota says the match was. Its lobby type can mark a match ranked
+// but never unmark one; the mode is kept so history can leave out Turbo, which pays about double.
 func (s *Server) saveMatchKind(matchID string, lobbyType, gameMode int) {
 	ranked := lobbyType == rankedLobby
 	if err := s.stats.UpdateMatch(matchID, func(row *model.MatchSummary) {
@@ -75,6 +71,8 @@ func (s *Server) saveMatchKind(matchID string, lobbyType, gameMode int) {
 	s.confirmRanked(matchID, ranked)
 }
 
+// afterMatch waits for OpenDota to parse a real match, stores the parsed data and then writes
+// the review with it, in the background so the trainer keeps coaching.
 func (s *Server) afterMatch(m model.MatchSummary, set config.Settings) {
 	if !isOpenDotaMatch(m) {
 		s.reviewMatch(m, set, false, nil)
@@ -95,13 +93,13 @@ func (s *Server) afterMatch(m model.MatchSummary, set config.Settings) {
 		s.hub.publish("review_status", reviewStatus{Text: text, MatchID: m.MatchID, Waiting: true})
 	}
 	status(0)
-	s.spawn(func(context.Context) { s.checkRanked(m.MatchID) })
-	s.spawn(func(ctx context.Context) {
+	s.bg.Go(func(context.Context) { s.checkRanked(m.MatchID) })
+	s.bg.Go(func(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(ctx, parseWait)
 		defer cancel()
 		detail, err := s.matches.Enrich(ctx, m, s.cfg.Settings().AccountID, status)
 		switch {
-		case s.baseCtx.Err() != nil:
+		case s.bg.Context().Err() != nil:
 			return
 		case err != nil:
 			s.log.Warn("OpenDota match data unavailable", "match", m.MatchID, "err", err)
@@ -190,7 +188,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "an import is already running", http.StatusConflict)
 		return
 	}
-	s.spawn(func(ctx context.Context) {
+	s.bg.Go(func(ctx context.Context) {
 		defer s.importing.Store(false)
 		ctx, cancel := context.WithTimeout(ctx, importTimeout)
 		defer cancel()

@@ -27,6 +27,7 @@ import (
 	"gourdian/internal/game/dota"
 	"gourdian/internal/game/gsi"
 	"gourdian/internal/game/model"
+	"gourdian/internal/sim"
 	"gourdian/internal/sys/config"
 )
 
@@ -196,7 +197,7 @@ func TestAutoRecordingPerMatchWithPruning(t *testing.T) {
 		t.Fatal(err)
 	}
 	playMatch("8001")
-	if got := recordingNames(t, dir); len(got) != 1 || !strings.HasPrefix(got[0], manualPrefix) {
+	if got := recordingNames(t, dir); len(got) != 1 || !strings.HasPrefix(got[0], sim.ManualPrefix) {
 		t.Fatalf("a manual recording should take precedence over auto-recording: %v", got)
 	}
 	srv.StopRecording()
@@ -209,7 +210,7 @@ func TestAutoRecordingPerMatchWithPruning(t *testing.T) {
 	if len(got) != 2 || !strings.HasSuffix(got[0], "_8003.jsonl.gz") || !strings.HasSuffix(got[1], "_8004.jsonl.gz") {
 		t.Fatalf("want the two newest match recordings, got %v", got)
 	}
-	if srv.recordingPath() != "" {
+	if srv.rec.Path() != "" {
 		t.Fatal("recording should stop when the match ends")
 	}
 
@@ -695,7 +696,7 @@ func TestSettingsSaveKeepsChangesMadeMeanwhile(t *testing.T) {
 func TestCloseWaitsForBackgroundWork(t *testing.T) {
 	srv, _, _ := newTestServer(t, nil)
 	var finished atomic.Bool
-	srv.spawn(func(ctx context.Context) {
+	srv.bg.Go(func(ctx context.Context) {
 		<-ctx.Done()
 		time.Sleep(100 * time.Millisecond) // still writing when told to stop
 		finished.Store(true)
@@ -705,7 +706,7 @@ func TestCloseWaitsForBackgroundWork(t *testing.T) {
 		t.Fatal("Close returned before the background work finished")
 	}
 	var ran atomic.Bool
-	srv.spawn(func(context.Context) { ran.Store(true) })
+	srv.bg.Go(func(context.Context) { ran.Store(true) })
 	time.Sleep(50 * time.Millisecond)
 	if ran.Load() {
 		t.Fatal("work started after Close")

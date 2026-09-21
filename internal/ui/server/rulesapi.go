@@ -168,7 +168,7 @@ func (s *Server) handleTestRule(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "pick one of the recordings", http.StatusBadRequest)
 		return
 	}
-	path := filepath.Join(s.recordingsDir(), name)
+	path := filepath.Join(s.rec.Dir, name)
 	var readErr error
 	states := func(yield func(*gsi.State) bool) {
 		stop := errors.New("stop")

@@ -52,7 +52,7 @@ func (s *Server) setupChecks() []setupCheck {
 	}
 	if platform.LinuxDesktop() {
 		steam := "Or show the HUD in the Steam overlay: press Shift+Tab, open the web browser, go to " + config.DashboardHost(cfg.Listen) + "/overlay.html and pin it."
-		switch reported, hudErr := s.hudStatus(); {
+		switch reported, hudErr := s.overlay.hudState(); {
 		case hudErr != "":
 			checks = append(checks, setupCheck{Label: "The HUD can't show over Dota", Detail: hudErr + ". " + steam})
 		case reported:

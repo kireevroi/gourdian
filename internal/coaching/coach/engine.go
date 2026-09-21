@@ -77,17 +77,17 @@ const (
 )
 
 type Engine struct {
-	data      Data
+	data Data
+	log  *slog.Logger
+	now  func() time.Time
+
+	mu        sync.Mutex
 	rules     []Rule // built-in rules, then the player's custom rules
 	overrides map[string]RuleOverride
 	custom    []RuleSpec
 	lang      string
 	targets   TargetSource
-	log       *slog.Logger
-	now       func() time.Time
-
-	mu   sync.Mutex
-	last *gsi.State
+	last      *gsi.State
 	// prev is the earlier state the last update compared with, for the rule editor's check.
 	prev        *gsi.State
 	lastSeen    time.Time
@@ -191,9 +191,8 @@ func (e *Engine) SetOverrides(o map[string]RuleOverride) {
 	e.rebuild()
 }
 
-// newCtx is what rules see for state s. The rule editor's live check builds it the same way,
-// so it shows the values the rule really gets. The caller holds e.mu, and asked for the
-// targets before taking it.
+// newCtx is what rules see for s; the rule editor builds it the same way. The caller holds e.mu,
+// and asked for the targets before taking it.
 func (e *Engine) newCtx(s, prev *gsi.State, set config.Settings, targets Targets, now time.Time) *Ctx {
 	return &Ctx{S: s, Prev: prev, Clock: s.Map.ClockTime, Settings: set, T: set.Timings, Focus: e.focus, RoleNote: e.roleNote,
 		Targets: targets, data: e.data, m: e.match, now: now}
@@ -498,29 +497,13 @@ type match struct {
 	itemSeen  map[string]int // first game clock each item was held; -1 if already held when first seen
 	observed  bool
 
-	roshanKnown  bool
-	roshanDeadAt int
-	roshanTeam   string
-	aegisKnown   bool
-	aegisExpires int
-	aegisTeam    string
-	aegisMine    bool
-	aegisHolder  int
-	// aegisUsed is the Aegis having brought its holder back. The player's own shows at once;
-	// anyone else's only once they die for good, as coming back prints no kill.
-	aegisUsed bool
-	glyphUsed bool // your team's Glyph is cooling down since glyphAt
-	glyphAt   int
+	roshan roshanState
+	aegis  aegisState
+	glyph  glyphState
 
 	sampledMinute int
 
-	skillGapSet  bool
-	skillGap     int
-	skillSeen    int
-	skillSpareAt int
-	skillLow     int
-	skillLowSet  bool
-	skillLowAt   int
+	skills skillPoints
 
 	idle anchor
 	lane laneTracker
@@ -560,54 +543,6 @@ func (m *match) sample(s *gsi.State) (model.Sample, bool) {
 	}, true
 }
 
-// seeSkillPoints tracks unspent skill points against the fewest the hero has had this match.
-// Innate and auto-levelled abilities make the raw count look wrong, so only a rise counts, and
-// a rise the player never spends becomes the new normal instead of a warning every minute.
-func (m *match) seeSkillPoints(s *gsi.State) {
-	if s.Hero.Level == 0 || len(s.Abilities) == 0 {
-		return
-	}
-	// Talents are not counted: they spend their own talent points, not skill points.
-	spent := s.Hero.AttributesLevel
-	for _, a := range s.Abilities {
-		spent += a.Level
-	}
-	gap := SkillPointsAtLevel(s.Hero.Level) - spent
-	clock := s.Map.ClockTime
-	if gap >= m.skillGap || gap != m.skillLow {
-		m.skillLowSet = false
-	}
-	switch {
-	case !m.skillGapSet:
-		m.skillGapSet, m.skillGap, m.skillSpareAt = true, gap, 0
-	case gap < m.skillGap:
-		// A level-up can show the new ability level one update before the new hero level.
-		m.skillSpareAt = 0
-		if !m.skillLowSet {
-			m.skillLow, m.skillLowSet, m.skillLowAt = gap, true, clock
-		} else if clock-m.skillLowAt >= skillSettle {
-			m.skillGap, m.skillLowSet = gap, false
-		}
-	case gap > m.skillGap:
-		if m.skillSpareAt == 0 {
-			m.skillSpareAt = clock
-		} else if clock-m.skillSpareAt >= skillAccept {
-			m.skillGap, m.skillSpareAt = gap, 0
-		}
-	default:
-		m.skillSpareAt = 0
-	}
-	m.skillSeen = gap
-}
-
-// skillSpare is how many points are unspent beyond the hero's usual gap.
-func (m *match) skillSpare() int {
-	if !m.skillGapSet {
-		return 0
-	}
-	return max(m.skillSeen-m.skillGap, 0)
-}
-
 func (m *match) observe(s, prev *gsi.State, t dota.Timings) {
 	clock := s.Map.ClockTime
 	m.last = s
@@ -619,7 +554,7 @@ func (m *match) observe(s, prev *gsi.State, t dota.Timings) {
 		}
 	}
 	if prev != nil && reincarnated(prev, s) {
-		m.aegisUsed = true
+		m.aegis.used = true
 	}
 	if prev != nil && died(prev, s) {
 		m.deaths = append(m.deaths, clock)
@@ -630,7 +565,7 @@ func (m *match) observe(s, prev *gsi.State, t dota.Timings) {
 	if prev != nil && prev.Hero != nil && s.Hero.Alive && prev.Hero.HealthPercent-s.Hero.HealthPercent >= hurtDrop {
 		m.hurtAt = clock
 	}
-	m.seeSkillPoints(s)
+	m.skills.see(s)
 	m.seeBuildings(s, clock)
 	m.seeIdle(s, clock)
 	m.seeRuleEvents(s, prev, clock)
@@ -657,16 +592,15 @@ func (m *match) observe(s, prev *gsi.State, t dota.Timings) {
 		m.eventAt[ev.EventType] = ev.GameTime - offset
 		switch ev.EventType {
 		case "roshan_killed":
-			m.roshanKnown, m.roshanDeadAt, m.roshanTeam = true, ev.GameTime-offset, ev.KilledByTeam
+			m.roshan = roshanState{known: true, deadAt: ev.GameTime - offset, team: ev.KilledByTeam}
 		case "aegis_picked_up":
-			m.aegisKnown, m.aegisExpires, m.aegisUsed = true, ev.GameTime-offset+t.AegisDuration, false
-			m.aegisTeam = "radiant"
+			team := "radiant"
 			if ev.PlayerID >= 5 {
-				m.aegisTeam = "dire"
+				team = "dire"
 			}
 			me, ok := s.Player.PlayerID()
-			m.aegisMine = ok && me == ev.PlayerID
-			m.aegisHolder = ev.PlayerID
+			m.aegis = aegisState{known: true, expires: ev.GameTime - offset + t.AegisDuration, team: team,
+				mine: ok && me == ev.PlayerID, holder: ev.PlayerID}
 		case "generic_event":
 			if c, ok := ev.Chat(); ok {
 				m.seeChat(c, ev.GameTime-offset)

@@ -1,13 +1,11 @@
 package server
 
 import (
-	"maps"
 	"net/http"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"time"
 
 	"gourdian/internal/sys/autostart"
 	"gourdian/internal/ui/hud"
@@ -57,7 +55,7 @@ func (s *Server) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 // handleOpenFolder opens one of the app's data folders in Explorer.
 func (s *Server) handleOpenFolder(w http.ResponseWriter, r *http.Request) {
 	folders := map[string]string{
-		"data": s.workDir, "stats": s.stats.Dir(), "recordings": s.recordingsDir(), "logs": filepath.Join(s.workDir, "logs"),
+		"data": s.workDir, "stats": s.stats.Dir(), "recordings": s.rec.Dir, "logs": filepath.Join(s.workDir, "logs"),
 	}
 	dir, ok := folders[r.PathValue("name")]
 	switch {
@@ -93,41 +91,18 @@ func (s *Server) handleOverlayStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad status", http.StatusBadRequest)
 		return
 	}
-	s.overlayMu.Lock()
-	if body.HotkeyProblems != nil || body.HUDError == nil {
-		s.hotkeyProblems = body.HotkeyProblems
-	}
-	if body.HUDError != nil {
-		s.hudError, s.hudReported = *body.HUDError, true
-	}
-	s.overlayMu.Unlock()
+	s.overlay.set(body.HotkeyProblems, body.HUDError)
 	s.publishSettings()
 	writeJSON(w, map[string]string{"status": "ok"})
-}
-
-// hudStatus is whether the Linux HUD has reported in, and its error if it couldn't open.
-func (s *Server) hudStatus() (reported bool, err string) {
-	s.overlayMu.Lock()
-	defer s.overlayMu.Unlock()
-	return s.hudReported, s.hudError
-}
-
-func (s *Server) hotkeyProblemsCopy() map[string]string {
-	s.overlayMu.Lock()
-	defer s.overlayMu.Unlock()
-	return maps.Clone(s.hotkeyProblems)
 }
 
 func (s *Server) hudPayload() hud.Payload {
 	set := s.cfg.Settings()
 	snap, tips := s.snapshot(set), s.engine.RecentTips()
-	s.hudMu.Lock()
-	live := hud.BuildHeld(snap, tips, set.HUDWidgets, time.Now(), &s.hudQueue, set.Language)
-	s.hudMu.Unlock()
+	live := s.alerts.build(snap, tips, set)
 	return hud.Payload{Live: live, Sample: hud.SampleIn(set.HUDWidgets, set.Language),
-		// Choosing is about the player's own pick and so ends when they make it; reading the
-		// screen carries on for the whole draft, because the other side is still picking and
-		// what the trainer knows of them would otherwise go stale and be dropped.
+		// Choosing ends with the player's own pick; reading the screen lasts the whole draft,
+		// since the other side is still picking and what is known of them would go stale.
 		Choosing: pickMatters(snap),
 		Draft:    set.Screen.Draft && draftMatters(snap)}
 }

@@ -123,6 +123,7 @@ are there so the tree says what the program is made of.
 | `sys/install` | Steam and Dota discovery, GSI config |
 | `sys/hidewin` | Running console programs without a console window |
 | `sys/buildinfo` | The version the binary was built with |
+| `sys/tasks` | Background work the program waits for before it exits, and stops starting once it's closing |
 
 ### The rest
 
@@ -133,5 +134,5 @@ are there so the tree says what the program is made of.
 | `internal/cli` | The commands, their flags, and the checks behind `doctor` |
 | `internal/app` | Starting the trainer: settings, logger, engine, statistics and server wired together |
 | `internal/i18n` | Russian for the phrases the trainer builds, and a glossary of game terms |
-| `internal/sim` | Simulator and recordings |
+| `internal/sim` | Simulator, and recordings: writing them during a match and playing them back |
 | `installer/` | Inno Setup script, signing scripts, build script, icons |

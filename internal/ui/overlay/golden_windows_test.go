@@ -16,7 +16,7 @@ func TestDrawGolden(t *testing.T) {
 		t.Skip("set GOLDEN_DIR to write the frames")
 	}
 	for _, g := range goldenViews {
-		u := &ui{model: newModel(time.Time{}, false), baseScale: 1, layout: goldenLayout(), editing: g.editing}
+		u := &ui{hudState: hudState{model: newModel(time.Time{}, false), layout: goldenLayout(), editing: g.editing}, baseScale: 1}
 		if err := u.setupGDI(); err != nil {
 			t.Fatal(err)
 		}

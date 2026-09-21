@@ -12,9 +12,7 @@ const (
 	metaMinGames = 200
 )
 
-// HeroMeta is how a hero is doing in public games right now. OpenDota counts picks and wins by
-// rank bracket, 1 (Herald) to 8 (Immortal), so pick advice can follow the player's own bracket
-// instead of everybody's average.
+// HeroMeta is a hero's public games by rank bracket, 1 (Herald) to 8 (Immortal).
 type HeroMeta struct {
 	ID          int
 	Roles       []string
@@ -25,9 +23,8 @@ type HeroMeta struct {
 	Win  [9]int
 }
 
-// WinPct is the hero's win rate at the bracket and the games behind it. A bracket too thin to
-// read falls back to every bracket together, so a rare hero still says something. Games of 0
-// means the hero has no record worth using.
+// WinPct is the win rate at bracket and the games behind it, from every bracket when that one is
+// too thin; 0 games means no record worth using.
 func (m HeroMeta) WinPct(bracket int) (pct, games int) {
 	if bracket >= 1 && bracket < len(m.Pick) && m.Pick[bracket] >= metaMinGames {
 		return m.Win[bracket] * 100 / m.Pick[bracket], m.Pick[bracket]
@@ -38,11 +35,9 @@ func (m HeroMeta) WinPct(bracket int) (pct, games int) {
 	return m.Win[0] * 100 / m.Pick[0], m.Pick[0]
 }
 
-// Melee reports whether the hero fights in melee, for reading a team's shape.
 func (m HeroMeta) Melee() bool { return m.AttackType == "Melee" }
 
-// heroStatsRow is one hero in OpenDota's /heroStats. The bracket counts are named by number,
-// so they are spelled out here the way gsi.Hero spells out its talents.
+// heroStatsRow is one hero in /heroStats, whose bracket counts are named by number.
 type heroStatsRow struct {
 	ID          int      `json:"id"`
 	Roles       []string `json:"roles"`
@@ -78,17 +73,15 @@ func (r heroStatsRow) meta() HeroMeta {
 	return m
 }
 
-// Meta is how every hero is doing in public games, by rank bracket, or nil until it loads.
-// The first call starts the fetch; it never blocks, so the GSI handler can ask on any update.
+// Meta is every hero's HeroMeta, nil until it loads; it never blocks, so GSI can ask every update.
 func (c *Client) Meta() map[int]HeroMeta {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.meta != nil || c.metaPending || time.Since(c.metaFailed) < buildRetry {
-		return c.meta
+	m, _, fetch := c.meta.get(struct{}{})
+	if fetch {
+		go c.fetchMeta()
 	}
-	c.metaPending = true
-	go c.fetchMeta()
-	return nil
+	return m
 }
 
 func (c *Client) fetchMeta() {
@@ -98,16 +91,15 @@ func (c *Client) fetchMeta() {
 	err := c.getJSON(ctx, "/heroStats", "herostats.json", metaMaxAge, &rows)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.metaPending = false
 	if err != nil || len(rows) == 0 {
 		c.log.Warn("no hero meta; will retry", "err", err)
-		c.metaFailed = time.Now()
+		c.meta.fail(struct{}{})
 		return
 	}
 	meta := make(map[int]HeroMeta, len(rows))
 	for _, r := range rows {
 		meta[r.ID] = r.meta()
 	}
-	c.meta = meta
+	c.meta.done(struct{}{}, meta)
 	c.log.Info("hero meta loaded", "heroes", len(meta))
 }

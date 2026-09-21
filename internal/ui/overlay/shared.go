@@ -85,3 +85,19 @@ func sendPosition(a api, log *slog.Logger, i int) {
 		}
 	}()
 }
+
+// hudState is what the HUD keeps the same way on every platform; each platform's HUD embeds it
+// next to its own window handles.
+type hudState struct {
+	model   *model
+	opts    Options
+	api     api
+	log     *slog.Logger
+	layout  config.OverlaySettings
+	hotkeys config.HotkeySettings // registered shortcuts
+	hidden  bool
+	// editing lets the HUD take the mouse so it can be dragged, resized and faded in game.
+	editing         bool
+	positionKeys    bool // whether Ctrl+Shift+1..5 are registered
+	dashboardWindow bool
+}

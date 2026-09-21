@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gourdian/internal/sys/config"
@@ -24,6 +25,12 @@ type naturalVoice struct {
 	Folder string              `json:"folder"`
 	Voices []speech.PiperVoice `json:"voices"`
 	Chosen map[string]string   `json:"chosen"`
+}
+
+// voiceState is the voices being installed: a Windows one, or Piper's on Linux.
+type voiceState struct {
+	windows atomic.Bool
+	piper   piperState
 }
 
 type piperState struct {
@@ -76,10 +83,10 @@ func (s *Server) usePiper() {
 		return
 	}
 	key := fmt.Sprint(bin, player, models)
-	s.piper.mu.Lock()
-	same := s.piper.applied == key
-	s.piper.applied = key
-	s.piper.mu.Unlock()
+	s.voice.piper.mu.Lock()
+	same := s.voice.piper.applied == key
+	s.voice.piper.applied = key
+	s.voice.piper.mu.Unlock()
 	if same {
 		return
 	}
@@ -101,9 +108,9 @@ func (s *Server) ensurePiper() {
 		s.usePiper()
 		return
 	}
-	s.piper.mu.Lock()
-	failed := s.piper.failed != ""
-	s.piper.mu.Unlock()
+	s.voice.piper.mu.Lock()
+	failed := s.voice.piper.failed != ""
+	s.voice.piper.mu.Unlock()
 	if !failed {
 		s.installPiper()
 	}
@@ -111,16 +118,16 @@ func (s *Server) ensurePiper() {
 
 // installPiper downloads Piper and the chosen voice for the trainer's language in the background.
 func (s *Server) installPiper() bool {
-	s.piper.mu.Lock()
-	if s.piper.busy {
-		s.piper.mu.Unlock()
+	s.voice.piper.mu.Lock()
+	if s.voice.piper.busy {
+		s.voice.piper.mu.Unlock()
 		return false
 	}
-	s.piper.busy, s.piper.failed, s.piper.done, s.piper.total = true, "", 0, 0
-	s.piper.mu.Unlock()
+	s.voice.piper.busy, s.voice.piper.failed, s.voice.piper.done, s.voice.piper.total = true, "", 0, 0
+	s.voice.piper.mu.Unlock()
 	set := s.cfg.Settings()
 	voices := []string{chosenVoice(set, set.Language)}
-	s.spawn(func(ctx context.Context) {
+	s.bg.Go(func(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
 		s.log.Info("downloading Piper voice", "voices", voices, "into", s.piperHome())
@@ -131,17 +138,17 @@ func (s *Server) installPiper() bool {
 				return
 			}
 			last = time.Now()
-			s.piper.mu.Lock()
-			s.piper.done, s.piper.total = p.Done>>20, p.Total>>20
-			s.piper.mu.Unlock()
+			s.voice.piper.mu.Lock()
+			s.voice.piper.done, s.voice.piper.total = p.Done>>20, p.Total>>20
+			s.voice.piper.mu.Unlock()
 			s.hub.publish("voice_progress", voiceProgress{DoneMB: p.Done >> 20, SizeMB: p.Total >> 20})
 		})
-		s.piper.mu.Lock()
-		s.piper.busy = false
+		s.voice.piper.mu.Lock()
+		s.voice.piper.busy = false
 		if err != nil {
-			s.piper.failed = err.Error()
+			s.voice.piper.failed = err.Error()
 		}
-		s.piper.mu.Unlock()
+		s.voice.piper.mu.Unlock()
 		if err != nil {
 			s.log.Warn("Piper download failed", "err", err)
 			s.hub.publish("voice_install", voiceStatus{State: "failed", Text: "The natural voice didn't download: " + err.Error()})
@@ -165,10 +172,10 @@ func (s *Server) naturalVoiceStatus() *naturalVoice {
 	if player != nil {
 		nv.Player = filepath.Base(player[0])
 	}
-	s.piper.mu.Lock()
-	busy, failed := s.piper.busy, s.piper.failed
-	nv.DoneMB, nv.SizeMB = s.piper.done, s.piper.total
-	s.piper.mu.Unlock()
+	s.voice.piper.mu.Lock()
+	busy, failed := s.voice.piper.busy, s.voice.piper.failed
+	nv.DoneMB, nv.SizeMB = s.voice.piper.done, s.voice.piper.total
+	s.voice.piper.mu.Unlock()
 	switch {
 	case player == nil:
 		nv.State = "no_player"

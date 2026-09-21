@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"runtime"
 	"sync"
 	"syscall"
@@ -28,28 +27,17 @@ const (
 )
 
 type ui struct {
-	model *model
-	opts  Options
-	api   api
-	g     *gdi
-	log   *slog.Logger
+	hudState
 
-	hwnd    uintptr
-	w, h    int32
-	hidden  bool
-	visible bool
-	// positionKeys is whether Ctrl+Shift+1..5 are currently registered.
-	positionKeys bool
-	// editing lets the HUD take the mouse so it can be dragged, resized and faded in game.
-	editing   bool
-	layout    config.OverlaySettings
+	g *gdi
+
+	hwnd      uintptr
+	w, h      int32
+	visible   bool
 	baseScale float64
 
 	fontBig, fontSmall uintptr
 	canvas             *canvas
-
-	hotkeys         config.HotkeySettings // registered shortcuts
-	dashboardWindow bool
 
 	// Settings arrive on other goroutines and are applied on the UI thread.
 	mu        sync.Mutex
@@ -67,7 +55,8 @@ func Run(ctx context.Context, o Options) error {
 	defer runtime.UnlockOSThread()
 	pSetProcessDPIAware.Call()
 
-	u := &ui{model: newModel(time.Now(), o.Quiet), opts: o, api: newAPI(o.URL), log: o.logger(), baseScale: uiScale(o.Scale), editing: o.SnapshotEditing}
+	u := &ui{hudState: hudState{model: newModel(time.Now(), o.Quiet), opts: o, api: newAPI(o.URL), log: o.logger(), editing: o.SnapshotEditing},
+		baseScale: uiScale(o.Scale)}
 	defaults := config.Default().Settings
 	u.layout, u.dashboardWindow = defaults.Overlay, defaults.DashboardWindow
 	u.layout.HUDCorner = o.Corner

@@ -37,14 +37,11 @@ func (c *Client) SkillBuildFor(heroID int, role string) *SkillBuild {
 	key := positionKey{heroID, dota.Position(role), true}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if b, ok := c.skillBuilds[key]; ok {
-		return b
-	}
-	if !c.skillPending[key] && time.Since(c.skillFailed[key]) >= buildRetry {
-		c.skillPending[key] = true
+	b, _, fetch := c.skillBuilds.get(key)
+	if fetch {
 		go c.fetchSkillBuild(key)
 	}
-	return nil
+	return b
 }
 
 // AbilityName is how the game writes an ability, such as "Ball Lightning".
@@ -79,13 +76,12 @@ func (c *Client) fetchSkillBuild(key positionKey) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.skillPending, key)
 	if err != nil {
 		c.log.Warn("no skill build for hero; will retry", "hero_id", key.hero, "position", key.pos, "err", err)
-		c.skillFailed[key] = time.Now()
+		c.skillBuilds.fail(key)
 		return
 	}
-	c.skillBuilds[key] = b
+	c.skillBuilds.done(key, b)
 	c.log.Info("skill build loaded", "hero_id", key.hero, "position", b.Position, "won_only", b.Won, "pro_games", b.Games, "points", len(b.Order))
 }
 
