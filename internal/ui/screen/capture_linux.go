@@ -5,15 +5,18 @@ package screen
 import (
 	"fmt"
 	"image"
+	"io"
+	"log"
 	"os"
 
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
 )
 
-// Size is how big the screen is. The root window's own geometry is asked for rather than the
-// size the display announces: with more than one monitor, or under a compositor, the second
-// can cover ground the server won't hand back pixels for.
+// Every X connection reads xgb's global logger, so it is silenced once, before any can open.
+func init() { xgb.Logger = log.New(io.Discard, "", 0) }
+
+// Size asks the root window: with several monitors the announced size covers pixels X won't return.
 func Size() (image.Rectangle, error) {
 	conn, screen, err := connect()
 	if err != nil {
@@ -31,8 +34,7 @@ func rootSize(conn *xgb.Conn, screen *xproto.ScreenInfo) (image.Rectangle, error
 	return image.Rect(0, 0, int(geom.Width), int(geom.Height)), nil
 }
 
-// Grab copies the part of the screen inside r. Under Wayland the root window is not the
-// desktop and comes back blank, which the caller is told about rather than left to wonder at.
+// Grab copies r from the screen; under Wayland the root comes back blank, and the caller is told.
 func Grab(r image.Rectangle) (image.Image, error) {
 	if r.Empty() {
 		return nil, fmt.Errorf("asked for an empty part of the screen")
@@ -53,8 +55,7 @@ func Grab(r image.Rectangle) (image.Image, error) {
 	reply, err := xproto.GetImage(conn, xproto.ImageFormatZPixmap, xproto.Drawable(screen.Root),
 		int16(r.Min.X), int16(r.Min.Y), uint16(r.Dx()), uint16(r.Dy()), 0xffffffff).Reply()
 	if err != nil {
-		// The usual cause is a root window the server won't hand pixels back for: Wayland
-		// through XWayland, or WSLg, where the Linux root isn't the desktop you can see.
+		// Usually XWayland or WSLg, where the root window isn't the desktop you can see.
 		return nil, fmt.Errorf("the X server wouldn't hand back the screen (%w). "+
 			"Under WSL or Wayland the desktop isn't the X root window, so it can't be read from here", err)
 	}
@@ -80,8 +81,7 @@ func connect() (*xgb.Conn, *xproto.ScreenInfo, error) {
 	return conn, xproto.Setup(conn).DefaultScreen(conn), nil
 }
 
-// Wayland reports whether the session is one where reading the root window gives nothing. The
-// caller uses it to say why rather than showing an empty picture.
+// Wayland reports whether reading the root window gives nothing, so the caller can say why.
 func Wayland() bool {
 	return os.Getenv("WAYLAND_DISPLAY") != "" && os.Getenv("XDG_SESSION_TYPE") == "wayland"
 }

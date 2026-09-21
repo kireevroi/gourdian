@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -94,7 +93,6 @@ func Run(ctx context.Context, o Options) error {
 	if o.Snapshot != "" {
 		return u.snapshot(ctx)
 	}
-	xgb.Logger = slog.NewLogLogger(u.log.Handler(), slog.LevelDebug)
 	err := u.connect()
 	u.report(err)
 	if err != nil {
