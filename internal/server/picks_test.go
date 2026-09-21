@@ -374,6 +374,83 @@ func TestTheAdviceIsReadAgainWhenThePositionChanges(t *testing.T) {
 	}
 }
 
+// A second reading has to say what has changed, or it is the same sentence twice.
+func TestTheAdviceSaysWhoTheOtherSideHas(t *testing.T) {
+	board := &picks.Board{
+		Role:    dota.Mid,
+		Best:    []picks.Hero{{ID: 17, Name: "Storm Spirit"}, {ID: 74, Name: "Invoker"}},
+		Avoid:   []picks.Hero{{ID: 1, Name: "Anti-Mage"}},
+		Enemies: []picks.Hero{{ID: 35, Name: "Sniper"}, {ID: 2, Name: "Axe"}},
+	}
+	text, speech := pickLine(board, dota.Mid, "en")
+	for _, want := range []string{"Sniper", "Axe", "Storm Spirit", "Invoker", "Anti-Mage"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the advice doesn't mention %s: %q", want, text)
+		}
+		if !strings.Contains(speech, want) {
+			t.Errorf("the spoken advice doesn't mention %s: %q", want, speech)
+		}
+	}
+	if !strings.HasPrefix(speech, "Against: Sniper, Axe.") {
+		t.Errorf("the other side isn't said first: %q", speech)
+	}
+
+	// Before the screen has been read, and for a hero the trainer has no name for, there is
+	// nothing to say about the other side -- not an empty list.
+	board.Enemies = []picks.Hero{{ID: 999}}
+	if _, speech := pickLine(board, dota.Mid, "en"); strings.Contains(speech, "Against") {
+		t.Errorf("named an enemy it can't name: %q", speech)
+	}
+	board.Enemies = nil
+	if _, speech := pickLine(board, dota.Mid, "en"); strings.Contains(speech, "Against") {
+		t.Errorf("talked about an other side it can't see: %q", speech)
+	}
+}
+
+// The other side locks heroes together and the screen settles them a couple of seconds apart,
+// so the advice waits for a wave to finish instead of talking over each hero as it lands.
+func TestTheAdviceWaitsForAWaveOfPicksToFinish(t *testing.T) {
+	c := &pickCache{}
+	at := time.Date(2026, 9, 21, 1, 13, 0, 0, time.UTC)
+	tick := func(d time.Duration) time.Time { at = at.Add(d); return at }
+
+	if !c.sayNow(dota.Carry, nil, at) {
+		t.Fatal("said nothing when the position was named")
+	}
+	if c.sayNow(dota.Carry, nil, tick(time.Minute)) {
+		t.Error("read the same advice out again with nothing new on the board")
+	}
+	if c.sayNow(dota.Carry, []int{2}, tick(time.Second)) {
+		t.Error("spoke as the first hero of a wave landed")
+	}
+	if c.sayNow(dota.Carry, []int{2, 67}, tick(2*time.Second)) {
+		t.Error("spoke while the wave was still arriving")
+	}
+	if c.sayNow(dota.Carry, []int{2, 67}, tick(waveQuiet-time.Second)) {
+		t.Error("spoke before the wave had settled")
+	}
+	if !c.sayNow(dota.Carry, []int{2, 67}, tick(2*time.Second)) {
+		t.Fatal("never spoke about the wave")
+	}
+	if c.sayNow(dota.Carry, []int{2, 67}, tick(time.Minute)) {
+		t.Error("spoke twice about the same wave")
+	}
+
+	// A reading the overlay stops renewing takes heroes off the board, and getting them back
+	// is not another wave.
+	if c.sayNow(dota.Carry, []int{2}, tick(time.Second)) {
+		t.Error("spoke because the board shrank")
+	}
+	if c.sayNow(dota.Carry, []int{2, 67}, tick(waveQuiet+time.Second)) {
+		t.Error("spoke again for heroes it had already read out")
+	}
+
+	// A different position is different advice, and is worth hearing without waiting.
+	if !c.sayNow(dota.Mid, []int{2, 67}, tick(time.Second)) {
+		t.Fatal("said nothing when the position changed")
+	}
+}
+
 // setRole is the position hotkey, as the overlay sends it.
 func setRole(t *testing.T, srv *Server, role string) {
 	t.Helper()

@@ -80,7 +80,7 @@ All of those numbers are yours to change, on Settings › **Pick help**, because
 
 **Reset** puts them all back. How much each part of the score is allowed to move a hero — your record against the patch against the hero's roles — is fixed, since that's the shape of the model rather than a matter of taste.
 
-The top of the list is read aloud once for each position you name, and the AI coach can add a sentence on which to take (AI page › **A word on your pick**).
+The top of the list is read aloud for each position you name, and again once the other side has finished each wave of picks, since that is when the advice has changed. Each reading starts with who they have, so you can hear whether the trainer is reading your screen correctly. The AI coach adds a sentence on which to take (AI page › **A word on your pick**), and it answers again on each wave too — its first answer is made before anyone has picked.
 
 Once you take a hero the advice about which to take goes, since it is settled, but the draft stays up: who the other side has taken and what the two line-ups are short of keep filling in while the rest of them pick, which is what tells you what to buy and what to expect. It all goes when the game starts.
 

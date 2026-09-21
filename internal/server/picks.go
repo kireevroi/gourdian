@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,40 @@ type pickCache struct {
 	// spokenFor is the position the picks were last read out for. Changing position changes
 	// the advice entirely, so it is worth hearing again.
 	spokenFor string
+	// spokenAgainst is the other side as it stood when the advice was last read out, and seen
+	// is the board now, timed so a run of picks is heard about once rather than hero by hero.
+	spokenAgainst []int
+	seen          []int
+	seenAt        time.Time
+}
+
+// waveQuiet is how long the other side has to stop picking before the advice is read out
+// again: without a pause to gather them, a wave of three heroes is three interruptions.
+const waveQuiet = 6 * time.Second
+
+// sayNow reports whether the advice is worth reading out, and records that it was.
+func (c *pickCache) sayNow(role string, enemies []int, now time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !slices.Equal(enemies, c.seen) {
+		c.seen, c.seenAt = slices.Clone(enemies), now
+	}
+	switch {
+	case c.spokenFor != role:
+	// Only a side that has grown is news. A reading the overlay stops renewing shrinks the
+	// board, and saying the same heroes again as it recovers is not another wave.
+	case len(enemies) > len(c.spokenAgainst) && now.Sub(c.seenAt) >= waveQuiet:
+	default:
+		return false
+	}
+	c.spokenFor, c.spokenAgainst = role, slices.Clone(enemies)
+	return true
+}
+
+func (c *pickCache) forget() {
+	c.mu.Lock()
+	c.drafting, c.spokenFor, c.spokenAgainst, c.seen = false, "", nil, nil
+	c.mu.Unlock()
 }
 
 // pickBoard is the heroes worth taking in this position: the player's own record, weighed
@@ -131,48 +166,67 @@ func drafting(st *gsi.State) bool {
 	return draftState(st.Map.GameState)
 }
 
-// speakPicks reads the pick advice out, once for each position the player names while they
-// are choosing. Naming a position is what makes advice possible at all, and naming a
-// different one makes it different advice, so both are worth hearing; saying the same one
-// twice is not.
+// speakPicks reads the pick advice out while the player is choosing: once for each position
+// they name, and again after each wave of picks from the other side, which is when the advice
+// has actually changed.
 func (s *Server) speakPicks(st *gsi.State, set config.Settings) {
-	open := drafting(st)
 	c := &s.picks
-	c.mu.Lock()
-	if !open {
-		c.drafting, c.spokenFor = false, ""
-		c.mu.Unlock()
+	if !drafting(st) {
+		c.forget()
 		return
 	}
+	c.mu.Lock()
 	c.drafting = true
-	said := c.spokenFor == set.Role
 	c.mu.Unlock()
-	// Nothing to say until they have named a position, and nothing to add once it has been
-	// said for that one. Both checks are cheap, which matters twice a second.
-	if said || !s.rolePickedInDraft() {
+	// Nothing to say until they have named a position. The check is cheap, which matters
+	// twice a second.
+	if !s.rolePickedInDraft() {
 		return
 	}
 	snap := s.snapshot(set)
 	if snap.Picks == nil || len(snap.Picks.Best) == 0 {
 		return
 	}
-	var names []string
-	for _, h := range snap.Picks.Best[:min(len(snap.Picks.Best), 2)] {
-		names = append(names, h.Name)
+	against := make([]int, 0, len(snap.Picks.Enemies))
+	for _, h := range snap.Picks.Enemies {
+		against = append(against, h.ID)
 	}
-	role := dota.RoleName(set.Role, set.Language)
-	text := roleSay(set.Language, "Best %s picks: %s", role, strings.Join(names, " · "))
-	speech := roleSay(set.Language, "Best %s picks: %s", role, strings.Join(names, ", ")) + "."
-	if len(snap.Picks.Avoid) > 0 {
-		avoid := roleSay(set.Language, "Avoid %s", snap.Picks.Avoid[0].Name)
-		text, speech = text+" · "+avoid, speech+" "+avoid+"."
+	if !c.sayNow(set.Role, against, time.Now()) {
+		return
 	}
-	c.mu.Lock()
-	c.spokenFor = set.Role
-	c.mu.Unlock()
+	text, speech := pickLine(snap.Picks, set.Role, set.Language)
 	s.emitTips(snap.MatchID, []coach.Tip{{Rule: "picks", Category: "focus", Severity: coach.Info,
 		Clock: snap.Clock, At: time.Now(), Text: text, Speech: speech}}, set)
 	s.askDraft(set, false)
+}
+
+// pickLine is the advice as it is written on screen and as it is read out. Who the other side
+// has comes first: a second reading is prompted by their picks, and without them it is the
+// same sentence over again.
+func pickLine(b *picks.Board, role, lang string) (text, speech string) {
+	var names []string
+	for _, h := range b.Best[:min(len(b.Best), 2)] {
+		names = append(names, h.Name)
+	}
+	named := dota.RoleName(role, lang)
+	text = roleSay(lang, "Best %s picks: %s", named, strings.Join(names, " · "))
+	speech = roleSay(lang, "Best %s picks: %s", named, strings.Join(names, ", ")) + "."
+	if len(b.Avoid) > 0 {
+		avoid := roleSay(lang, "Avoid %s", b.Avoid[0].Name)
+		text, speech = text+" · "+avoid, speech+" "+avoid+"."
+	}
+	var them []string
+	for _, h := range b.Enemies {
+		// A hero the trainer has no name for would otherwise read out as a pause.
+		if h.Name != "" {
+			them = append(them, h.Name)
+		}
+	}
+	if len(them) > 0 {
+		had := roleSay(lang, "Against: %s", strings.Join(them, ", "))
+		text, speech = had+" · "+text, had+". "+speech
+	}
+	return text, speech
 }
 
 // handlePicksAsk is the dashboard's "ask the coach" button during a draft.
