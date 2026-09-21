@@ -459,22 +459,6 @@ func TestSettingsThatCantBeSavedSayThat(t *testing.T) {
 	}
 }
 
-func TestRoleFromHeroRoles(t *testing.T) {
-	cases := map[string][]string{
-		dota.SoftSupport: {"Support", "Disabler", "Nuker", "Initiator"},
-		dota.Carry:       {"Carry", "Pusher", "Escape"},
-		"":               {"Initiator", "Durable"},
-	}
-	for want, roles := range cases {
-		if got := roleFromHeroRoles(roles); got != want {
-			t.Errorf("roleFromHeroRoles(%v) = %q, want %q", roles, got, want)
-		}
-	}
-	if got := roleFromHeroRoles([]string{"Carry", "Support"}); got != dota.Carry {
-		t.Errorf("the first listed role wins, got %q", got)
-	}
-}
-
 func TestLaningMidSwitchesRoleUnlessPlayerPicked(t *testing.T) {
 	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.SoftSupport })
 	for clock := 0; clock <= 160; clock++ {
@@ -617,6 +601,7 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 	data.Start(t.Context())
 	data.WaitReady(t.Context())
 	srv.data = data
+	srv.targets.Builds = data
 
 	st := openStats(t, dir)
 	for i, lh := range []int{40, 44, 38} {
@@ -634,9 +619,7 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 		if len(got.Items) == 2 && got.Items[0].By > 0 {
 			break
 		}
-		srv.targets.mu.Lock() // the history hasn't changed, so ask again as if nothing were cached
-		clear(srv.targets.entries)
-		srv.targets.mu.Unlock()
+		srv.targets.Forget() // the history hasn't changed, so ask again as if nothing were cached
 		time.Sleep(20 * time.Millisecond)
 	}
 	if got.LastHits[1] != 44 || got.Usual[1] != 40 {
@@ -646,31 +629,6 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 	// 12:00 bucket, so it's the goal. Manta has no OpenDota data, so its goal is also personal.
 	if len(got.Items) != 2 || got.Items[0].Item != "bfury" || got.Items[0].By != 990 || got.Items[1].Item != "manta" || got.Items[1].By != 1500 {
 		t.Fatalf("item goals = %+v", got.Items)
-	}
-}
-
-func TestTiltReason(t *testing.T) {
-	base := time.Date(2026, 9, 17, 18, 0, 0, 0, time.UTC)
-	game := func(minutes int, result string) model.MatchSummary {
-		return model.MatchSummary{MatchID: fmt.Sprint(minutes), Result: result, Source: model.SourceLive, EndedAt: base.Add(time.Duration(minutes) * time.Minute)}
-	}
-	cases := []struct {
-		name    string
-		matches []model.MatchSummary
-		mmr     []model.MMREntry
-		want    string
-	}{
-		{"two losses", []model.MatchSummary{game(0, "win"), game(45, "loss"), game(90, "loss")}, nil, "Two losses in a row"},
-		{"gap ends the session", []model.MatchSummary{game(0, "loss"), game(300, "loss")}, nil, ""},
-		{"three of four", []model.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win"), game(120, "loss")}, nil, "Three of your last four"},
-		{"win breaks it", []model.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win")}, nil, ""},
-		{"mmr drop", []model.MatchSummary{game(0, "win"), game(40, "loss")},
-			[]model.MMREntry{{Date: base, MMR: 3000}, {Date: base.Add(50 * time.Minute), MMR: 2940}}, "down 60 MMR"},
-	}
-	for _, c := range cases {
-		if got := tiltReason(c.matches, c.mmr, "en"); c.want == "" && got != "" || !strings.Contains(got, c.want) {
-			t.Errorf("%s: %q", c.name, got)
-		}
 	}
 }
 

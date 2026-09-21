@@ -1,93 +1,39 @@
 package server
 
 import (
-	"gourdian/internal/model"
 	"net/http"
-	"sync"
 	"time"
+
+	"gourdian/internal/mmr"
+	"gourdian/internal/model"
 )
 
 // rankedLobby is OpenDota's lobby type for ranked matchmaking.
 const rankedLobby = 7
-
-// mmrPrompt asks for the new MMR after a match. It stays until the player answers or
-// dismisses it, so closing the dashboard mid-match doesn't lose it.
-type mmrPrompt struct {
-	MatchID string    `json:"match_id"`
-	Hero    string    `json:"hero"`
-	Result  string    `json:"result"`
-	Last    int       `json:"last"`   // the MMR logged before this match
-	Ranked  bool      `json:"ranked"` // false until OpenDota confirms it
-	At      time.Time `json:"at"`
-}
-
-type mmrState struct {
-	mu sync.Mutex
-	// prompt is never changed in place: a change stores a new one, so a prompt that was handed
-	// out (to be encoded for the dashboard, say) stays as it was.
-	prompt *mmrPrompt
-}
-
-func (s *Server) pendingMMR() *mmrPrompt {
-	s.mmr.mu.Lock()
-	defer s.mmr.mu.Unlock()
-	return s.mmr.prompt
-}
 
 // askForMMR offers to log the MMR after a real match.
 func (s *Server) askForMMR(m *model.MatchSummary) {
 	if !m.Real() || !s.cfg.Settings().MMRPrompt {
 		return
 	}
-	p := &mmrPrompt{MatchID: m.MatchID, Hero: m.Hero, Result: m.Result, Ranked: m.Ranked, At: time.Now()}
+	p := &mmr.Prompt{MatchID: m.MatchID, Hero: m.Hero, Result: m.Result, Ranked: m.Ranked, At: time.Now()}
 	if entries, err := s.stats.MMR(); err == nil {
-		p.Last, _ = mmrBefore(entries, m.MatchID, time.Time{})
+		p.Last, _ = mmr.Before(entries, m.MatchID, time.Time{})
 	}
-	s.mmr.mu.Lock()
-	s.mmr.prompt = p
-	s.mmr.mu.Unlock()
+	s.mmr.Ask(p)
 	s.hub.publish("mmr_prompt", p)
-}
-
-// mmrBefore is the last MMR logged before a match, not counting the match's own entry, so
-// logging a match again doesn't add its win twice.
-func mmrBefore(entries []model.MMREntry, matchID string, ended time.Time) (int, bool) {
-	for i := len(entries) - 1; i >= 0; i-- {
-		e := entries[i]
-		if matchID != "" && e.MatchID == matchID || !ended.IsZero() && e.Date.After(ended) {
-			continue
-		}
-		return e.MMR, true
-	}
-	return 0, false
 }
 
 // confirmRanked is called once it's known what kind of match it was; an unranked one takes
 // the prompt away again.
 func (s *Server) confirmRanked(matchID string, ranked bool) {
-	s.mmr.mu.Lock()
-	p := s.mmr.prompt
-	if p == nil || p.MatchID != matchID {
-		s.mmr.mu.Unlock()
-		return
+	if next, changed := s.mmr.ConfirmRanked(matchID, ranked); changed {
+		s.hub.publish("mmr_prompt", next)
 	}
-	if ranked {
-		next := *p
-		next.Ranked = true
-		s.mmr.prompt = &next
-		s.mmr.mu.Unlock()
-		s.hub.publish("mmr_prompt", &next)
-		return
-	}
-	s.mmr.prompt = nil
-	s.mmr.mu.Unlock()
-	s.hub.publish("mmr_prompt", nil)
 }
 
 func (s *Server) clearMMRPrompt() {
-	s.mmr.mu.Lock()
-	s.mmr.prompt = nil
-	s.mmr.mu.Unlock()
+	s.mmr.Clear()
 	s.hub.publish("mmr_prompt", nil)
 }
 
@@ -110,7 +56,7 @@ func (s *Server) handleMatchRanked(w http.ResponseWriter, r *http.Request) {
 		s.matchProblem(w, "couldn't read that match", err)
 		return
 	}
-	switch p := s.pendingMMR(); {
+	switch p := s.mmr.Pending(); {
 	case p != nil && p.MatchID == matchID:
 		s.confirmRanked(matchID, body.Ranked)
 	case body.Ranked && p == nil && s.mmrFor(matchID) == 0:
@@ -125,12 +71,7 @@ func (s *Server) mmrFor(matchID string) int {
 	if err != nil {
 		return 0
 	}
-	for _, e := range entries {
-		if e.MatchID == matchID {
-			return e.MMR
-		}
-	}
-	return 0
+	return mmr.For(entries, matchID)
 }
 
 // handleMatchMMR logs the MMR after one match, from the match lists.
@@ -161,7 +102,7 @@ func (s *Server) handleMatchMMR(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Change != 0 {
 		entries, err := s.stats.MMR()
-		before, ok := mmrBefore(entries, matchID, m.EndedAt)
+		before, ok := mmr.Before(entries, matchID, m.EndedAt)
 		if err != nil || !ok {
 			http.Error(w, "there's no MMR logged before this match, so type the number instead", http.StatusBadRequest)
 			return
@@ -176,7 +117,7 @@ func (s *Server) handleMatchMMR(w http.ResponseWriter, r *http.Request) {
 		s.failed(w, http.StatusInternalServerError, "couldn't save your MMR", err)
 		return
 	}
-	if p := s.pendingMMR(); p != nil && p.MatchID == matchID {
+	if p := s.mmr.Pending(); p != nil && p.MatchID == matchID {
 		s.clearMMRPrompt()
 	}
 	writeJSON(w, entry)
@@ -186,7 +127,7 @@ func (s *Server) handleMMRPrompt(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodDelete {
 		s.clearMMRPrompt()
 	}
-	writeJSON(w, s.pendingMMR())
+	writeJSON(w, s.mmr.Pending())
 }
 
 // handleMMRChange logs a win or loss as a step from the last entry, for the prompt's buttons.
@@ -199,13 +140,13 @@ func (s *Server) handleMMRChange(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `send {"change": 25}`, http.StatusBadRequest)
 		return
 	}
-	p := s.pendingMMR()
+	p := s.mmr.Pending()
 	if p == nil {
 		http.Error(w, "this match's MMR is already logged", http.StatusConflict)
 		return
 	}
 	entries, err := s.stats.MMR()
-	before, ok := mmrBefore(entries, p.MatchID, time.Time{})
+	before, ok := mmr.Before(entries, p.MatchID, time.Time{})
 	if err != nil || !ok {
 		http.Error(w, "log your MMR once first, then the buttons can add and subtract", http.StatusBadRequest)
 		return

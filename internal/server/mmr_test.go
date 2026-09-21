@@ -1,12 +1,10 @@
 package server
 
 import (
-	"encoding/json"
 	"gourdian/internal/model"
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -17,18 +15,18 @@ func TestMMRPromptAfterARealMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv.askForMMR(&model.MatchSummary{MatchID: "123", Hero: "Lion", Result: "win", Source: model.SourceLive})
-	p := srv.pendingMMR()
+	p := srv.mmr.Pending()
 	if p == nil || p.Last != 3000 || p.MatchID != "123" {
 		t.Fatalf("prompt = %+v", p)
 	}
 
 	srv.askForMMR(&model.MatchSummary{MatchID: "local-1", Hero: "Lion", Source: model.SourcePractice})
-	if srv.pendingMMR().MatchID != "123" {
+	if srv.mmr.Pending().MatchID != "123" {
 		t.Fatal("a practice game replaced the prompt")
 	}
 
 	srv.confirmRanked("123", false)
-	if srv.pendingMMR() != nil {
+	if srv.mmr.Pending() != nil {
 		t.Fatal("an unranked match should take the prompt away")
 	}
 }
@@ -66,7 +64,7 @@ func TestMMRChangeCountsEachMatchOnce(t *testing.T) {
 		t.Fatalf("logging a match again stepped from its own entry: %d", last())
 	}
 	srv.askForMMR(&model.MatchSummary{MatchID: "123", Hero: "Lion", Result: "win", Source: model.SourceLive})
-	if p := srv.pendingMMR(); p.Last != 3000 {
+	if p := srv.mmr.Pending(); p.Last != 3000 {
 		t.Fatalf("the prompt should step from the MMR before this match, not %d", p.Last)
 	}
 }
@@ -78,38 +76,14 @@ func TestAMatchMarkedRankedStaysRanked(t *testing.T) {
 	}
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/matches/123/ranked", strings.NewReader(`{"ranked":true}`)))
-	if rec.Code != http.StatusOK || srv.pendingMMR() == nil {
-		t.Fatalf("status %d, prompt %+v", rec.Code, srv.pendingMMR())
+	if rec.Code != http.StatusOK || srv.mmr.Pending() == nil {
+		t.Fatalf("status %d, prompt %+v", rec.Code, srv.mmr.Pending())
 	}
 	srv.saveMatchKind("123", 0, 0)
 	if m, _ := srv.stats.Match("123"); !m.Ranked {
 		t.Fatal("OpenDota's lobby type undid the player's own mark")
 	}
-	if p := srv.pendingMMR(); p == nil || !p.Ranked {
+	if p := srv.mmr.Pending(); p == nil || !p.Ranked {
 		t.Fatalf("the prompt for a match marked ranked went away: %+v", p)
-	}
-}
-
-// The prompt is encoded for the dashboard while OpenDota's answer marks it ranked; that must
-// not race (run with -race).
-func TestConfirmingRankedDoesNotRaceWithReaders(t *testing.T) {
-	srv, _, _ := newTestServer(t, nil)
-	srv.mmr.prompt = &mmrPrompt{MatchID: "m1"}
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		for range 200 {
-			srv.confirmRanked("m1", true)
-		}
-	})
-	wg.Go(func() {
-		for range 200 {
-			if _, err := json.Marshal(srv.pendingMMR()); err != nil {
-				t.Error(err)
-			}
-		}
-	})
-	wg.Wait()
-	if p := srv.pendingMMR(); p == nil || !p.Ranked {
-		t.Fatalf("prompt = %+v, want it marked ranked", p)
 	}
 }
