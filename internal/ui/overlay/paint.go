@@ -274,7 +274,6 @@ func fade(img *image.RGBA, a uint32) {
 	}
 }
 
-// savePaintedPNG writes a painted HUD with its transparency.
 // paintedNRGBA is the painted frame with its alpha un-premultiplied, the way a PNG holds it.
 func paintedNRGBA(img *image.RGBA) *image.NRGBA {
 	out := image.NewNRGBA(img.Rect)
@@ -282,6 +281,7 @@ func paintedNRGBA(img *image.RGBA) *image.NRGBA {
 	return out
 }
 
+// savePaintedPNG writes a painted HUD with its transparency.
 func savePaintedPNG(path string, img *image.RGBA) error {
 	out := paintedNRGBA(img)
 	f, err := os.Create(path)

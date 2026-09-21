@@ -42,7 +42,6 @@ func (h Hotkey) VK() uint32 {
 	return namedKeys[k]
 }
 
-// Mods returns the RegisterHotKey modifier flags.
 // Keysym is the key's X11 keysym, for grabbing it on Linux.
 func (h Hotkey) Keysym() uint32 {
 	k := h.Key
@@ -64,6 +63,7 @@ var x11Keys = map[string]uint32{
 	"Insert": 0xff63, "Delete": 0xffff, "Pause": 0xff13,
 }
 
+// Mods returns the RegisterHotKey modifier flags.
 func (h Hotkey) Mods() uint32 {
 	var m uint32
 	if h.Ctrl {
