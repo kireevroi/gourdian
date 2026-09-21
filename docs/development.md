@@ -47,9 +47,9 @@ The usual way: bump `VERSION` and `pkgver` in `packaging/arch/PKGBUILD` (they ha
 
 Dota posts the game state about twice a second. One request runs the whole pipeline:
 
-1. **`POST /gsi` → `handleGSI`** (`internal/server/server.go`) parses the payload into a `gsi.State`, keeping every field it understands even if a new Dota version sends one it doesn't, and checks the token.
+1. **`POST /gsi` → `handleGSI`** (`internal/ui/server/server.go`) parses the payload into a `gsi.State`, keeping every field it understands even if a new Dota version sends one it doesn't, and checks the token.
 2. **The position** is chosen when a match starts on a different hero (`applyHeroRole`): what you played on that hero last, else your usual position on it, else a guess from OpenDota's hero roles.
-3. **`engine.Update`** (`internal/coach`) runs every rule against the state and the one before it, and returns the tips that fired, the timeline samples, and a finished match when the game ends. Rules are data (`RuleSpec`: when, if, then), each wrapped in `recover`, so one bad rule can't stop the rest.
+3. **`engine.Update`** (`internal/coaching/coach`) runs every rule against the state and the one before it, and returns the tips that fired, the timeline samples, and a finished match when the game ends. Rules are data (`RuleSpec`: when, if, then), each wrapped in `recover`, so one bad rule can't stop the rest.
 4. **Lane detection** may switch the position once the lanes are clear (`applyDetectedRole`), and says so in a tip.
 5. **`deliver`** sends each tip to the dashboard's event stream, speaks it if the voice is on and the tip is important enough, and saves it. `emitTips` is the same thing for tips the trainer makes outside the engine, like the drill line.
 6. **`recordMatch`**, when the game is over, saves the match and its item timings, then runs what depends on a finished game: the drill result, the MMR prompt, weekly-goal feedback, the tilt check, remembering the hero's position, and the AI review.
@@ -58,35 +58,80 @@ Everything slow hangs off that path rather than sitting in it: OpenDota lookups,
 
 ## Code map
 
+`internal/` is grouped by what each package is for, not by what it is made of. The groups carry
+no meaning to the compiler — a package nested in one is no more private than a flat one — they
+are there so the tree says what the program is made of.
+
+### `internal/game` — what Dota is, and what happened
+
 | Path | Contents |
 |---|---|
-| `internal/gsi` | GSI payload types |
-| `internal/dota` | The game's vocabulary: positions, lanes, clock formatting, map timings, shared thresholds |
-| `internal/model` | The record of play: matches, timeline samples, tips, item timings, MMR, reviews, weekly goals |
-| `internal/coach` | Rules engine, built-in rules, custom rule specs and fields, lane detection, personal targets |
-| `internal/rules` | Rule storage (custom rules and edits to built-in ones) and templates |
-| `internal/hud` | What the HUD shows, per widget |
-| `internal/picks` | Scoring the heroes worth taking in a position, from the player's record and the hero meta |
-| `internal/screen` | Reading the hero portraits along the top of the game, and the table of what they look like |
-| `internal/vpk` | Valve's pack files and the textures inside them, for `make portraits` |
-| `internal/i18n` | Russian for the phrases the trainer builds, and a glossary of game terms |
-| `internal/ai` | AI providers: Claude Code and Codex CLIs (with their installers), Anthropic API, OpenAI-compatible APIs |
-| `internal/aicoach` | Coach prompts and answer schemas |
-| `internal/aisvc` | Provider health, model lists and the setup wizard |
-| `internal/secrets` | API keys encrypted with DPAPI |
-| `internal/dotadata` | OpenDota items, heroes, builds, item timings, matches and rank, with a disk cache and rate limit |
-| `internal/matchdata` | Parsed OpenDota matches folded into the statistics; history import |
-| `internal/stats` | The data file (pure-Go SQLite), its migrations, queries and CSV export |
-| `internal/server` | HTTP API, event stream, dashboard pages, the match pipeline, briefing, tilt check |
-| `internal/overlay` | The HUD on Windows (Win32, per-pixel alpha) and Linux (X11), hotkeys, tray icon, dashboard window |
-| `internal/platform` | WSL and Linux-desktop checks in one place |
-| `internal/hotkey` | Shortcut parsing |
-| `internal/autostart` | Starting with Windows or the Linux desktop |
-| `internal/config` | Settings and where the app keeps its folder |
-| `internal/speech` | Windows speech and Piper voices |
-| `internal/install` | Steam and Dota discovery, GSI config |
-| `internal/sim` | Simulator and recordings |
+| `game/gsi` | GSI payload types |
+| `game/dota` | The game's vocabulary: positions, lanes, clock formatting, map timings, shared thresholds |
+| `game/model` | The record of play: matches, timeline samples, tips, item timings, MMR, reviews, weekly goals |
+| `game/vpk` | Valve's pack files and the textures inside them, for `make portraits` |
+
+### `internal/coaching` — the trainer forming an opinion
+
+| Path | Contents |
+|---|---|
+| `coaching/coach` | Rules engine, built-in rules, custom rule specs and fields, lane detection |
+| `coaching/rules` | Rule storage (custom rules and edits to built-in ones) and templates |
+| `coaching/targets` | The numbers to beat, from your own history: last hits per checkpoint, item timings |
+| `coaching/drill` | Scoring the habit you are working on against recent matches |
+| `coaching/tilt` | Spotting the losing run a break would help with |
+| `coaching/focus` | Which past review's focus applies to the game about to start |
+| `coaching/picks` | Scoring the heroes worth taking in a position, from your record and the hero meta |
+| `coaching/position` | Guessing the position to coach a hero as when you haven't said |
+
+### `internal/data` — where the record lives and comes from
+
+| Path | Contents |
+|---|---|
+| `data/stats` | The data file (pure-Go SQLite), its migrations, queries and CSV export |
+| `data/opendota` | OpenDota items, heroes, builds, item timings, matches and rank, with a disk cache and rate limit |
+| `data/ingest` | Parsed OpenDota matches folded into the statistics; history import |
+| `data/mmr` | The rating prompt, and reading what was logged before a match |
+
+### `internal/ai` — the AI coach
+
+| Path | Contents |
+|---|---|
+| `ai` | Providers: Claude Code and Codex CLIs (with their installers), Anthropic API, OpenAI-compatible APIs |
+| `ai/prompts` | Coach prompts and answer schemas |
+| `ai/connect` | Provider health, model lists and the setup wizard |
+| `ai/secrets` | API keys encrypted with DPAPI |
+
+### `internal/ui` — everything the player sees or hears
+
+| Path | Contents |
+|---|---|
+| `ui/server` | HTTP API, event stream, dashboard pages, the match pipeline, briefing |
+| `ui/overlay` | The HUD on Windows (Win32, per-pixel alpha) and Linux (X11), hotkeys, tray icon, dashboard window |
+| `ui/hud` | What the HUD shows, per widget |
+| `ui/speech` | Windows speech and Piper voices |
+| `ui/screen` | Reading the hero portraits along the top of the game, and the table of what they look like |
+
+### `internal/sys` — the machine, not the game
+
+| Path | Contents |
+|---|---|
+| `sys/config` | Settings and where the app keeps its folder |
+| `sys/platform` | WSL and Linux-desktop checks in one place |
+| `sys/hotkey` | Shortcut parsing |
+| `sys/autostart` | Starting with Windows or the Linux desktop |
+| `sys/install` | Steam and Dota discovery, GSI config |
+| `sys/hidewin` | Running console programs without a console window |
+| `sys/buildinfo` | The version the binary was built with |
+
+### The rest
+
+| Path | Contents |
+|---|---|
 | `cmd/gourdian` | The binary, and the Windows icon and version resource |
+| `cmd/portraits` | Builds the hero portrait table `ui/screen` matches against |
 | `internal/cli` | The commands, their flags, and the checks behind `doctor` |
 | `internal/app` | Starting the trainer: settings, logger, engine, statistics and server wired together |
+| `internal/i18n` | Russian for the phrases the trainer builds, and a glossary of game terms |
+| `internal/sim` | Simulator and recordings |
 | `installer/` | Inno Setup script, signing scripts, build script, icons |

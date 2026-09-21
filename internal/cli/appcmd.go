@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"gourdian/internal/app"
-	"gourdian/internal/buildinfo"
-	"gourdian/internal/config"
-	"gourdian/internal/hidewin"
-	"gourdian/internal/overlay"
+	"gourdian/internal/sys/buildinfo"
+	"gourdian/internal/sys/config"
+	"gourdian/internal/sys/hidewin"
+	"gourdian/internal/ui/overlay"
 )
 
 // setupCmd prepares the installed app folder: config with its auth token, data folders and

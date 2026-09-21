@@ -12,10 +12,10 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"gourdian/internal/config"
-	"gourdian/internal/dotadata"
-	"gourdian/internal/matchdata"
-	"gourdian/internal/stats"
+	"gourdian/internal/data/ingest"
+	"gourdian/internal/data/opendota"
+	"gourdian/internal/data/stats"
+	"gourdian/internal/sys/config"
 )
 
 func importCmd(args []string) error {
@@ -32,16 +32,16 @@ func importCmd(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	data := dotadata.New(filepath.Join(dir, "cache"), log)
+	data := opendota.New(filepath.Join(dir, "cache"), log)
 	data.Start(ctx)
 	st, err := stats.Open(dir)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
-	svc := matchdata.Service{Data: data, Stats: st, Log: log}
+	svc := ingest.Service{Data: data, Stats: st, Log: log}
 	fmt.Printf("importing up to %d matches for account %s (about one per second)\n", min(max(*n, 1), 100), accountID)
-	added, err := svc.Import(ctx, accountID, min(max(*n, 1), 100), func(p matchdata.ImportProgress) {
+	added, err := svc.Import(ctx, accountID, min(max(*n, 1), 100), func(p ingest.ImportProgress) {
 		fmt.Printf("\r  %d/%d checked, %d added", p.Done, p.Total, p.Added)
 	})
 	fmt.Println()

@@ -20,7 +20,7 @@ options=('!debug')
 build() {
 	cd "$startdir/../.."
 	export CGO_ENABLED=0 GOFLAGS='-buildvcs=false -trimpath'
-	go build -ldflags "-s -w -X gourdian/internal/buildinfo.Version=$pkgver" -o "$srcdir/gourdian" ./cmd/gourdian
+	go build -ldflags "-s -w -X gourdian/internal/sys/buildinfo.Version=$pkgver" -o "$srcdir/gourdian" ./cmd/gourdian
 }
 
 package() {

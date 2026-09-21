@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"gourdian/internal/config"
-	"gourdian/internal/overlay"
+	"gourdian/internal/sys/config"
+	"gourdian/internal/ui/overlay"
 )
 
 func overlayCmd(args []string) error {

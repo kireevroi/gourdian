@@ -18,14 +18,14 @@ import (
 	"syscall"
 	"time"
 
-	"gourdian/internal/coach"
-	"gourdian/internal/config"
-	"gourdian/internal/dotadata"
-	"gourdian/internal/overlay"
-	"gourdian/internal/platform"
-	"gourdian/internal/server"
-	"gourdian/internal/speech"
-	"gourdian/internal/stats"
+	"gourdian/internal/coaching/coach"
+	"gourdian/internal/data/opendota"
+	"gourdian/internal/data/stats"
+	"gourdian/internal/sys/config"
+	"gourdian/internal/sys/platform"
+	"gourdian/internal/ui/overlay"
+	"gourdian/internal/ui/server"
+	"gourdian/internal/ui/speech"
 )
 
 // Options is what the `run` command decides from its flags.
@@ -70,7 +70,7 @@ func Run(o Options) error {
 	defer stop()
 
 	cacheDir := filepath.Join(dir, "cache")
-	data := dotadata.New(cacheDir, log)
+	data := opendota.New(cacheDir, log)
 	if !o.Background {
 		data.Start(ctx)
 	}

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"gourdian/internal/overlay"
-	"gourdian/internal/platform"
+	"gourdian/internal/sys/platform"
+	"gourdian/internal/ui/overlay"
 )
 
 // startOverlay runs the overlay in-process on Windows and Linux desktops; under WSL it launches

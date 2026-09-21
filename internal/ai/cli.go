@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"gourdian/internal/hidewin"
+	"gourdian/internal/sys/hidewin"
 )
 
 // findCLI looks for a command-line tool: the configured path, then PATH, then npm's global

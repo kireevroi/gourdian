@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"gourdian/internal/config"
 	"gourdian/internal/sim"
+	"gourdian/internal/sys/config"
 )
 
 func simulateCmd(args []string) error {

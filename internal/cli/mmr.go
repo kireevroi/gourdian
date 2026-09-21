@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"gourdian/internal/config"
-	"gourdian/internal/model"
-	"gourdian/internal/stats"
+	"gourdian/internal/data/stats"
+	"gourdian/internal/game/model"
+	"gourdian/internal/sys/config"
 )
 
 func mmrCmd(args []string) error {
