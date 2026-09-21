@@ -11,8 +11,6 @@ import (
 // rankedLobby is OpenDota's lobby type for ranked matchmaking.
 const rankedLobby = 7
 
-func (s *Server) pendingMMR() *mmr.Prompt { return s.mmr.Pending() }
-
 // askForMMR offers to log the MMR after a real match.
 func (s *Server) askForMMR(m *model.MatchSummary) {
 	if !m.Real() || !s.cfg.Settings().MMRPrompt {
@@ -29,12 +27,7 @@ func (s *Server) askForMMR(m *model.MatchSummary) {
 // confirmRanked is called once it's known what kind of match it was; an unranked one takes
 // the prompt away again.
 func (s *Server) confirmRanked(matchID string, ranked bool) {
-	next, changed := s.mmr.ConfirmRanked(matchID, ranked)
-	switch {
-	case !changed:
-	case next == nil:
-		s.hub.publish("mmr_prompt", nil)
-	default:
+	if next, changed := s.mmr.ConfirmRanked(matchID, ranked); changed {
 		s.hub.publish("mmr_prompt", next)
 	}
 }
@@ -63,7 +56,7 @@ func (s *Server) handleMatchRanked(w http.ResponseWriter, r *http.Request) {
 		s.matchProblem(w, "couldn't read that match", err)
 		return
 	}
-	switch p := s.pendingMMR(); {
+	switch p := s.mmr.Pending(); {
 	case p != nil && p.MatchID == matchID:
 		s.confirmRanked(matchID, body.Ranked)
 	case body.Ranked && p == nil && s.mmrFor(matchID) == 0:
@@ -124,7 +117,7 @@ func (s *Server) handleMatchMMR(w http.ResponseWriter, r *http.Request) {
 		s.failed(w, http.StatusInternalServerError, "couldn't save your MMR", err)
 		return
 	}
-	if p := s.pendingMMR(); p != nil && p.MatchID == matchID {
+	if p := s.mmr.Pending(); p != nil && p.MatchID == matchID {
 		s.clearMMRPrompt()
 	}
 	writeJSON(w, entry)
@@ -134,7 +127,7 @@ func (s *Server) handleMMRPrompt(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodDelete {
 		s.clearMMRPrompt()
 	}
-	writeJSON(w, s.pendingMMR())
+	writeJSON(w, s.mmr.Pending())
 }
 
 // handleMMRChange logs a win or loss as a step from the last entry, for the prompt's buttons.
@@ -147,7 +140,7 @@ func (s *Server) handleMMRChange(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `send {"change": 25}`, http.StatusBadRequest)
 		return
 	}
-	p := s.pendingMMR()
+	p := s.mmr.Pending()
 	if p == nil {
 		http.Error(w, "this match's MMR is already logged", http.StatusConflict)
 		return

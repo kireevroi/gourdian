@@ -9,7 +9,6 @@ import (
 	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/model"
-	"gourdian/internal/stats"
 )
 
 type fakeHistory struct {
@@ -22,7 +21,7 @@ type fakeHistory struct {
 
 func (f *fakeHistory) HistoryVersion() int64 { return f.version }
 
-func (f *fakeHistory) MatchesWhere(stats.MatchFilter) ([]model.MatchSummary, error) {
+func (f *fakeHistory) RecentOn(int, string, int) ([]model.MatchSummary, error) {
 	f.asked++
 	return f.matches, f.err
 }
@@ -138,7 +137,7 @@ func TestAStoreThatFailsFallsBackToTheRoleDefaults(t *testing.T) {
 func TestSupportsGetNoItemGoals(t *testing.T) {
 	h := &fakeHistory{version: 1, matches: playedCarry(5)}
 	builds := &fakeBuilds{items: catalogue()}
-	c := &Cache{History: h, Builds: func() BuildSource { return builds }}
+	c := &Cache{History: h, Builds: builds}
 	if got := c.TargetsFor(1, dota.HardSupport); len(got.Items) != 0 {
 		t.Fatalf("a support should get no item goals, got %+v", got.Items)
 	}
@@ -150,7 +149,7 @@ func TestYourOwnItemsBeatTheProBuild(t *testing.T) {
 	h.items = append(boughtIn(ids, "bfury", 1200), boughtIn(ids, "manta", 1800)...)
 	builds := &fakeBuilds{items: catalogue(),
 		build: &dotadata.Build{Items: []dotadata.BuildItem{{Name: "manta", Cost: 4650, Phase: dotadata.PhaseMid}}}}
-	c := &Cache{History: h, Builds: func() BuildSource { return builds }}
+	c := &Cache{History: h, Builds: builds}
 
 	got := c.TargetsFor(1, dota.Carry)
 	if got.ItemGames != 3 {
@@ -169,7 +168,7 @@ func TestCheapItemsAreNotGoals(t *testing.T) {
 	ids := []string{"a", "b", "c"}
 	h := &fakeHistory{version: 1, matches: playedCarry(3), items: boughtIn(ids, "tango", 60)}
 	builds := &fakeBuilds{items: catalogue(), build: &dotadata.Build{}}
-	c := &Cache{History: h, Builds: func() BuildSource { return builds }}
+	c := &Cache{History: h, Builds: builds}
 	if got := c.TargetsFor(1, dota.Carry); len(got.Items) != 0 {
 		t.Fatalf("a 90-gold item is below GoalItemCost, got %+v", got.Items)
 	}
@@ -180,7 +179,7 @@ func TestWithoutEnoughGamesTheProBuildIsUsed(t *testing.T) {
 	builds := &fakeBuilds{items: catalogue(),
 		build:   &dotadata.Build{Items: []dotadata.BuildItem{{Name: "manta", Cost: 4650, Phase: dotadata.PhaseMid}}},
 		timings: map[string][]dotadata.ItemTiming{"manta": {{Time: 1500, Games: 40, Wins: 24}}}}
-	c := &Cache{History: h, Builds: func() BuildSource { return builds }}
+	c := &Cache{History: h, Builds: builds}
 
 	got := c.TargetsFor(1, dota.Carry)
 	if got.ItemGames != 0 {
@@ -194,7 +193,7 @@ func TestWithoutEnoughGamesTheProBuildIsUsed(t *testing.T) {
 func TestALoadingBuildIsRetriedButACompleteOneIsKept(t *testing.T) {
 	h := &fakeHistory{version: 1, matches: playedCarry(2)}
 	builds := &fakeBuilds{items: catalogue(), build: &dotadata.Build{Loading: true}}
-	c := &Cache{History: h, Builds: func() BuildSource { return builds }}
+	c := &Cache{History: h, Builds: builds}
 	c.TargetsFor(1, dota.Carry)
 	age(c)
 	c.TargetsFor(1, dota.Carry)
@@ -211,21 +210,5 @@ func TestALoadingBuildIsRetriedButACompleteOneIsKept(t *testing.T) {
 	c.TargetsFor(1, dota.Carry)
 	if h.asked != before {
 		t.Fatalf("a complete answer should outlive the retry window, got %d reads", h.asked-before)
-	}
-}
-
-func TestTheClientCanArriveAfterTheCacheIsBuilt(t *testing.T) {
-	h := &fakeHistory{version: 1, matches: playedCarry(2)}
-	var builds BuildSource
-	c := &Cache{History: h, Builds: func() BuildSource { return builds }}
-	if got := c.TargetsFor(1, dota.Carry); len(got.Items) != 0 {
-		t.Fatalf("no client yet, so no item goals: %+v", got.Items)
-	}
-	builds = &fakeBuilds{items: catalogue(),
-		build:   &dotadata.Build{Items: []dotadata.BuildItem{{Name: "manta", Cost: 4650, Phase: dotadata.PhaseMid}}},
-		timings: map[string][]dotadata.ItemTiming{"manta": {{Time: 1500, Games: 40, Wins: 24}}}}
-	h.version = 2
-	if got := c.TargetsFor(1, dota.Carry); len(got.Items) != 1 {
-		t.Fatalf("the client that arrived later should be used: %+v", got.Items)
 	}
 }

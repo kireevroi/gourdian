@@ -125,12 +125,10 @@ func New(cfg *config.Store, engine *coach.Engine, st *stats.Store, data *dotadat
 	}
 	s.rules = store
 	s.applyRules()
-	s.targets = &targets.Cache{History: st, Builds: func() targets.BuildSource {
-		if s.data == nil {
-			return nil
-		}
-		return s.data
-	}}
+	s.targets = &targets.Cache{History: targetHistory{st}}
+	if data != nil {
+		s.targets.Builds = data
+	}
 	engine.SetTargetSource(s.targets)
 	s.providers = aisvc.New(aisvc.Host{Settings: cfg, Keys: s.keys, WorkDir: workDir, Log: log, Ctx: s.baseCtx,
 		Spawn: s.spawn, Publish: s.hub.publish, PublishSettings: s.publishSettings, Resumed: s.resumePending,

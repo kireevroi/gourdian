@@ -617,6 +617,7 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 	data.Start(t.Context())
 	data.WaitReady(t.Context())
 	srv.data = data
+	srv.targets.Builds = data
 
 	st := openStats(t, dir)
 	for i, lh := range []int{40, 44, 38} {

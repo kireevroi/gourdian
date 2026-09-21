@@ -41,7 +41,7 @@ func Reason(matches []model.MatchSummary, mmr []model.MMREntry, lang string) str
 			return i18n.Say(lang, "Three of your last four games were losses. Take a break before the next one")
 		}
 	}
-	if drop, ok := sessionDrop(mmr, session[0].EndedAt); ok && drop >= mmrDrop && lost(k-1) {
+	if drop := sessionDrop(mmr, session[0].EndedAt); drop >= mmrDrop && lost(k-1) {
 		return i18n.Say(lang, "You're down %d MMR this session. Take a break before you queue again", drop)
 	}
 	return ""
@@ -67,7 +67,7 @@ func lastSession(matches []model.MatchSummary) []model.MatchSummary {
 	return decided[start:]
 }
 
-func sessionDrop(mmr []model.MMREntry, start time.Time) (int, bool) {
+func sessionDrop(mmr []model.MMREntry, start time.Time) int {
 	var first, last *model.MMREntry
 	for i := range mmr {
 		// Entries are logged after a session starts, so reach back for the one it began on.
@@ -79,7 +79,7 @@ func sessionDrop(mmr []model.MMREntry, start time.Time) (int, bool) {
 		}
 	}
 	if first == nil || last == first {
-		return 0, false
+		return 0
 	}
-	return first.MMR - last.MMR, true
+	return first.MMR - last.MMR
 }

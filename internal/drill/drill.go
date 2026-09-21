@@ -3,6 +3,7 @@
 package drill
 
 import (
+	"cmp"
 	"slices"
 	"time"
 
@@ -58,10 +59,16 @@ func Habits(rules []coach.Rule) []coach.Rule {
 // Countable keeps the matches a drill is scored over: real games the trainer watched, newest
 // first, at most Matches of them.
 func Countable(recent []model.MatchSummary) []model.MatchSummary {
-	recent = slices.DeleteFunc(slices.Clone(recent), func(m model.MatchSummary) bool {
-		return !m.Real() || !m.Coached()
-	})
-	return recent[:min(len(recent), Matches)]
+	out := make([]model.MatchSummary, 0, Matches)
+	for _, m := range recent {
+		if !m.Real() || !m.Coached() {
+			continue
+		}
+		if out = append(out, m); len(out) == Matches {
+			break
+		}
+	}
+	return out
 }
 
 // Score builds the view from the drillable rules, the matches from Countable and how often each
@@ -82,27 +89,16 @@ func Score(habits []coach.Rule, recent []model.MatchSummary, fires map[string]ma
 		if r.ID != chosen {
 			continue
 		}
-		v.Label, v.Advice, v.Average, v.Best = r.Label, r.Advice, avg, -1
-		for _, m := range recent {
+		v.Label, v.Advice, v.Average = r.Label, r.Advice, avg
+		for i, m := range recent {
 			n := per[m.MatchID]
 			v.Recent = append(v.Recent, Match{MatchID: m.MatchID, Hero: m.Hero, EndedAt: m.EndedAt, Count: n})
-			if v.Best < 0 || n < v.Best {
+			if i == 0 || n < v.Best {
 				v.Best = n
 			}
 		}
-		if v.Best < 0 {
-			v.Best = 0
-		}
 	}
-	slices.SortFunc(v.Choices, func(a, b Choice) int {
-		switch {
-		case a.Average > b.Average:
-			return -1
-		case a.Average < b.Average:
-			return 1
-		}
-		return 0
-	})
+	slices.SortFunc(v.Choices, func(a, b Choice) int { return cmp.Compare(b.Average, a.Average) })
 	if len(v.Choices) > 0 && v.Choices[0].Average > 0 {
 		v.Suggestion, v.SuggestionLabel = v.Choices[0].Rule, v.Choices[0].Label
 	}

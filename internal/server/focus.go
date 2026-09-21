@@ -9,7 +9,7 @@ import (
 // applyFocus tells the engine what to work on in the match about to start.
 func (s *Server) applyFocus(role string, heroID int) {
 	reviews, err := s.stats.Reviews()
-	if err != nil {
+	if err != nil || len(reviews) == 0 {
 		return
 	}
 	if f := focus.Pick(reviews, role, heroID, s.cfg.Settings().Language); f != "" {

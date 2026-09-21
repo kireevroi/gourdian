@@ -11,13 +11,11 @@ import (
 
 var day = time.Date(2026, 9, 17, 18, 0, 0, 0, time.UTC)
 
-func logged(entries ...model.MMREntry) []model.MMREntry { return entries }
-
 func TestBeforeTakesTheLatestEarlierEntry(t *testing.T) {
-	entries := logged(
-		model.MMREntry{Date: day, MMR: 3000},
-		model.MMREntry{Date: day.Add(time.Hour), MMR: 3025},
-	)
+	entries := []model.MMREntry{
+		{Date: day, MMR: 3000},
+		{Date: day.Add(time.Hour), MMR: 3025},
+	}
 	got, ok := Before(entries, "", time.Time{})
 	if !ok || got != 3025 {
 		t.Fatalf("Before = %d/%v, want the last entry", got, ok)
@@ -25,10 +23,10 @@ func TestBeforeTakesTheLatestEarlierEntry(t *testing.T) {
 }
 
 func TestBeforeSkipsTheMatchesOwnEntry(t *testing.T) {
-	entries := logged(
-		model.MMREntry{Date: day, MMR: 3000},
-		model.MMREntry{Date: day.Add(time.Hour), MMR: 3025, MatchID: "m1"},
-	)
+	entries := []model.MMREntry{
+		{Date: day, MMR: 3000},
+		{Date: day.Add(time.Hour), MMR: 3025, MatchID: "m1"},
+	}
 	got, ok := Before(entries, "m1", time.Time{})
 	if !ok || got != 3000 {
 		t.Fatalf("Before = %d/%v, want the entry before m1 so its win isn't counted twice", got, ok)
@@ -36,10 +34,10 @@ func TestBeforeSkipsTheMatchesOwnEntry(t *testing.T) {
 }
 
 func TestBeforeIgnoresEntriesLoggedAfterTheMatchEnded(t *testing.T) {
-	entries := logged(
-		model.MMREntry{Date: day, MMR: 3000},
-		model.MMREntry{Date: day.Add(3 * time.Hour), MMR: 3100},
-	)
+	entries := []model.MMREntry{
+		{Date: day, MMR: 3000},
+		{Date: day.Add(3 * time.Hour), MMR: 3100},
+	}
 	got, ok := Before(entries, "", day.Add(time.Hour))
 	if !ok || got != 3000 {
 		t.Fatalf("Before = %d/%v, want only what was logged by then", got, ok)
@@ -50,17 +48,17 @@ func TestBeforeReportsWhenThereIsNothingToGoOn(t *testing.T) {
 	if _, ok := Before(nil, "", time.Time{}); ok {
 		t.Fatal("nothing logged, so there is no earlier MMR")
 	}
-	only := logged(model.MMREntry{Date: day, MMR: 3000, MatchID: "m1"})
+	only := []model.MMREntry{{Date: day, MMR: 3000, MatchID: "m1"}}
 	if _, ok := Before(only, "m1", time.Time{}); ok {
 		t.Fatal("the only entry is the match's own, so there is nothing before it")
 	}
 }
 
 func TestForFindsTheMatchesEntry(t *testing.T) {
-	entries := logged(
-		model.MMREntry{Date: day, MMR: 3000},
-		model.MMREntry{Date: day.Add(time.Hour), MMR: 3025, MatchID: "m1"},
-	)
+	entries := []model.MMREntry{
+		{Date: day, MMR: 3000},
+		{Date: day.Add(time.Hour), MMR: 3025, MatchID: "m1"},
+	}
 	if got := For(entries, "m1"); got != 3025 {
 		t.Fatalf("For = %d, want 3025", got)
 	}

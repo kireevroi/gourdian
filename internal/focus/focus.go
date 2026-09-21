@@ -3,6 +3,7 @@
 package focus
 
 import (
+	"cmp"
 	"strings"
 
 	"gourdian/internal/dota"
@@ -13,28 +14,21 @@ import (
 // Pick is the focus for a match about to start, worded in lang, or "" when no review set one.
 // A focus borrowed from another position says where it came from.
 func Pick(reviews []model.Review, role string, heroID int, lang string) string {
-	var sameHero, sameRole, any model.Review
+	var sameHero, sameRole string
+	var any model.Review
 	for _, r := range reviews {
 		if strings.TrimSpace(r.NextGameFocus) == "" {
 			continue
 		}
 		any = r
 		if r.Role == role || r.Role == "" {
-			sameRole = r
+			sameRole = r.NextGameFocus
 		}
 		if r.Role == role && heroID > 0 && r.HeroID == heroID {
-			sameHero = r
+			sameHero = r.NextGameFocus
 		}
 	}
-	switch {
-	case sameHero.NextGameFocus != "":
-		return sameHero.NextGameFocus
-	case sameRole.NextGameFocus != "":
-		return sameRole.NextGameFocus
-	case any.NextGameFocus != "":
-		return fromRole(any, lang)
-	}
-	return ""
+	return cmp.Or(sameHero, sameRole, fromRole(any, lang))
 }
 
 // Last is the focus the previous review set for this position, so the next review can check

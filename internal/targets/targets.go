@@ -14,7 +14,6 @@ import (
 	"gourdian/internal/dota"
 	"gourdian/internal/dotadata"
 	"gourdian/internal/model"
-	"gourdian/internal/stats"
 )
 
 const incompleteWait = 10 * time.Second
@@ -22,7 +21,7 @@ const incompleteWait = 10 * time.Second
 // History is the part of the statistics store the targets are read from.
 type History interface {
 	HistoryVersion() int64
-	MatchesWhere(stats.MatchFilter) ([]model.MatchSummary, error)
+	RecentOn(heroID int, role string, limit int) ([]model.MatchSummary, error)
 	ItemsIn(matchIDs []string) ([]model.ItemTiming, error)
 }
 
@@ -37,8 +36,7 @@ type BuildSource interface {
 // history changes. A partial answer, made while OpenDota was still loading, is retried sooner.
 type Cache struct {
 	History History
-	// Builds is called per ask rather than held, because the client can be replaced while running.
-	Builds func() BuildSource
+	Builds  BuildSource
 
 	mu      sync.Mutex
 	entries map[string]cached
@@ -80,42 +78,37 @@ func (c *Cache) Forget() {
 }
 
 func (c *Cache) build(heroID int, role string) (coach.Targets, bool) {
-	matches, err := c.History.MatchesWhere(stats.MatchFilter{HeroID: heroID, Role: role, Real: true, Limit: dota.PersonalGames})
+	matches, err := c.History.RecentOn(heroID, role, dota.PersonalGames)
 	if err != nil {
 		return coach.RoleTargets(role), false
 	}
 	history := slices.Clone(matches)
 	slices.Reverse(history) // newest first
 	t := coach.PersonalLastHits(role, history)
-	var builds BuildSource
-	if c.Builds != nil {
-		builds = c.Builds()
-	}
-	if !dota.Core(role) || builds == nil {
+	if !dota.Core(role) || c.Builds == nil {
 		return t, true
 	}
 	var complete bool
-	t.Items, t.ItemGames, complete = c.itemGoals(builds, heroID, role, history)
+	t.Items, t.ItemGames, complete = c.itemGoals(heroID, role, history)
 	return t, complete
 }
 
 // itemGoals picks two core items, the player's usual ones if they have enough history on the
 // hero and otherwise the popular build's, and sets a timing goal for each.
-func (c *Cache) itemGoals(builds BuildSource, heroID int, role string, history []model.MatchSummary) ([]coach.ItemGoal, int, bool) {
-	items := builds.Items()
+func (c *Cache) itemGoals(heroID int, role string, history []model.MatchSummary) ([]coach.ItemGoal, int, bool) {
+	items := c.Builds.Items()
 	if items == nil {
 		return nil, 0, false
 	}
-	ids := map[string]bool{}
-	var idList []string
-	for _, m := range history[:min(len(history), dota.PersonalGames)] {
-		ids[m.MatchID] = true
+	counted := history[:min(len(history), dota.PersonalGames)]
+	idList := make([]string, 0, len(counted))
+	for _, m := range counted {
 		idList = append(idList, m.MatchID)
 	}
 	rows, _ := c.History.ItemsIn(idList)
 	perMatch := map[string]map[string]int{}
 	for _, r := range rows {
-		if !ids[r.MatchID] || items[r.Item].Cost < dota.GoalItemCost {
+		if items[r.Item].Cost < dota.GoalItemCost {
 			continue
 		}
 		if perMatch[r.MatchID] == nil {
@@ -156,7 +149,7 @@ func (c *Cache) itemGoals(builds BuildSource, heroID int, role string, history [
 		}
 	}
 	if len(chosen) == 0 {
-		build := builds.BuildFor(heroID, role)
+		build := c.Builds.BuildFor(heroID, role)
 		if build == nil || build.Loading {
 			return nil, 0, false
 		}
@@ -171,7 +164,7 @@ func (c *Cache) itemGoals(builds BuildSource, heroID int, role string, history [
 	complete := true
 	var goals []coach.ItemGoal
 	for _, name := range chosen {
-		buckets, ok := builds.ItemTimings(heroID, name)
+		buckets, ok := c.Builds.ItemTimings(heroID, name)
 		if !ok {
 			complete = false
 		}
