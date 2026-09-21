@@ -39,14 +39,11 @@ func (c *Client) Matchups(heroID int) map[int]Matchup {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if m, ok := c.matchups[heroID]; ok {
-		return m
-	}
-	if !c.matchupsPending[heroID] && time.Since(c.matchupsFailed[heroID]) >= buildRetry {
-		c.matchupsPending[heroID] = true
+	m, _, fetch := c.matchups.get(heroID)
+	if fetch {
 		go c.fetchMatchups(heroID)
 	}
-	return nil
+	return m
 }
 
 func (c *Client) fetchMatchups(heroID int) {
@@ -57,16 +54,15 @@ func (c *Client) fetchMatchups(heroID int) {
 		filepath.Join("matchups", fmt.Sprintf("%d.json", heroID)), matchupsMaxAge, &rows)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.matchupsPending, heroID)
 	if err != nil || len(rows) == 0 {
 		c.log.Warn("no matchups for hero; will retry", "hero_id", heroID, "err", err)
-		c.matchupsFailed[heroID] = time.Now()
+		c.matchups.fail(heroID)
 		return
 	}
 	against := make(map[int]Matchup, len(rows))
 	for _, r := range rows {
 		against[r.HeroID] = r
 	}
-	c.matchups[heroID] = against
+	c.matchups.done(heroID, against)
 	c.log.Info("matchups loaded", "hero_id", heroID, "against", len(against))
 }

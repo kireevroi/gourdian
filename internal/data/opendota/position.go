@@ -81,14 +81,14 @@ func (c *Client) proBuild(heroID, pos int, won bool, fallback *Build) *Build {
 	key := positionKey{heroID, pos, won}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if b, ok := c.posBuilds[key]; ok {
+	b, ok, fetch := c.posBuilds.get(key)
+	if ok {
 		if b != nil {
 			return b
 		}
 		return fallback
 	}
-	if !c.posPending[key] && time.Since(c.posFailed[key]) >= buildRetry {
-		c.posPending[key] = true
+	if fetch {
 		go c.fetchPositionBuild(key)
 	}
 	if fallback == nil {
@@ -106,10 +106,9 @@ func (c *Client) fetchPositionBuild(key positionKey) {
 	data, err := c.loadPositionData(ctx, key)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.posPending, key)
 	if err != nil || c.items == nil {
 		c.log.Warn("no pro build; will retry", "hero_id", key.hero, "position", key.pos, "won_only", key.won, "err", err)
-		c.posFailed[key] = time.Now()
+		c.posBuilds.fail(key)
 		return
 	}
 	var b *Build
@@ -117,7 +116,7 @@ func (c *Client) fetchPositionBuild(key positionKey) {
 		b = BuildFromPopularity(key.hero, data.Pop, data.At, c.items)
 		b.Position, b.Games, b.Won = key.pos, data.Games, key.won
 	}
-	c.posBuilds[key] = b
+	c.posBuilds.done(key, b)
 	c.log.Info("pro build loaded", "hero_id", key.hero, "position", key.pos, "won_only", key.won, "pro_games", data.Games, "used", b != nil)
 }
 

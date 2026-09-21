@@ -83,12 +83,11 @@ func (r heroStatsRow) meta() HeroMeta {
 func (c *Client) Meta() map[int]HeroMeta {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.meta != nil || c.metaPending || time.Since(c.metaFailed) < buildRetry {
-		return c.meta
+	m, _, fetch := c.meta.get(struct{}{})
+	if fetch {
+		go c.fetchMeta()
 	}
-	c.metaPending = true
-	go c.fetchMeta()
-	return nil
+	return m
 }
 
 func (c *Client) fetchMeta() {
@@ -98,16 +97,15 @@ func (c *Client) fetchMeta() {
 	err := c.getJSON(ctx, "/heroStats", "herostats.json", metaMaxAge, &rows)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.metaPending = false
 	if err != nil || len(rows) == 0 {
 		c.log.Warn("no hero meta; will retry", "err", err)
-		c.metaFailed = time.Now()
+		c.meta.fail(struct{}{})
 		return
 	}
 	meta := make(map[int]HeroMeta, len(rows))
 	for _, r := range rows {
 		meta[r.ID] = r.meta()
 	}
-	c.meta = meta
+	c.meta.done(struct{}{}, meta)
 	c.log.Info("hero meta loaded", "heroes", len(meta))
 }

@@ -32,37 +32,21 @@ type Client struct {
 
 	ready chan struct{}
 
-	mu          sync.RWMutex
-	items       map[string]ItemInfo
-	heroes      map[int]HeroInfo
-	builds      map[int]*Build
-	failedAt    map[int]time.Time
-	pending     map[int]bool
-	rankTiers   map[string]int
-	rankPending map[string]bool
+	mu        sync.RWMutex
+	items     map[string]ItemInfo
+	heroes    map[int]HeroInfo
+	builds    lazy[int, *Build]
+	rankTiers lazy[string, int]
+	posBuilds lazy[positionKey, *Build]
 
-	posBuilds  map[positionKey]*Build
-	posPending map[positionKey]bool
-	posFailed  map[positionKey]time.Time
-
-	skillBuilds   map[positionKey]*SkillBuild
-	skillPending  map[positionKey]bool
-	skillFailed   map[positionKey]time.Time
+	skillBuilds   lazy[positionKey, *SkillBuild]
 	abilityIDs    map[string]string
 	heroAbilities map[string][]string
 	abilities     map[string]abilityInfo
 
-	timings        map[timingsKey][]ItemTiming
-	timingsPending map[timingsKey]bool
-	timingsFailed  map[timingsKey]time.Time
-
-	meta        map[int]HeroMeta
-	metaPending bool
-	metaFailed  time.Time
-
-	matchups        map[int]map[int]Matchup
-	matchupsPending map[int]bool
-	matchupsFailed  map[int]time.Time
+	timings  lazy[timingsKey, []ItemTiming]
+	meta     lazy[struct{}, map[int]HeroMeta]
+	matchups lazy[int, map[int]Matchup]
 }
 
 func New(cacheDir string, log *slog.Logger) *Client {
@@ -73,28 +57,6 @@ func New(cacheDir string, log *slog.Logger) *Client {
 		log:      log,
 		ready:    make(chan struct{}),
 		limit:    newLimiter(),
-		builds:   map[int]*Build{},
-		failedAt: map[int]time.Time{},
-		pending:  map[int]bool{},
-
-		posBuilds:  map[positionKey]*Build{},
-		posPending: map[positionKey]bool{},
-		posFailed:  map[positionKey]time.Time{},
-
-		skillBuilds:  map[positionKey]*SkillBuild{},
-		skillPending: map[positionKey]bool{},
-		skillFailed:  map[positionKey]time.Time{},
-
-		rankTiers:   map[string]int{},
-		rankPending: map[string]bool{},
-
-		matchups:        map[int]map[int]Matchup{},
-		matchupsPending: map[int]bool{},
-		matchupsFailed:  map[int]time.Time{},
-
-		timings:        map[timingsKey][]ItemTiming{},
-		timingsPending: map[timingsKey]bool{},
-		timingsFailed:  map[timingsKey]time.Time{},
 	}
 }
 
@@ -172,14 +134,16 @@ func (c *Client) BuildFor(heroID int, role string) *Build {
 }
 
 func (c *Client) heroBuild(heroID int) *Build {
+	if heroID <= 0 {
+		return nil
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if b, ok := c.builds[heroID]; ok || c.pending[heroID] || heroID <= 0 || time.Since(c.failedAt[heroID]) < buildRetry {
-		return b
+	b, _, fetch := c.builds.get(heroID)
+	if fetch {
+		go c.fetchBuild(heroID)
 	}
-	c.pending[heroID] = true
-	go c.fetchBuild(heroID)
-	return nil
+	return b
 }
 
 func (c *Client) fetchBuild(heroID int) {
@@ -191,25 +155,28 @@ func (c *Client) fetchBuild(heroID int) {
 	err := c.getJSON(ctx, path, filepath.Join("builds", strconv.Itoa(heroID)+".json"), buildMaxAge, &pop)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.pending, heroID)
 	if err != nil || c.items == nil {
 		c.log.Warn("no item build for hero; will retry", "hero_id", heroID, "err", err)
-		c.failedAt[heroID] = time.Now()
+		c.builds.fail(heroID)
 		return
 	}
-	c.builds[heroID] = BuildFromPopularity(heroID, pop, nil, c.items)
-	c.log.Info("item build loaded", "hero_id", heroID, "items", len(c.builds[heroID].Items))
+	b := BuildFromPopularity(heroID, pop, nil, c.items)
+	c.builds.done(heroID, b)
+	c.log.Info("item build loaded", "hero_id", heroID, "items", len(b.Items))
 }
 
 // RankTier returns the player's medal as OpenDota encodes it (tens digit = medal,
 // ones = stars), or 0 while unknown. The first call per account starts a fetch.
 func (c *Client) RankTier(accountID string) int {
+	if accountID == "" || accountID == "0" {
+		return 0
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if tier, ok := c.rankTiers[accountID]; ok || c.rankPending[accountID] || accountID == "" || accountID == "0" {
+	tier, _, fetch := c.rankTiers.get(accountID)
+	if !fetch {
 		return tier
 	}
-	c.rankPending[accountID] = true
 	go func() {
 		ctx, cancel := context.WithTimeout(c.life(), 30*time.Second)
 		defer cancel()
@@ -222,7 +189,8 @@ func (c *Client) RankTier(accountID string) int {
 		}
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		c.rankTiers[accountID] = player.RankTier
+		// A failed lookup is kept too, as 0, and never asked for again.
+		c.rankTiers.done(accountID, player.RankTier)
 		if err != nil {
 			c.log.Warn("rank lookup failed", "err", err)
 		}
