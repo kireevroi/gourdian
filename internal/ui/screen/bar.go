@@ -2,11 +2,9 @@ package screen
 
 import "image"
 
-// Slots is how many heroes a team has in the bar.
 const Slots = 5
 
-// Box is a rectangle in screen pixels, spelled out so it reads plainly in the settings file
-// and can be dragged out on the dashboard.
+// Box is a rectangle in screen pixels.
 type Box struct {
 	X int `json:"x"`
 	Y int `json:"y"`
@@ -16,19 +14,15 @@ type Box struct {
 
 func (b Box) empty() bool { return b.W <= 0 || b.H <= 0 }
 
-// Bar is where the two runs of five hero portraits sit on the player's screen: their own team
-// on one side of the clock and the enemy on the other. Which side is which is not the bar's
-// business; the trainer knows its own team from the game state.
+// Bar is the two runs of five portraits either side of the clock; which is ours comes from GSI.
 type Bar struct {
 	Left  Box `json:"left"`
 	Right Box `json:"right"`
 }
 
-// Y is the top of the portraits.
 func (b Bar) Y() int { return b.Left.Y }
 
-// Ready reports whether the bar describes ten portraits big enough to tell apart. A portrait
-// smaller than the hash it is shrunk to carries no information.
+// Ready reports whether all ten portraits are at least as big as the hash they're shrunk to.
 func (b Bar) Ready() bool {
 	for _, side := range []Box{b.Left, b.Right} {
 		if side.empty() || side.W < Slots*sigW || side.H < sigH {
@@ -93,7 +87,7 @@ func (b Bar) Read(shot image.Image, t Table) [2 * Slots]int {
 	return out
 }
 
-// Read counts how many of the ten slots were read, which is how a calibration is judged.
+// ReadCount counts how many of the ten slots were read, which is how a calibration is judged.
 func ReadCount(slots [2 * Slots]int) int {
 	n := 0
 	for _, id := range slots {

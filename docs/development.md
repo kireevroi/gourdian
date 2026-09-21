@@ -54,7 +54,7 @@ Dota posts the game state about twice a second. One request runs the whole pipel
 5. **`deliver`** sends each tip to the dashboard's event stream, speaks it if the voice is on and the tip is important enough, and saves it. `emitTips` is the same thing for tips the trainer makes outside the engine, like the drill line.
 6. **`recordMatch`**, when the game is over, saves the match and its item timings, then runs what depends on a finished game: the drill result, the MMR prompt, weekly-goal feedback, the tilt check, remembering the hero's position, and the AI review.
 
-Everything slow hangs off that path rather than sitting in it: OpenDota lookups, the AI coach and the settings broadcast run as background work the server waits for when it shuts down (`Server.spawn`).
+Everything slow hangs off that path rather than sitting in it: OpenDota lookups, the AI coach and the settings broadcast run as background work the server waits for when it shuts down (a `sys/tasks.Group`, the server's `bg`).
 
 ## Code map
 

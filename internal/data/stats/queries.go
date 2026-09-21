@@ -91,9 +91,7 @@ func (s *Store) Matches() ([]model.MatchSummary, error) {
 	return s.queryMatches(`ORDER BY julianday(ended_at), rowid`)
 }
 
-// Recent returns up to n matches, newest first.
-// Recent is the newest n matches, newest first, leaving out Turbo for the same reason
-// MatchFilter does.
+// Recent is the newest n matches, newest first, leaving out Turbo as MatchFilter does.
 func (s *Store) Recent(n int) ([]model.MatchSummary, error) {
 	return s.queryMatches(`WHERE IFNULL(game_mode, 0) != ? ORDER BY julianday(ended_at) DESC, rowid DESC LIMIT ?`,
 		model.GameModeTurbo, n)
@@ -236,10 +234,8 @@ func (s *Store) RuleCounts(matchIDs map[string]bool) (map[string]int, error) {
 // Tips returns every tip ever shown, oldest first.
 func (s *Store) Tips() ([]model.TipRecord, error) { return s.tipRecords() }
 
-// AppendMMR logs an MMR reading. One logged against a match replaces an earlier reading for
-// that same match, so correcting a number doesn't leave two.
-// FiresIn counts, per rule, how often it fired in each of the given matches. One query
-// instead of one per rule: the drill page asks about every habit at once.
+// FiresIn counts, per rule, how often it fired in each match, in one query rather than one per
+// rule, since the drill page asks about every habit at once.
 func (s *Store) FiresIn(matchIDs []string) (map[string]map[string]int, error) {
 	out := map[string]map[string]int{}
 	if len(matchIDs) == 0 {
@@ -288,6 +284,8 @@ func (s *Store) FiresByMatch(rule string) (map[string]int, error) {
 	return out, rows.Err()
 }
 
+// AppendMMR logs an MMR reading; one against a match replaces that match's earlier reading, so
+// correcting a number doesn't leave two.
 func (s *Store) AppendMMR(e model.MMREntry) error {
 	return s.tx(func(tx *sql.Tx) error { return appendMMR(tx, e) })
 }
@@ -435,9 +433,8 @@ func (s *Store) ReplaceRules(rows []RuleRow) error {
 	})
 }
 
-// RulesImported reports whether the rules of an older version have been taken over already.
-// If the flag can't be read it counts as set: importing again would put an old rules file back
-// over the player's rules.
+// RulesImported reports whether an older version's rules were taken over. An unreadable flag
+// counts as set, since importing again would put an old rules file over the player's.
 func (s *Store) RulesImported() bool {
 	v, err := s.meta("rules_imported")
 	return err != nil || v != ""
@@ -454,11 +451,8 @@ type MatchFilter struct {
 	Since  time.Time // zero: any time
 	Real   bool      // only matches the player really played, as model.MatchSummary.Real says
 	Limit  int       // 0: all; otherwise only the newest this many
-	// Turbo brings back the Turbo matches, which are otherwise left out. A Turbo game pays
-	// about twice the gold and experience, so its numbers would drag every average, median
-	// and target towards something no normal game will ever reach. Only a caller showing
-	// Turbo on its own terms wants them, so they are out unless asked for, and a new caller
-	// can't let them back in by forgetting.
+	// Turbo brings back Turbo matches, left out by default since they pay about double and would
+	// drag every average and target; a new caller can't let them back in by forgetting.
 	Turbo bool
 }
 
