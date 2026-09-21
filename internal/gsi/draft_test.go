@@ -78,3 +78,24 @@ func TestDraftBoardWithoutTheBlock(t *testing.T) {
 		t.Error("reported a board where every slot is empty")
 	}
 }
+
+// Dota sends a player "draft": {} all game, and reporting that as a block Dota offers is how
+// a reader of the log concludes the draft is there when it never is.
+func TestAnEmptyDraftBlockIsNotAnExtra(t *testing.T) {
+	for _, payload := range []string{`{"draft":{}}`, `{"draft":{},"map":{"name":"start"}}`} {
+		var s State
+		if err := json.Unmarshal([]byte(payload), &s); err != nil {
+			t.Fatal(err)
+		}
+		if got := s.Extras(); slices.Contains(got, "draft") {
+			t.Errorf("%s was reported as sending a draft block: %v", payload, got)
+		}
+	}
+	var s State
+	if err := json.Unmarshal([]byte(draftJSON), &s); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Extras(); !slices.Contains(got, "draft") {
+		t.Errorf("a real draft block went unreported: %v", got)
+	}
+}

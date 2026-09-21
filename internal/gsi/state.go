@@ -143,10 +143,15 @@ func (s *State) Extras() []string {
 	if len(s.Buildings) > 0 {
 		out = append(out, "buildings")
 	}
-	if s.Draft != nil {
+	if !s.Draft.empty() {
 		out = append(out, "draft")
 	}
 	return out
+}
+
+// Dota sends players a bare "draft": {} throughout a match, which is not it offering a draft.
+func (d *Draft) empty() bool {
+	return d == nil || (d.ActiveTeam == 0 && !d.Pick && d.ActiveTeamTimeRem == 0 && d.Team2 == nil && d.Team3 == nil)
 }
 
 type Auth struct {
