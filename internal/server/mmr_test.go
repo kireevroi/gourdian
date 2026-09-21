@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"gourdian/internal/mmr"
 	"gourdian/internal/model"
 	"net/http"
 	"net/http/httptest"
@@ -94,7 +95,7 @@ func TestAMatchMarkedRankedStaysRanked(t *testing.T) {
 // not race (run with -race).
 func TestConfirmingRankedDoesNotRaceWithReaders(t *testing.T) {
 	srv, _, _ := newTestServer(t, nil)
-	srv.mmr.prompt = &mmrPrompt{MatchID: "m1"}
+	srv.mmr.Ask(&mmr.Prompt{MatchID: "m1"})
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		for range 200 {

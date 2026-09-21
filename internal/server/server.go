@@ -33,6 +33,7 @@ import (
 	"gourdian/internal/gsi"
 	"gourdian/internal/hud"
 	"gourdian/internal/matchdata"
+	"gourdian/internal/mmr"
 	"gourdian/internal/model"
 	"gourdian/internal/picks"
 	"gourdian/internal/platform"
@@ -83,7 +84,7 @@ type Server struct {
 	hudError       string
 	hudReported    bool
 
-	mmr     mmrState
+	mmr     mmr.Prompts
 	keys    *secrets.Store
 	rules   *rules.Store
 	targets *targets.Cache
