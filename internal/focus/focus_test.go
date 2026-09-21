@@ -69,6 +69,29 @@ func TestAReviewWithoutAPositionCountsForAny(t *testing.T) {
 	}
 }
 
+// Reading the hero test as applying to both branches would drop the first case here.
+func TestLastMatchesThePositionNotTheHero(t *testing.T) {
+	samePositionOtherHero := reviewed(model.Review{MatchID: "1", Hero: "Puck", HeroID: 13, Role: dota.Mid,
+		NextGameFocus: "Hit 60 last hits by 10:00"})
+	if got := Last(samePositionOtherHero, dota.Mid, 99); got != "Hit 60 last hits by 10:00" {
+		t.Fatalf("Last = %q, want the same position on another hero to count", got)
+	}
+
+	noPosition := reviewed(model.Review{MatchID: "1", Hero: "Puck", HeroID: 13, NextGameFocus: "Ward the high ground"})
+	if got := Last(noPosition, dota.Mid, 13); got != "Ward the high ground" {
+		t.Fatalf("Last = %q, want an unrecorded position to count on the same hero", got)
+	}
+	if got := Last(noPosition, dota.Mid, 99); got != "" {
+		t.Fatalf("Last = %q, want an unrecorded position on another hero ignored", got)
+	}
+}
+
+func TestLastIgnoresOtherPositions(t *testing.T) {
+	if got := Last(history, dota.Offlane, 13); got != "" {
+		t.Fatalf("Last = %q, want nothing from positions you didn't ask about", got)
+	}
+}
+
 func TestTheLatestReviewForThePositionWins(t *testing.T) {
 	if got := Last(history, dota.Mid, 13); got != "Leave lane with a bottle full" {
 		t.Fatalf("Last = %q, want the newest mid review", got)

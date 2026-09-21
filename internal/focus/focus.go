@@ -1,5 +1,4 @@
-// Package focus chooses the one thing to work on in the next game, out of what past reviews
-// asked for: this hero and position first, then this position on any hero, then any game at all.
+// Package focus chooses the one thing to work on next, out of what past reviews asked for.
 package focus
 
 import (
@@ -11,8 +10,7 @@ import (
 	"gourdian/internal/model"
 )
 
-// Pick is the focus for a match about to start, worded in lang, or "" when no review set one.
-// A focus borrowed from another position says where it came from.
+// Pick prefers this hero and position, then the position, then any game, worded in lang.
 func Pick(reviews []model.Review, role string, heroID int, lang string) string {
 	var sameHero, sameRole string
 	var any model.Review
@@ -31,22 +29,21 @@ func Pick(reviews []model.Review, role string, heroID int, lang string) string {
 	return cmp.Or(sameHero, sameRole, fromRole(any, lang))
 }
 
-// Last is the focus the previous review set for this position, so the next review can check
-// whether it happened.
+// Last is what the previous review asked of this position, so the next one can check it happened.
 func Last(reviews []model.Review, role string, heroID int) string {
 	best := ""
 	for _, r := range reviews {
 		if strings.TrimSpace(r.NextGameFocus) == "" {
 			continue
 		}
-		if r.Role == role || r.Role == "" && heroID == r.HeroID {
+		// The hero only has to match for a review saved before positions were recorded.
+		if r.Role == role || (r.Role == "" && heroID == r.HeroID) {
 			best = r.NextGameFocus
 		}
 	}
 	return best
 }
 
-// fromRole says which game a focus came from when it wasn't this position.
 func fromRole(r model.Review, lang string) string {
 	name := dota.RoleName(r.Role, lang)
 	switch {
