@@ -15,6 +15,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -38,11 +39,12 @@ import (
 	"gourdian/internal/game/gsi"
 	"gourdian/internal/game/model"
 	"gourdian/internal/i18n"
+	"gourdian/internal/sim"
 	"gourdian/internal/sys/autostart"
 	"gourdian/internal/sys/buildinfo"
 	"gourdian/internal/sys/config"
 	"gourdian/internal/sys/platform"
-	"gourdian/internal/ui/hud"
+	"gourdian/internal/sys/tasks"
 	"gourdian/internal/ui/speech"
 )
 
@@ -50,69 +52,49 @@ import (
 var webFS embed.FS
 
 type Server struct {
+	// What it is given.
 	cfg      *config.Store
 	engine   *coach.Engine
 	stats    *stats.Store
 	data     *opendota.Client
 	speaker  *speech.Speaker
+	keys     *secrets.Store
+	rules    *rules.Store
 	log      *slog.Logger
 	workDir  string
 	cacheDir string
 
+	// What it runs. Close waits for bg, so nothing writes to the data file after it.
 	hub       hub
-	dirty     atomic.Bool
-	authWarns atomic.Int32
-	typeWarns atomic.Int32
-	extras    atomic.Value // GSI blocks seen beyond the basics, logged once
-	draftSeen atomic.Bool  // Dota sent a draft board with heroes in it
-	accountID atomic.Value
-	quit      func()
+	bg        *tasks.Group
+	rec       *sim.Recorder
+	providers *connect.Service
+	targets   *targets.Cache
+	matches   ingest.Service
 
-	recMu sync.Mutex
-	rec   *recorder
-
-	firstGSI   sync.Once
-	onFirstGSI func()
-
-	// hudQueue lets alerts take turns on the HUD, across its redraws.
-	hudMu    sync.Mutex
-	hudQueue hud.Queue
-	// voiceBusy is set while a Windows voice is being installed.
-	voiceBusy atomic.Bool
-	piper     piperState
-
-	overlayMu      sync.Mutex
-	hotkeyProblems map[string]string
-	hudError       string
-	hudReported    bool
-
+	// What it remembers between requests.
+	feed    feed
+	role    position.Memory
 	mmr     mmr.Prompts
-	keys    *secrets.Store
-	rules   *rules.Store
-	targets *targets.Cache
 	brief   briefingCache
 	picks   pickCache
 	draft   draftBoard
+	ai      aiState
+	voice   voiceState
+	overlay overlayReport
+	alerts  alertQueue
 
-	role      position.Memory
-	ai        aiState
-	providers *connect.Service
-
-	matches   ingest.Service
+	dirty     atomic.Bool
 	importing atomic.Bool
-	// baseCtx bounds background work (OpenDota waits, imports) to the server's lifetime.
-	baseCtx context.Context
-	cancel  context.CancelFunc
-	// tasks counts the background work Close waits for; closing stops new work starting.
-	tasksMu sync.Mutex
-	closing bool
-	tasks   sync.WaitGroup
+	accountID atomic.Value
+	quit      func()
 }
 
 func New(cfg *config.Store, engine *coach.Engine, st *stats.Store, data *opendota.Client, speaker *speech.Speaker, workDir, cacheDir string, log *slog.Logger) *Server {
 	s := &Server{cfg: cfg, engine: engine, stats: st, data: data, speaker: speaker, workDir: workDir, cacheDir: cacheDir, log: log,
-		hub: newHub(log), matches: ingest.Service{Data: data, Stats: st, Log: log}}
-	s.baseCtx, s.cancel = context.WithCancel(context.Background())
+		hub: newHub(log), matches: ingest.Service{Data: data, Stats: st, Log: log},
+		rec: &sim.Recorder{Dir: filepath.Join(workDir, "recordings"), Log: log}}
+	s.bg = tasks.New()
 	s.keys = secrets.Open(workDir)
 	ai.SetToolsDir(workDir)
 	store, err := rules.Open(workDir, st)
@@ -126,8 +108,8 @@ func New(cfg *config.Store, engine *coach.Engine, st *stats.Store, data *opendot
 		s.targets.Builds = data
 	}
 	engine.SetTargetSource(s.targets)
-	s.providers = connect.New(connect.Host{Settings: cfg, Keys: s.keys, WorkDir: workDir, Log: log, Ctx: s.baseCtx,
-		Spawn: s.spawn, Publish: s.hub.publish, PublishSettings: s.publishSettings, Resumed: s.resumePending,
+	s.providers = connect.New(connect.Host{Settings: cfg, Keys: s.keys, WorkDir: workDir, Log: log, Ctx: s.bg.Context(),
+		Spawn: s.bg.Go, Publish: s.hub.publish, PublishSettings: s.publishSettings, Resumed: s.resumePending,
 		Paused: func(connect.Health) {
 			s.ai.noticePending.Store(true)
 			s.noticeAIProblem()
@@ -243,41 +225,18 @@ func sameOrigin(next http.Handler) http.Handler {
 	})
 }
 
-// spawn runs background work bounded by the server's lifetime; Close waits for it, so nothing
-// writes to the data file after main closes it. Once closing, spawn does nothing.
-func (s *Server) spawn(work func(ctx context.Context)) {
-	if !s.track() {
-		return
-	}
-	go func() {
-		defer s.tasks.Done()
-		work(s.baseCtx)
-	}()
-}
-
-// track counts work that Close waits for, and reports false once the server is closing.
-func (s *Server) track() bool {
-	s.tasksMu.Lock()
-	defer s.tasksMu.Unlock()
-	if s.closing {
-		return false
-	}
-	s.tasks.Add(1)
-	return true
-}
-
 // Run pushes dashboard snapshots until ctx ends: on change, and every few seconds so
 // the connection indicator notices when Dota stops posting.
 func (s *Server) Run(ctx context.Context) {
 	// Finishing a match writes to the data file, so Close waits for this loop too.
-	if !s.track() {
+	if !s.bg.Enter() {
 		return
 	}
-	defer s.tasks.Done()
-	s.spawn(func(context.Context) { s.resumePending() })
-	s.spawn(s.learnGameModes)
-	s.spawn(func(context.Context) { s.providers.StartupCheck() })
-	s.spawn(func(context.Context) { s.ensurePiper() })
+	defer s.bg.Leave()
+	s.bg.Go(func(context.Context) { s.resumePending() })
+	s.bg.Go(s.learnGameModes)
+	s.bg.Go(func(context.Context) { s.providers.StartupCheck() })
+	s.bg.Go(func(context.Context) { s.ensurePiper() })
 	tick := time.NewTicker(400 * time.Millisecond)
 	defer tick.Stop()
 	var n int
@@ -318,28 +277,28 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "bad payload", http.StatusBadRequest)
 			return
 		}
-		if s.typeWarns.Add(1) <= 3 {
+		if firstFew(&s.feed.typeWarns) {
 			s.log.Warn("unexpected GSI field type; continuing without it", "field", typeErr.Field, "value", typeErr.Value)
 		}
 	}
 	if extras := st.Extras(); len(extras) > 0 {
-		if seen, _ := s.extras.Load().(string); seen != strings.Join(extras, ",") {
-			s.extras.Store(strings.Join(extras, ","))
+		if seen, _ := s.feed.extras.Load().(string); seen != strings.Join(extras, ",") {
+			s.feed.extras.Store(strings.Join(extras, ","))
 			s.log.Info("Dota also sends these game-state blocks", "blocks", extras)
 		}
 		s.noteDraft(&st)
 	}
 	cfg := s.cfg.Get()
 	if st.Auth == nil || subtle.ConstantTimeCompare([]byte(st.Auth.Token), []byte(cfg.Token)) != 1 {
-		if s.authWarns.Add(1) <= 3 {
+		if firstFew(&s.feed.authWarns) {
 			s.log.Warn("GSI post with wrong token; re-run `gourdian install` and restart Dota")
 		}
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	s.firstGSI.Do(func() {
-		if s.onFirstGSI != nil {
-			s.onFirstGSI()
+	s.feed.first.Do(func() {
+		if s.feed.onFirst != nil {
+			s.feed.onFirst()
 		}
 	})
 	if st.Player != nil {
@@ -364,10 +323,10 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 		s.hub.publish("tips", []coach.Tip{})
 		s.tiltReminder(matchID, cfg.Settings)
 		if cfg.Settings.Recording.Auto && !strings.HasPrefix(matchID, "sim-") {
-			s.startAutoRecording(matchID)
+			s.rec.StartAuto(matchID, s.cfg.Get().Token)
 		}
 	}
-	if err := s.record(body); err != nil {
+	if err := s.rec.Write(body); err != nil {
 		s.log.Warn("recording failed", "err", err)
 	}
 	s.deliver(matchID, res.Tips, cfg.Settings)
@@ -385,7 +344,7 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 const matchIdleTimeout = 3 * time.Minute
 
 func (s *Server) recordMatch(m *model.MatchSummary, set config.Settings) {
-	s.stopAutoRecording(set.Recording.Keep)
+	s.rec.StopAuto(set.Recording.Keep)
 	if acct, _ := s.accountID.Load().(string); acct != "" {
 		m.RankTier = s.data.RankTier(acct)
 	}
@@ -511,7 +470,7 @@ func (s *Server) settingsResponse() settingsResponse {
 		SystemVoice:    s.speaker != nil,
 		ConfigPath:     s.cfg.Path(),
 		StatsDir:       s.stats.Dir(),
-		Recording:      s.recordingPath(),
+		Recording:      s.rec.Path(),
 		DataDir:        s.workDir,
 		Version:        buildinfo.Version,
 		Build:          webBuild(),
@@ -521,7 +480,7 @@ func (s *Server) settingsResponse() settingsResponse {
 		HeroNames:      s.heroNames(),
 		Autostart:      autostart.Enabled(),
 		CanAutostart:   runtime.GOOS == "windows" || platform.LinuxDesktop(),
-		HotkeyProblems: s.hotkeyProblemsCopy(),
+		HotkeyProblems: s.overlay.hotkeyProblems(),
 		VoiceLangs:     s.voiceLangs(),
 		NaturalVoice:   s.naturalVoiceStatus(),
 	}
@@ -532,7 +491,7 @@ func (s *Server) publishSettings() { s.hub.publish("settings", s.settingsRespons
 
 // publishSettingsLater sends the dashboard the new settings without holding up the
 // game-state post, since settingsResponse asks Windows about autostart and voices.
-func (s *Server) publishSettingsLater() { s.spawn(func(context.Context) { s.publishSettings() }) }
+func (s *Server) publishSettingsLater() { s.bg.Go(func(context.Context) { s.publishSettings() }) }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.settingsResponse())
@@ -613,9 +572,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		s.engine.SetLanguage(next.Language)
 	}
 	if next.Language != prev.Language || next.Voice != prev.Voice || !maps.Equal(next.PiperVoices, prev.PiperVoices) {
-		s.piper.mu.Lock()
-		s.piper.failed = ""
-		s.piper.mu.Unlock()
+		s.voice.piper.mu.Lock()
+		s.voice.piper.failed = ""
+		s.voice.piper.mu.Unlock()
 		s.ensurePiper()
 		s.usePiper()
 	}
@@ -644,7 +603,7 @@ func (s *Server) speechName() string {
 func (s *Server) OnQuit(quit func()) { s.quit = quit }
 
 // OnFirstGSI runs f once, when Dota sends its first update; set it before serving.
-func (s *Server) OnFirstGSI(f func()) { s.onFirstGSI = f }
+func (s *Server) OnFirstGSI(f func()) { s.feed.onFirst = f }
 
 func (s *Server) handleQuit(w http.ResponseWriter, r *http.Request) {
 	if s.quit == nil {
@@ -776,18 +735,7 @@ const closeWait = 3 * time.Second
 
 // Close stops background work and waits for it (up to closeWait), then stops recording.
 func (s *Server) Close() error {
-	s.tasksMu.Lock()
-	s.closing = true
-	s.tasksMu.Unlock()
-	s.cancel()
-	done := make(chan struct{})
-	go func() {
-		s.tasks.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(closeWait):
+	if !s.bg.Close(closeWait) {
 		s.log.Warn("background work still running at exit")
 	}
 	return s.StopRecording()

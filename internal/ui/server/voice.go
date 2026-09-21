@@ -40,16 +40,16 @@ func (s *Server) handleVoiceInstall(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "voices can only be added here on Windows", http.StatusBadRequest)
 		return
 	}
-	if !s.voiceBusy.CompareAndSwap(false, true) {
+	if !s.voice.windows.CompareAndSwap(false, true) {
 		http.Error(w, "the voice is already being installed", http.StatusConflict)
 		return
 	}
-	s.spawn(func(context.Context) { s.installVoice(ps, lang, locale) })
+	s.bg.Go(func(context.Context) { s.installVoice(ps, lang, locale) })
 	writeJSON(w, voiceStatus{State: "running", Text: "Windows is asking for permission to add the voice."})
 }
 
 func (s *Server) installVoice(ps, lang, locale string) {
-	defer s.voiceBusy.Store(false)
+	defer s.voice.windows.Store(false)
 	s.hub.publish("voice_install", voiceStatus{State: "running", Text: "Installing the Russian voice. Windows downloads it, which can take a few minutes."})
 	elevated := fmt.Sprintf(`$p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden `+
 		`-ArgumentList '-NoProfile','-Command','Add-WindowsCapability -Online -Name Language.TextToSpeech~~~%s~0.0.1.0'; exit $p.ExitCode`, locale)

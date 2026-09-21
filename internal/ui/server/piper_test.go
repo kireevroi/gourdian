@@ -30,7 +30,7 @@ func TestNaturalVoiceOnLinux(t *testing.T) {
 	srv.speaker = speech.New("", 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	defer srv.speaker.Close()
 	// Pretend a failed download already happened, so the test doesn't reach the internet.
-	srv.piper.failed = "offline"
+	srv.voice.piper.failed = "offline"
 
 	nv := srv.naturalVoiceStatus()
 	if nv == nil || nv.State != "failed" || nv.Chosen["ru"] != "ru_RU-irina-medium" || nv.Player != "pw-play" {
@@ -54,7 +54,7 @@ func TestNaturalVoiceOnLinux(t *testing.T) {
 	if nv := srv.naturalVoiceStatus(); nv.State != "ready" {
 		t.Fatalf("with Piper and the voice in place: %+v", nv)
 	}
-	if srv.piper.applied == "" {
+	if srv.voice.piper.applied == "" {
 		t.Fatal("the downloaded voice wasn't given to the speaker")
 	}
 	if checks := srv.piperChecks(srv.cfg.Settings()); len(checks) != 1 || !checks[0].OK || checks[0].Detail != "Ирина" {

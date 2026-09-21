@@ -227,7 +227,7 @@ func (s *Server) handleProviderTest(w http.ResponseWriter, r *http.Request) {
 	tips, err := prompts.Suggest(ctx, p, choice, set.AI, set.Language, prompt)
 	if err != nil {
 		if k := ai.KindOf(err); k == ai.ErrAuth || k == ai.ErrLimit {
-			s.providers.Check(s.baseCtx, choice.Provider)
+			s.providers.Check(s.bg.Context(), choice.Provider)
 		}
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return

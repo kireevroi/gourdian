@@ -39,7 +39,7 @@ type reviewStatus struct {
 // checkRanked asks OpenDota what kind of match it was, so the MMR prompt only stays for
 // ranked games. The summary is there within a couple of minutes, long before the replay parse.
 func (s *Server) checkRanked(matchID string) {
-	ctx, cancel := context.WithTimeout(s.baseCtx, 10*time.Minute)
+	ctx, cancel := context.WithTimeout(s.bg.Context(), 10*time.Minute)
 	defer cancel()
 	for wait := 30 * time.Second; ; wait *= 2 {
 		select {
@@ -95,13 +95,13 @@ func (s *Server) afterMatch(m model.MatchSummary, set config.Settings) {
 		s.hub.publish("review_status", reviewStatus{Text: text, MatchID: m.MatchID, Waiting: true})
 	}
 	status(0)
-	s.spawn(func(context.Context) { s.checkRanked(m.MatchID) })
-	s.spawn(func(ctx context.Context) {
+	s.bg.Go(func(context.Context) { s.checkRanked(m.MatchID) })
+	s.bg.Go(func(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(ctx, parseWait)
 		defer cancel()
 		detail, err := s.matches.Enrich(ctx, m, s.cfg.Settings().AccountID, status)
 		switch {
-		case s.baseCtx.Err() != nil:
+		case s.bg.Context().Err() != nil:
 			return
 		case err != nil:
 			s.log.Warn("OpenDota match data unavailable", "match", m.MatchID, "err", err)
@@ -190,7 +190,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "an import is already running", http.StatusConflict)
 		return
 	}
-	s.spawn(func(ctx context.Context) {
+	s.bg.Go(func(ctx context.Context) {
 		defer s.importing.Store(false)
 		ctx, cancel := context.WithTimeout(ctx, importTimeout)
 		defer cancel()
