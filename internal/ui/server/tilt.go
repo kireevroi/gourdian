@@ -7,6 +7,7 @@ import (
 	"gourdian/internal/coaching/tilt"
 	"gourdian/internal/data/stats"
 	"gourdian/internal/game/model"
+	"gourdian/internal/i18n"
 	"gourdian/internal/sys/config"
 )
 
@@ -45,10 +46,10 @@ func (s *Server) tiltReminder(matchID string, set config.Settings) {
 		return
 	}
 	tip := coach.Tip{Rule: "tilt", Category: "focus", Severity: coach.Info, At: time.Now(),
-		Text:   roleSay(set.Language, "Straight back in after a losing run: play this one calm, mute anyone tilting you, and focus on your own farm"),
-		Speech: roleSay(set.Language, "Play this one calm. Mute anyone tilting you.")}
+		Text:   i18n.Say(set.Language, "Straight back in after a losing run: play this one calm, mute anyone tilting you, and focus on your own farm"),
+		Speech: i18n.Say(set.Language, "Play this one calm. Mute anyone tilting you.")}
 	if set.Language != "en" {
-		tip.SpeechEN = roleSay("en", "Play this one calm. Mute anyone tilting you.")
+		tip.SpeechEN = i18n.Say("en", "Play this one calm. Mute anyone tilting you.")
 	}
 	s.emitTips(matchID, []coach.Tip{tip}, set)
 }

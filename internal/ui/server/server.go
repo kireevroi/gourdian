@@ -27,6 +27,7 @@ import (
 	"gourdian/internal/ai/secrets"
 	"gourdian/internal/coaching/coach"
 	"gourdian/internal/coaching/picks"
+	"gourdian/internal/coaching/position"
 	"gourdian/internal/coaching/rules"
 	"gourdian/internal/coaching/targets"
 	"gourdian/internal/data/ingest"
@@ -36,6 +37,7 @@ import (
 	"gourdian/internal/game/dota"
 	"gourdian/internal/game/gsi"
 	"gourdian/internal/game/model"
+	"gourdian/internal/i18n"
 	"gourdian/internal/sys/autostart"
 	"gourdian/internal/sys/buildinfo"
 	"gourdian/internal/sys/config"
@@ -92,15 +94,9 @@ type Server struct {
 	picks   pickCache
 	draft   draftBoard
 
-	roleMu   sync.Mutex
-	roleHero int
-	// roleChosen is a position picked before there was a hero to remember it against, and
-	// roleChosenAt bounds the wait, so an abandoned draft can't claim a game an hour later.
-	roleChosen   string
-	roleChosenAt time.Time
-	roleLock     string // match in which the player picked the role themselves
-	ai           aiState
-	providers    *connect.Service
+	role      position.Memory
+	ai        aiState
+	providers *connect.Service
 
 	matches   ingest.Service
 	importing atomic.Bool
@@ -605,8 +601,8 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if snap := s.engine.Snapshot(next); snap.InMatch && snap.Hero != nil && !strings.HasPrefix(snap.MatchID, "sim-") {
 		s.rememberHeroRole(snap.Hero.ID, next.Role)
 		if next.Role != prev.Role {
-			s.lockRole(snap.MatchID)
-			s.engine.SetRoleNote(roleSay(next.Language, "your pick"))
+			s.role.Lock(snap.MatchID)
+			s.engine.SetRoleNote(i18n.Say(next.Language, "your pick"))
 		}
 	}
 	if s.speaker != nil {

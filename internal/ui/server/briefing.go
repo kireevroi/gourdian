@@ -12,6 +12,7 @@ import (
 	"gourdian/internal/data/stats"
 	"gourdian/internal/game/dota"
 	"gourdian/internal/game/model"
+	"gourdian/internal/i18n"
 	"gourdian/internal/sys/config"
 )
 
@@ -127,16 +128,16 @@ func (s *Server) briefMatch(matchID string, set config.Settings) {
 func briefingWords(b *coach.Briefing, lang string) (text, speech string) {
 	var parts, said []string
 	if b.Target10 > 0 {
-		parts = append(parts, roleSay(lang, "aim for %d last hits at 10:00", b.Target10))
-		said = append(said, roleSay(lang, "Aim for %d last hits at ten minutes.", b.Target10))
+		parts = append(parts, i18n.Say(lang, "aim for %d last hits at 10:00", b.Target10))
+		said = append(said, i18n.Say(lang, "Aim for %d last hits at ten minutes.", b.Target10))
 	}
 	for _, it := range b.Items[:min(len(b.Items), 1)] {
-		parts = append(parts, roleSay(lang, "%s by %s", it.Name, dota.Clock(it.By)))
-		said = append(said, roleSay(lang, "%s by %d minutes.", it.Name, (it.By+30)/60))
+		parts = append(parts, i18n.Say(lang, "%s by %s", it.Name, dota.Clock(it.By)))
+		said = append(said, i18n.Say(lang, "%s by %d minutes.", it.Name, (it.By+30)/60))
 	}
 	for _, g := range b.Goals[:min(len(b.Goals), 1)] {
-		parts = append(parts, roleSay(lang, "goal: %s (%d/%d)", g.Label, g.Met, model.GoalsDone))
-		said = append(said, roleSay(lang, "This week's goal: %s.", g.Label))
+		parts = append(parts, i18n.Say(lang, "goal: %s (%d/%d)", g.Label, g.Met, model.GoalsDone))
+		said = append(said, i18n.Say(lang, "This week's goal: %s.", g.Label))
 	}
 	if len(parts) == 0 {
 		return "", ""

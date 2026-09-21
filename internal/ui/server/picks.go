@@ -15,6 +15,7 @@ import (
 	"gourdian/internal/data/stats"
 	"gourdian/internal/game/dota"
 	"gourdian/internal/game/gsi"
+	"gourdian/internal/i18n"
 	"gourdian/internal/sys/config"
 )
 
@@ -209,10 +210,10 @@ func pickLine(b *picks.Board, role, lang string) (text, speech string) {
 		names = append(names, h.Name)
 	}
 	named := dota.RoleName(role, lang)
-	text = roleSay(lang, "Best %s picks: %s", named, strings.Join(names, " · "))
-	speech = roleSay(lang, "Best %s picks: %s", named, strings.Join(names, ", ")) + "."
+	text = i18n.Say(lang, "Best %s picks: %s", named, strings.Join(names, " · "))
+	speech = i18n.Say(lang, "Best %s picks: %s", named, strings.Join(names, ", ")) + "."
 	if len(b.Avoid) > 0 {
-		avoid := roleSay(lang, "Avoid %s", b.Avoid[0].Name)
+		avoid := i18n.Say(lang, "Avoid %s", b.Avoid[0].Name)
 		text, speech = text+" · "+avoid, speech+" "+avoid+"."
 	}
 	var them []string
@@ -223,7 +224,7 @@ func pickLine(b *picks.Board, role, lang string) (text, speech string) {
 		}
 	}
 	if len(them) > 0 {
-		had := roleSay(lang, "Against: %s", strings.Join(them, ", "))
+		had := i18n.Say(lang, "Against: %s", strings.Join(them, ", "))
 		text, speech = had+" · "+text, had+". "+speech
 	}
 	return text, speech

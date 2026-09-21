@@ -10,6 +10,7 @@ import (
 	"gourdian/internal/coaching/coach"
 	"gourdian/internal/data/stats"
 	"gourdian/internal/game/model"
+	"gourdian/internal/i18n"
 	"gourdian/internal/sys/config"
 )
 
@@ -64,15 +65,15 @@ func (s *Server) goalFeedback(m model.MatchSummary, set config.Settings) {
 		tip := coach.Tip{Rule: "goals", Category: "focus", Severity: coach.Info, Clock: m.DurationSec, At: time.Now()}
 		switch {
 		case met && p.Met == model.GoalsDone:
-			tip.Text = roleSay(lang, "Weekly goal done: %s, met in %d matches", p.Label, model.GoalsDone)
-			tip.Speech = roleSay(lang, "Weekly goal done. %s", p.Label)
-			tip.SpeechEN = roleSay("en", "Weekly goal done. %s", p.Label)
+			tip.Text = i18n.Say(lang, "Weekly goal done: %s, met in %d matches", p.Label, model.GoalsDone)
+			tip.Speech = i18n.Say(lang, "Weekly goal done. %s", p.Label)
+			tip.SpeechEN = i18n.Say("en", "Weekly goal done. %s", p.Label)
 		case met:
-			tip.Text = roleSay(lang, "Goal met: %s (%d of %d this week)", p.Label, min(p.Met, model.GoalsDone), model.GoalsDone)
-			tip.Speech = roleSay(lang, "Goal met. %d of %d this week.", min(p.Met, model.GoalsDone), model.GoalsDone)
-			tip.SpeechEN = roleSay("en", "Goal met. %d of %d this week.", min(p.Met, model.GoalsDone), model.GoalsDone)
+			tip.Text = i18n.Say(lang, "Goal met: %s (%d of %d this week)", p.Label, min(p.Met, model.GoalsDone), model.GoalsDone)
+			tip.Speech = i18n.Say(lang, "Goal met. %d of %d this week.", min(p.Met, model.GoalsDone), model.GoalsDone)
+			tip.SpeechEN = i18n.Say("en", "Goal met. %d of %d this week.", min(p.Met, model.GoalsDone), model.GoalsDone)
 		default:
-			tip.Text = roleSay(lang, "Goal missed: %s (you had %g)", p.Label, v)
+			tip.Text = i18n.Say(lang, "Goal missed: %s (you had %g)", p.Label, v)
 			tip.Quiet = true
 		}
 		tips = append(tips, tip)

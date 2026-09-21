@@ -8,6 +8,7 @@ import (
 	"gourdian/internal/coaching/coach"
 	"gourdian/internal/coaching/drill"
 	"gourdian/internal/game/model"
+	"gourdian/internal/i18n"
 	"gourdian/internal/sys/config"
 )
 
@@ -73,11 +74,11 @@ func (s *Server) drillResult(m model.MatchSummary, set config.Settings) {
 	line := func(lang string) string {
 		switch {
 		case before > 0 && float64(count) < before:
-			return roleSay(lang, "Drill: %s %d times, under your usual %.1f", v.Label, count, before)
+			return i18n.Say(lang, "Drill: %s %d times, under your usual %.1f", v.Label, count, before)
 		case before > 0 && float64(count) > before:
-			return roleSay(lang, "Drill: %s %d times, above your usual %.1f", v.Label, count, before)
+			return i18n.Say(lang, "Drill: %s %d times, above your usual %.1f", v.Label, count, before)
 		}
-		return roleSay(lang, "Drill: %s %d times this game", v.Label, count)
+		return i18n.Say(lang, "Drill: %s %d times this game", v.Label, count)
 	}
 	tip := coach.Tip{Rule: "drill", Category: "focus", Severity: coach.Info, Clock: m.DurationSec, At: time.Now(),
 		Text: line(set.Language), Speech: line(set.Language)}
