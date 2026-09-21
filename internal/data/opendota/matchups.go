@@ -35,7 +35,7 @@ func (c *Client) Matchups(heroID int) map[int]Matchup {
 	defer c.mu.Unlock()
 	m, _, fetch := c.matchups.get(heroID)
 	if fetch {
-		go c.fetchMatchups(heroID)
+		c.goFetch(func() { c.fetchMatchups(heroID) })
 	}
 	return m
 }

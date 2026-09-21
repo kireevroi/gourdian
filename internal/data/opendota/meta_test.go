@@ -30,6 +30,7 @@ func metaClient(t *testing.T, body string) *Client {
 	}))
 	t.Cleanup(srv.Close)
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(c.Wait)
 	c.SetBaseURL(srv.URL)
 	c.Start(context.Background())
 	return c

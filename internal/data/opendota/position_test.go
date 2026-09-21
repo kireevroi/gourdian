@@ -37,6 +37,7 @@ func TestBuildFollowsThePosition(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(c.Wait)
 	c.SetBaseURL(srv.URL) // a fake OpenDota has no rate limit to keep to
 	c.Start(t.Context())
 
@@ -77,6 +78,7 @@ func TestLivePositionBuild(t *testing.T) {
 		t.Skip("set LIVE_OPENDOTA=1 to ask the real OpenDota")
 	}
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(c.Wait)
 	c.Start(t.Context())
 	for _, q := range []struct {
 		hero int

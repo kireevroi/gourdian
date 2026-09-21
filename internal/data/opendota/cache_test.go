@@ -18,6 +18,7 @@ func testClient(t *testing.T, h http.HandlerFunc) *Client {
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(c.Wait)
 	c.SetBaseURL(srv.URL)
 	return c
 }
@@ -62,6 +63,7 @@ func TestLimiterAllowsABurstThenSlowsDown(t *testing.T) {
 // When OpenDota is down, an old cached answer is better than none.
 func TestCachedFallsBackToAStaleCopy(t *testing.T) {
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(c.Wait)
 	fresh := func() ([]byte, error) { return []byte("7"), nil }
 	down := func() ([]byte, error) { return nil, errors.New("OpenDota is down") }
 	if v, err := cached[int](c, "n.json", 0, fresh, nil); err != nil || v != 7 {
@@ -79,6 +81,7 @@ func TestCachedFallsBackToAStaleCopy(t *testing.T) {
 // served; a cached copy that no longer decodes is fetched again.
 func TestCachedKeepsOnlyAnswersThatDecode(t *testing.T) {
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(c.Wait)
 	answer := `[1, 2]`
 	fetch := func() ([]byte, error) { return []byte(answer), nil }
 	if v, err := cached[[]int](c, "list.json", time.Hour, fetch, nil); err != nil || len(v) != 2 {

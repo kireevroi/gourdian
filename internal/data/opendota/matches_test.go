@@ -86,6 +86,7 @@ func TestMatchCachesOnlyParsedMatches(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(c.Wait)
 	c.SetBaseURL(srv.URL) // a fake OpenDota has no rate limit to keep to
 
 	for range 2 {

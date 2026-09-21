@@ -39,7 +39,7 @@ func (c *Client) SkillBuildFor(heroID int, role string) *SkillBuild {
 	defer c.mu.Unlock()
 	b, _, fetch := c.skillBuilds.get(key)
 	if fetch {
-		go c.fetchSkillBuild(key)
+		c.goFetch(func() { c.fetchSkillBuild(key) })
 	}
 	return b
 }
