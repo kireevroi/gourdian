@@ -77,17 +77,17 @@ const (
 )
 
 type Engine struct {
-	data      Data
+	data Data
+	log  *slog.Logger
+	now  func() time.Time
+
+	mu        sync.Mutex
 	rules     []Rule // built-in rules, then the player's custom rules
 	overrides map[string]RuleOverride
 	custom    []RuleSpec
 	lang      string
 	targets   TargetSource
-	log       *slog.Logger
-	now       func() time.Time
-
-	mu   sync.Mutex
-	last *gsi.State
+	last      *gsi.State
 	// prev is the earlier state the last update compared with, for the rule editor's check.
 	prev        *gsi.State
 	lastSeen    time.Time
