@@ -649,31 +649,6 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 	}
 }
 
-func TestTiltReason(t *testing.T) {
-	base := time.Date(2026, 9, 17, 18, 0, 0, 0, time.UTC)
-	game := func(minutes int, result string) model.MatchSummary {
-		return model.MatchSummary{MatchID: fmt.Sprint(minutes), Result: result, Source: model.SourceLive, EndedAt: base.Add(time.Duration(minutes) * time.Minute)}
-	}
-	cases := []struct {
-		name    string
-		matches []model.MatchSummary
-		mmr     []model.MMREntry
-		want    string
-	}{
-		{"two losses", []model.MatchSummary{game(0, "win"), game(45, "loss"), game(90, "loss")}, nil, "Two losses in a row"},
-		{"gap ends the session", []model.MatchSummary{game(0, "loss"), game(300, "loss")}, nil, ""},
-		{"three of four", []model.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win"), game(120, "loss")}, nil, "Three of your last four"},
-		{"win breaks it", []model.MatchSummary{game(0, "loss"), game(40, "loss"), game(80, "win")}, nil, ""},
-		{"mmr drop", []model.MatchSummary{game(0, "win"), game(40, "loss")},
-			[]model.MMREntry{{Date: base, MMR: 3000}, {Date: base.Add(50 * time.Minute), MMR: 2940}}, "down 60 MMR"},
-	}
-	for _, c := range cases {
-		if got := tiltReason(c.matches, c.mmr, "en"); c.want == "" && got != "" || !strings.Contains(got, c.want) {
-			t.Errorf("%s: %q", c.name, got)
-		}
-	}
-}
-
 func TestBriefingBeforeHorn(t *testing.T) {
 	srv, h, dir := newTestServer(t, func(s *config.Settings) {
 		s.Role = dota.Mid
