@@ -34,7 +34,6 @@ const (
 	VoiceOff     = "off"
 )
 
-// Languages the dashboard can be shown in.
 var Languages = []string{"en", "ru"}
 
 // Voice levels decide which tips are spoken; every tip still shows on screen.
@@ -44,7 +43,6 @@ const (
 	SpeakUrgent    = "urgent"
 )
 
-// AIChoice is which provider and model answer one kind of request.
 type AIChoice struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
@@ -73,7 +71,6 @@ type AISettings struct {
 	LegacyClaudePath string `json:"claude_path,omitempty"`
 }
 
-// migrate moves pre-1.1 Claude settings into the provider choices.
 func (a *AISettings) migrate() {
 	if a.LegacyModel != "" {
 		a.Live.Model, a.Reviews.Model = a.LegacyModel, a.LegacyModel
@@ -106,7 +103,6 @@ var AIEfforts = []string{"low", "medium", "high", "xhigh", "max"}
 
 var HUDCorners = []string{"top-right", "top-left", "top-center"}
 
-// OverlaySettings are the in-game HUD's position, size and look.
 type OverlaySettings struct {
 	HUDCorner string `json:"hud_corner"`
 	// HUDPlaced means the player dragged the HUD to HUDX, HUDY; picking a corner clears it.
@@ -121,7 +117,6 @@ type OverlaySettings struct {
 	HUDShadow     bool `json:"hud_shadow"` // outline text so it reads over the game
 }
 
-// Limits for the overlay's size and opacity.
 const (
 	MinHUDScale   = 60
 	MaxHUDScale   = 200
@@ -144,7 +139,6 @@ type HUDWidget struct {
 	Within int      `json:"within,omitempty"`
 }
 
-// HUD widget ids.
 const (
 	WidgetAlerts   = "alerts"
 	WidgetPosition = "position"
@@ -166,15 +160,12 @@ var (
 	TipSeverities = []string{"info", "warn", "urgent"}
 )
 
-// ScreenSettings covers reading the bar of hero portraits Dota draws along the top of the
-// screen, which is the only way a player's tools can learn who the other side picked: Valve
-// sends the draft to spectators and not to players.
+// ScreenSettings read the hero portraits along the top of the screen: Valve sends the draft to
+// spectators and not to players, so the pixels are the only way to learn the other side's picks.
 type ScreenSettings struct {
-	// Draft turns the reading on. It is off until the player asks for it, because it means
-	// the trainer looks at their screen.
+	// Draft is off until the player asks for it, because it means looking at their screen.
 	Draft bool `json:"draft"`
-	// Bars is where the portraits were found, by screen size ("2560x1440"), so the search
-	// only has to happen once per screen.
+	// Bars is where the portraits were found, by screen size ("2560x1440").
 	Bars map[string]screen.Bar `json:"bars,omitempty"`
 }
 
@@ -196,8 +187,7 @@ func DefaultWidgets() []HUDWidget {
 	}
 }
 
-// normalizeWidgets drops unknown widgets and duplicates, and appends widgets added in newer
-// versions with their default on/off state, so a saved layout keeps working.
+// normalizeWidgets drops unknown and duplicate widgets and appends ones newer versions added.
 func normalizeWidgets(list []HUDWidget) []HUDWidget {
 	defaults := DefaultWidgets()
 	known := map[string]HUDWidget{}
@@ -236,6 +226,8 @@ type Settings struct {
 	Role      string `json:"role"`
 	Language  string `json:"language"`   // "en" or "ru": the dashboard's text
 	MMRPrompt bool   `json:"mmr_prompt"` // ask for the new MMR after a match
+	// MMRGoal is the rank the player is climbing to, as an OpenDota rank tier; 0 for none.
+	MMRGoal int `json:"mmr_goal,omitempty"`
 	// Drill is the rule whose habit the player is working on, counted live and after each match.
 	Drill string `json:"drill,omitempty"`
 	// QuietInFights holds back spoken reminders while the hero is losing health fast.
@@ -244,23 +236,19 @@ type Settings struct {
 	VoiceRate     int      `json:"voice_rate"` // -10 (slow) .. 10 (fast)
 	VoiceLevel    string   `json:"voice_level"`
 	DisabledRules []string `json:"disabled_rules"`
-	// RulesOffSeen records which of the rules that ship switched off this config has already
-	// had switched off, so an upgrade does it once and a player who turns one back on keeps it.
-	RulesOffSeen []string     `json:"rules_off_seen,omitempty"`
-	Timings      dota.Timings `json:"-"` // always dota.DefaultTimings()
-	// Picks tunes how heroes are ranked while you choose one.
-	Picks picks.Tuning `json:"picks"`
-	// Screen is the reading of the hero portraits along the top of the game.
-	Screen    ScreenSettings    `json:"screen"`
-	AI        AISettings        `json:"ai"`
-	Overlay   OverlaySettings   `json:"overlay"`
-	Recording RecordingSettings `json:"recording"`
-	Hotkeys   HotkeySettings    `json:"hotkeys"`
+	// RulesOffSeen are the rules shipOff has switched off once, so turning one back on sticks.
+	RulesOffSeen []string          `json:"rules_off_seen,omitempty"`
+	Timings      dota.Timings      `json:"-"` // always dota.DefaultTimings()
+	Picks        picks.Tuning      `json:"picks"`
+	Screen       ScreenSettings    `json:"screen"`
+	AI           AISettings        `json:"ai"`
+	Overlay      OverlaySettings   `json:"overlay"`
+	Recording    RecordingSettings `json:"recording"`
+	Hotkeys      HotkeySettings    `json:"hotkeys"`
 	// DashboardWindow opens the dashboard in its own app window instead of a browser tab.
 	DashboardWindow bool        `json:"dashboard_window"`
 	HUDWidgets      []HUDWidget `json:"hud_widgets"`
-	// TiltCheck suggests a break after a run of losses.
-	TiltCheck bool `json:"tilt_check"`
+	TiltCheck       bool        `json:"tilt_check"`
 	// HeroRoles remembers the role last played on each hero, keyed by hero id.
 	HeroRoles map[string]string `json:"hero_roles"`
 	// PiperVoices is the natural voice picked for each language on Linux, by voice id.
@@ -271,13 +259,10 @@ type Settings struct {
 
 func (s Settings) RuleEnabled(id string) bool { return !slices.Contains(s.DisabledRules, id) }
 
-// RulesShipOff are the built-in rules that arrive switched off, for the player to turn on from
-// the Rules page. They are the ones whose answer is a matter of taste rather than a mistake, so
-// the trainer offers them instead of pressing them.
+// RulesShipOff are the built-in rules that arrive switched off, for the player to turn on.
 var RulesShipOff = []string{"shard_sale", "shard"}
 
-// shipOff switches off each rule in RulesShipOff the first time this config sees it. Afterwards
-// its id stays in RulesOffSeen, so the next start leaves the player's own choice alone. It
+// shipOff switches off each rule in RulesShipOff the first time this config sees it, and
 // reports whether anything changed, which is when the config is worth writing back.
 func (s *Settings) shipOff() bool {
 	changed := false
@@ -316,6 +301,9 @@ func (s Settings) Validate() error {
 	}
 	if !slices.Contains(Languages, s.Language) {
 		return fmt.Errorf("unknown language %q", s.Language)
+	}
+	if _, ok := dota.RankFloor(s.MMRGoal); s.MMRGoal != 0 && !ok {
+		return fmt.Errorf("unknown rank %d", s.MMRGoal)
 	}
 	if !slices.Contains([]string{VoiceSystem, VoiceBrowser, VoiceOff}, s.Voice) {
 		return fmt.Errorf("unknown voice mode %q", s.Voice)
@@ -455,7 +443,6 @@ const (
 	dataName = "dotatrainer"
 )
 
-// IsAppExe reports whether an exe file name is the installed app's, under either name.
 func IsAppExe(name string) bool { return name == AppExe || name == LegacyAppExe }
 
 // AppID is the installer's AppId (installer/Gourdian.iss). Its uninstall entry records the
@@ -477,8 +464,7 @@ func InstallDirs(localAppData string) []string {
 	return dirs
 }
 
-// HomeOverride is the data folder a test profile sets with GOURDIAN_HOME (or DOTATRAINER_HOME,
-// its name before 1.5), or "".
+// HomeOverride is GOURDIAN_HOME, or DOTATRAINER_HOME from before 1.5, which test profiles set.
 func HomeOverride() string { return cmp.Or(os.Getenv("GOURDIAN_HOME"), os.Getenv("DOTATRAINER_HOME")) }
 
 // Dir prefers the installed app's folder, even from other builds, so every entry point shares one set of data.
@@ -544,9 +530,8 @@ func mntPath(win string) string {
 	return "/mnt/" + strings.ToLower(win[:1]) + "/" + strings.ReplaceAll(win[3:], `\`, "/")
 }
 
-// repairSettings rebuilds settings that don't validate: each top-level setting from the file
-// is kept if the settings stay valid with it, and the others keep their defaults, which it
-// returns the names of.
+// repairSettings keeps each top-level setting from the file that validates, and returns the
+// names of the others, which keep their defaults.
 func repairSettings(file []byte) (Settings, []string) {
 	var raw struct {
 		Settings map[string]json.RawMessage `json:"settings"`
@@ -569,8 +554,7 @@ func repairSettings(file []byte) (Settings, []string) {
 	return set, reset
 }
 
-// Repaired lists the settings Open put back to their defaults because config.json had them
-// wrong; the file as it was is kept as config.json.bad.
+// Repaired lists the settings Open reset; the file as it was is kept as config.json.bad.
 func (s *Store) Repaired() []string { return s.repaired }
 
 type Store struct {
@@ -580,8 +564,7 @@ type Store struct {
 	repaired []string
 }
 
-// OpenDefault opens the settings in the folder Dir picks, and reports that folder. It is how
-// every command reaches the app's data without repeating the two steps.
+// OpenDefault opens the settings in the folder Dir picks, and reports that folder.
 func OpenDefault() (*Store, string, error) {
 	dir, err := Dir()
 	if err != nil {
@@ -610,8 +593,7 @@ func Open(dir string) (*Store, error) {
 	s.cfg.Settings.HUDWidgets = normalizeWidgets(s.cfg.Settings.HUDWidgets)
 	s.cfg.Settings.AI.migrate()
 	if s.cfg.Settings.Validate() != nil {
-		// A hand edit broke something: every later save would fail, so put back what's broken
-		// and keep the original next to it.
+		// A hand edit broke something, and every later save would fail until it's put back.
 		s.cfg.Settings, s.repaired = repairSettings(data)
 		if err := os.WriteFile(s.path+".bad", data, 0o600); err != nil {
 			return nil, err
@@ -666,9 +648,8 @@ func (s *Store) UpdateSettings(next Settings) error {
 // nothing changed. Every other error from Update is about a value the player can fix.
 var ErrSave = errors.New("the settings file couldn't be written")
 
-// Update changes the settings in place: change edits the current settings under the store's
-// lock, so changes made at the same time from different places all land. If change fails or
-// leaves the settings invalid, nothing changes. It returns the settings after the change.
+// Update runs change under the store's lock, so concurrent changes all land. If change fails
+// or leaves the settings invalid, nothing changes.
 func (s *Store) Update(change func(*Settings) error) (Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

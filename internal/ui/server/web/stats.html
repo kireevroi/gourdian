@@ -87,6 +87,11 @@
   .review p { margin: 4px 0; color: var(--text-2); }
   form.mmr { display: flex; gap: 6px; align-items: center; }
   form.mmr input[type=number] { width: 96px; }
+  .goal-row { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: flex-start; margin-bottom: 10px; }
+  .goal-row label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); white-space: nowrap; }
+  .forecast { color: var(--text-2); font-size: 13px; line-height: 1.5; min-width: 0; }
+  .forecast b { color: var(--text); }
+  .forecast .pace { color: var(--muted); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -125,6 +130,10 @@
           <input type="text" id="mmr-note" placeholder="Note (optional)" aria-label="Note">
           <button class="btn" type="submit">Log MMR</button>
         </form>
+      </div>
+      <div class="goal-row">
+        <label>Target rank <select id="mmr-goal"><option value="0">No target</option></select></label>
+        <div class="forecast" id="mmr-forecast"></div>
       </div>
       <div class="chart" id="c-mmr"></div>
     </section>

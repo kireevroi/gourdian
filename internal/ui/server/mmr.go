@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"gourdian/internal/data/mmr"
+	"gourdian/internal/game/dota"
 	"gourdian/internal/game/model"
 )
 
@@ -162,6 +163,43 @@ func (s *Server) handleMMRChange(w http.ResponseWriter, r *http.Request) {
 	}
 	s.clearMMRPrompt()
 	writeJSON(w, entry)
+}
+
+type rankChoice struct {
+	Tier  int    `json:"tier"`
+	Name  string `json:"name"`
+	Medal string `json:"medal"`
+	MMR   int    `json:"mmr"`
+}
+
+// handleMMRGoal lists the ranks to aim for and how far the chosen one is at the player's pace.
+func (s *Server) handleMMRGoal(w http.ResponseWriter, r *http.Request) {
+	set := s.cfg.Settings()
+	resp := struct {
+		Goal     int           `json:"goal"`
+		Ranks    []rankChoice  `json:"ranks"`
+		Forecast *mmr.Forecast `json:"forecast"`
+	}{Goal: set.MMRGoal}
+	for _, tier := range dota.RankTiers() {
+		floor, _ := dota.RankFloor(tier)
+		resp.Ranks = append(resp.Ranks, rankChoice{tier, dota.RankName(tier, set.Language), dota.MedalName(dota.Bracket(tier), set.Language), floor})
+	}
+	if floor, ok := dota.RankFloor(set.MMRGoal); ok {
+		entries, err := s.stats.MMR()
+		if err != nil {
+			s.failed(w, http.StatusInternalServerError, "couldn't read your MMR log", err)
+			return
+		}
+		matches, err := s.stats.Matches()
+		if err != nil {
+			s.failed(w, http.StatusInternalServerError, "couldn't read your match history", err)
+			return
+		}
+		if f, ok := mmr.Toward(floor, entries, matches); ok {
+			resp.Forecast = &f
+		}
+	}
+	writeJSON(w, resp)
 }
 
 // handleMMRList returns every MMR entry, so the match lists can show what was logged.

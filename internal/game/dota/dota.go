@@ -20,10 +20,8 @@ const (
 // Roles are the positions in order: Roles[0] is position 1.
 var Roles = []string{Carry, Mid, Offlane, SoftSupport, HardSupport}
 
-// Position is a role's number, 1 (carry) to 5 (hard support), or 0 for anything else.
 func Position(role string) int { return slices.Index(Roles, role) + 1 }
 
-// RoleAt is the role at position 1 to 5, or "".
 func RoleAt(pos int) string {
 	if pos < 1 || pos > len(Roles) {
 		return ""
@@ -31,7 +29,6 @@ func RoleAt(pos int) string {
 	return Roles[pos-1]
 }
 
-// Core reports whether a role is one of the farming positions.
 func Core(role string) bool { return role == Carry || role == Mid || role == Offlane }
 
 var roleNames = map[string][2]string{
@@ -42,7 +39,6 @@ var roleNames = map[string][2]string{
 	HardSupport: {"hard support", "хардсаппорт"},
 }
 
-// RoleName is how a role reads in a sentence, in English or Russian ("ru"); "" for an unknown role.
 func RoleName(role, lang string) string {
 	if lang == "ru" {
 		return roleNames[role][1]
@@ -58,7 +54,7 @@ const (
 	LaneJungle = "jungle"
 )
 
-// LaneNumbered names OpenDota's lane numbers (1 safe, 2 mid, 3 off, 4 jungle), or "".
+// LaneNumbered reads OpenDota's lane numbers: 1 safe, 2 mid, 3 off, 4 jungle.
 func LaneNumbered(n int) string {
 	if n < 1 || n > 4 {
 		return ""
@@ -75,8 +71,6 @@ func Clock(sec int) string {
 	return fmt.Sprintf("%s%d:%02d", sign, sec/60, sec%60)
 }
 
-// Median is the middle value, or the mean of the two middle ones, and 0 for none. Every
-// personal target uses it, so "your usual" means the same everywhere.
 func Median(values []int) int {
 	if len(values) == 0 {
 		return 0
@@ -90,21 +84,16 @@ func Median(values []int) int {
 }
 
 const (
-	// PersonalGames is how many of the player's latest games on a hero in a position their
-	// personal targets come from.
+	// PersonalGames is how many recent games on a hero in a position personal targets use.
 	PersonalGames = 10
-	// GoalItemCost is the least an item costs to be a core item timing goal.
-	GoalItemCost = 2000
+	GoalItemCost  = 2000
 	// CoreItemCost is the least an item costs for its purchase time to be kept with a match.
 	CoreItemCost = 1500
 )
 
-// TalentLevels are the levels that hand out a talent point, in order. Since 7.40 talents
-// spend their own points rather than the level's skill point: one at 10, 15, 20 and 25, then
-// one at every level from 27 to 30, which is enough to take both sides of every tier.
+// Since 7.40 talents have points of their own, separate from the level's skill point.
 var TalentLevels = []int{10, 15, 20, 25, 27, 28, 29, 30}
 
-// TalentsAtLevel is how many talents a hero may have taken by a level.
 func TalentsAtLevel(level int) int {
 	n := 0
 	for _, l := range TalentLevels {
@@ -115,8 +104,7 @@ func TalentsAtLevel(level int) int {
 	return n
 }
 
-// TalentDueAt is the level whose talent is waiting when taken of them have been picked, or 0
-// when none is: the talent after the ones already taken.
+// TalentDueAt is the level of the next talent waiting to be taken, or 0 when none is.
 func TalentDueAt(taken, level int) int {
 	if taken < 0 || taken >= TalentsAtLevel(level) {
 		return 0
@@ -124,8 +112,7 @@ func TalentDueAt(taken, level int) int {
 	return TalentLevels[taken]
 }
 
-// medalNames are the ranked medals in order, English and Russian, following the Russian
-// Dota client. Index 0 is an unranked or unknown player.
+// The Russian names follow the Russian client; index 0 is an unranked or unknown player.
 var medalNames = [][2]string{
 	{"", ""},
 	{"Herald", "Рекрут"},
@@ -138,8 +125,7 @@ var medalNames = [][2]string{
 	{"Immortal", "Бессмертный"},
 }
 
-// Bracket is the skill bracket of an OpenDota rank tier (tens digit the medal, ones the
-// stars): 1 for Herald up to 8 for Immortal, and 0 when the rank isn't known.
+// Bracket reads an OpenDota rank tier, whose tens digit is the medal and ones digit the stars.
 func Bracket(rankTier int) int {
 	if b := rankTier / 10; b >= 1 && b < len(medalNames) {
 		return b
@@ -147,7 +133,6 @@ func Bracket(rankTier int) int {
 	return 0
 }
 
-// MedalName names a bracket from Bracket, in English or Russian ("ru"); "" when unknown.
 func MedalName(bracket int, lang string) string {
 	if bracket < 1 || bracket >= len(medalNames) {
 		return ""
@@ -156,4 +141,39 @@ func MedalName(bracket int, lang string) string {
 		return medalNames[bracket][1]
 	}
 	return medalNames[bracket][0]
+}
+
+const immortal = 80
+
+func RankTiers() []int {
+	var tiers []int
+	for medal := 1; medal < immortal/10; medal++ {
+		for star := 1; star <= 5; star++ {
+			tiers = append(tiers, medal*10+star)
+		}
+	}
+	return append(tiers, immortal)
+}
+
+// Valve doesn't publish rank thresholds; these are the ones players measured. The 7.41e squish
+// only rescaled MMR inside Immortal, so none of them moved.
+func RankFloor(tier int) (int, bool) {
+	medal, star := tier/10, tier%10
+	switch {
+	case tier == immortal:
+		return 5620, true
+	case medal < 1 || medal >= immortal/10 || star < 1 || star > 5:
+		return 0, false
+	case medal == 7:
+		return 4620 + (star-1)*200, true
+	}
+	return ((medal-1)*5 + star - 1) * 154, true
+}
+
+func RankName(tier int, lang string) string {
+	name := MedalName(Bracket(tier), lang)
+	if tier == immortal || name == "" {
+		return name
+	}
+	return fmt.Sprintf("%s %d", name, tier%10)
 }
