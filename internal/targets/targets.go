@@ -1,4 +1,6 @@
-package server
+// Package targets turns your own match history into the numbers to beat: last hits at each
+// checkpoint, and a timing goal for the two core items you actually build.
+package targets
 
 import (
 	"cmp"
@@ -15,68 +17,92 @@ import (
 	"gourdian/internal/stats"
 )
 
-const (
-	incompleteWait = 10 * time.Second // retry while OpenDota data is still loading
-)
+const incompleteWait = 10 * time.Second
 
-// targetCache builds personal targets from the match history and OpenDota's item timings. The
-// engine asks several times a second, so answers are kept until the history changes, which
-// stats counts for us.
-type targetCache struct {
-	s       *Server
-	mu      sync.Mutex
-	entries map[string]cachedTargets
+// History is the part of the statistics store the targets are read from.
+type History interface {
+	HistoryVersion() int64
+	MatchesWhere(stats.MatchFilter) ([]model.MatchSummary, error)
+	ItemsIn(matchIDs []string) ([]model.ItemTiming, error)
 }
 
-type cachedTargets struct {
+// BuildSource is the part of the OpenDota client the item goals are read from.
+type BuildSource interface {
+	Items() map[string]dotadata.ItemInfo
+	BuildFor(heroID int, role string) *dotadata.Build
+	ItemTimings(heroID int, item string) ([]dotadata.ItemTiming, bool)
+}
+
+// Cache answers the engine, which asks several times a second, so answers are kept until the
+// history changes. A partial answer, made while OpenDota was still loading, is retried sooner.
+type Cache struct {
+	History History
+	// Builds is called per ask rather than held, because the client can be replaced while running.
+	Builds func() BuildSource
+
+	mu      sync.Mutex
+	entries map[string]cached
+}
+
+type cached struct {
 	t        coach.Targets
 	history  int64
 	complete bool
 	at       time.Time
 }
 
-func (tc *targetCache) TargetsFor(heroID int, role string) coach.Targets {
+func (c *Cache) TargetsFor(heroID int, role string) coach.Targets {
 	key := role + "/" + strconv.Itoa(heroID)
-	history := tc.s.stats.HistoryVersion()
-	tc.mu.Lock()
-	if e, ok := tc.entries[key]; ok && e.history == history && (e.complete || time.Since(e.at) < incompleteWait) {
-		tc.mu.Unlock()
+	history := c.History.HistoryVersion()
+	c.mu.Lock()
+	if e, ok := c.entries[key]; ok && e.history == history && (e.complete || time.Since(e.at) < incompleteWait) {
+		c.mu.Unlock()
 		return e.t
 	}
-	tc.mu.Unlock()
+	c.mu.Unlock()
 
-	t, complete := tc.build(heroID, role)
-	tc.mu.Lock()
-	if tc.entries == nil {
-		tc.entries = map[string]cachedTargets{}
+	t, complete := c.build(heroID, role)
+	c.mu.Lock()
+	if c.entries == nil {
+		c.entries = map[string]cached{}
 	}
-	tc.entries[key] = cachedTargets{t: t, history: history, complete: complete, at: time.Now()}
-	tc.mu.Unlock()
+	c.entries[key] = cached{t: t, history: history, complete: complete, at: time.Now()}
+	c.mu.Unlock()
 	return t
 }
 
-func (tc *targetCache) build(heroID int, role string) (coach.Targets, bool) {
-	s := tc.s
-	matches, err := s.stats.MatchesWhere(stats.MatchFilter{HeroID: heroID, Role: role, Real: true, Limit: dota.PersonalGames})
+// Forget drops every cached answer, so the next ask is built from scratch even though the
+// history version hasn't moved.
+func (c *Cache) Forget() {
+	c.mu.Lock()
+	clear(c.entries)
+	c.mu.Unlock()
+}
+
+func (c *Cache) build(heroID int, role string) (coach.Targets, bool) {
+	matches, err := c.History.MatchesWhere(stats.MatchFilter{HeroID: heroID, Role: role, Real: true, Limit: dota.PersonalGames})
 	if err != nil {
 		return coach.RoleTargets(role), false
 	}
 	history := slices.Clone(matches)
 	slices.Reverse(history) // newest first
 	t := coach.PersonalLastHits(role, history)
-	if !dota.Core(role) || s.data == nil {
+	var builds BuildSource
+	if c.Builds != nil {
+		builds = c.Builds()
+	}
+	if !dota.Core(role) || builds == nil {
 		return t, true
 	}
 	var complete bool
-	t.Items, t.ItemGames, complete = tc.itemGoals(heroID, role, history)
+	t.Items, t.ItemGames, complete = c.itemGoals(builds, heroID, role, history)
 	return t, complete
 }
 
 // itemGoals picks two core items, the player's usual ones if they have enough history on the
 // hero and otherwise the popular build's, and sets a timing goal for each.
-func (tc *targetCache) itemGoals(heroID int, role string, history []model.MatchSummary) ([]coach.ItemGoal, int, bool) {
-	s := tc.s
-	items := s.data.Items()
+func (c *Cache) itemGoals(builds BuildSource, heroID int, role string, history []model.MatchSummary) ([]coach.ItemGoal, int, bool) {
+	items := builds.Items()
 	if items == nil {
 		return nil, 0, false
 	}
@@ -86,7 +112,7 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []model.MatchS
 		ids[m.MatchID] = true
 		idList = append(idList, m.MatchID)
 	}
-	rows, _ := s.stats.ItemsIn(idList)
+	rows, _ := c.History.ItemsIn(idList)
 	perMatch := map[string]map[string]int{}
 	for _, r := range rows {
 		if !ids[r.MatchID] || items[r.Item].Cost < dota.GoalItemCost {
@@ -117,8 +143,8 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []model.MatchS
 	var chosen []string
 	fromGames := 0
 	if len(perMatch) >= 3 {
-		for n, c := range counts {
-			if c >= 2 {
+		for n, count := range counts {
+			if count >= 2 {
 				chosen = append(chosen, n)
 			}
 		}
@@ -130,7 +156,7 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []model.MatchS
 		}
 	}
 	if len(chosen) == 0 {
-		build := s.data.BuildFor(heroID, role)
+		build := builds.BuildFor(heroID, role)
 		if build == nil || build.Loading {
 			return nil, 0, false
 		}
@@ -145,7 +171,7 @@ func (tc *targetCache) itemGoals(heroID int, role string, history []model.MatchS
 	complete := true
 	var goals []coach.ItemGoal
 	for _, name := range chosen {
-		buckets, ok := s.data.ItemTimings(heroID, name)
+		buckets, ok := builds.ItemTimings(heroID, name)
 		if !ok {
 			complete = false
 		}

@@ -40,6 +40,7 @@ import (
 	"gourdian/internal/secrets"
 	"gourdian/internal/speech"
 	"gourdian/internal/stats"
+	"gourdian/internal/targets"
 )
 
 //go:embed web
@@ -85,16 +86,15 @@ type Server struct {
 	mmr     mmrState
 	keys    *secrets.Store
 	rules   *rules.Store
-	targets *targetCache
+	targets *targets.Cache
 	brief   briefingCache
 	picks   pickCache
 	draft   draftBoard
 
 	roleMu   sync.Mutex
 	roleHero int
-	// roleChosen is a position the player picked while still choosing a hero, held until
-	// there is a hero to remember it against; roleChosenAt bounds how long, so an abandoned
-	// draft can't hand its choice to a game an hour later.
+	// roleChosen is a position picked before there was a hero to remember it against, and
+	// roleChosenAt bounds the wait, so an abandoned draft can't claim a game an hour later.
 	roleChosen   string
 	roleChosenAt time.Time
 	roleLock     string // match in which the player picked the role themselves
@@ -124,7 +124,12 @@ func New(cfg *config.Store, engine *coach.Engine, st *stats.Store, data *dotadat
 	}
 	s.rules = store
 	s.applyRules()
-	s.targets = &targetCache{s: s}
+	s.targets = &targets.Cache{History: st, Builds: func() targets.BuildSource {
+		if s.data == nil {
+			return nil
+		}
+		return s.data
+	}}
 	engine.SetTargetSource(s.targets)
 	s.providers = aisvc.New(aisvc.Host{Settings: cfg, Keys: s.keys, WorkDir: workDir, Log: log, Ctx: s.baseCtx,
 		Spawn: s.spawn, Publish: s.hub.publish, PublishSettings: s.publishSettings, Resumed: s.resumePending,
@@ -243,9 +248,8 @@ func sameOrigin(next http.Handler) http.Handler {
 	})
 }
 
-// spawn runs work in the background for the server's lifetime: its ctx ends when the server
-// closes, and Close waits for it, so nothing writes to the data file after main closes it.
-// Once the server is closing, spawn does nothing.
+// spawn runs background work bounded by the server's lifetime; Close waits for it, so nothing
+// writes to the data file after main closes it. Once closing, spawn does nothing.
 func (s *Server) spawn(work func(ctx context.Context)) {
 	if !s.track() {
 		return
@@ -539,8 +543,6 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.settingsResponse())
 }
 
-// errNoSystemVoice refuses system speech on a machine that has none.
-//
 //lint:ignore ST1005 the dashboard shows this as a sentence, and it starts with a name
 var errNoSystemVoice = errors.New("Windows speech isn't available on this machine; use browser voice")
 
@@ -676,8 +678,7 @@ func readOptionalJSON(w http.ResponseWriter, r *http.Request, limit int64, v any
 
 func writeJSON(w http.ResponseWriter, v any) { writeJSONStatus(w, http.StatusOK, v) }
 
-// failed answers a request that couldn't be carried out for a reason the player can't do
-// anything about. They get the sentence, the log gets what actually went wrong, so a database
+// failed gives the player a sentence and the log what actually went wrong, so a database
 // message or a file path never lands on the dashboard.
 func (s *Server) failed(w http.ResponseWriter, status int, msg string, err error) {
 	s.log.Error(msg, "err", err)
@@ -757,10 +758,8 @@ func (h *hub) publish(event string, v any) {
 	h.publishRaw(event, data)
 }
 
-// publishRaw sends an event whose JSON is already encoded. A client that has fallen a whole
-// buffer behind misses the event, which is logged once for it: the game-state post can't
-// wait for it. Disconnecting it instead would lose the event just the same, and blank the
-// dashboard while it reconnects.
+// publishRaw sends already-encoded JSON. A client a whole buffer behind misses the event rather
+// than stalling the game-state post; disconnecting it would lose the event and blank its dashboard.
 func (h *hub) publishRaw(event string, data []byte) {
 	msg := fmt.Appendf(nil, "event: %s\ndata: %s\n\n", event, data)
 	h.mu.Lock()

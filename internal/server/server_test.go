@@ -634,9 +634,7 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 		if len(got.Items) == 2 && got.Items[0].By > 0 {
 			break
 		}
-		srv.targets.mu.Lock() // the history hasn't changed, so ask again as if nothing were cached
-		clear(srv.targets.entries)
-		srv.targets.mu.Unlock()
+		srv.targets.Forget() // the history hasn't changed, so ask again as if nothing were cached
 		time.Sleep(20 * time.Millisecond)
 	}
 	if got.LastHits[1] != 44 || got.Usual[1] != 40 {
