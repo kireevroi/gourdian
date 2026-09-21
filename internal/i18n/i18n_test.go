@@ -75,7 +75,7 @@ func TestWordAndSay(t *testing.T) {
 func TestEveryLookedUpLineHasRussian(t *testing.T) {
 	// The single-language localisers. Others, like the coach's sources, carry both languages
 	// at the call site and need nothing here.
-	call := regexp.MustCompile(`(?:\bl\.f\(|\bl\.s\(|\broleSay\(\s*\w+,\s*|\blaneIn\(\s*\w+,\s*|i18n\.Say\(\s*\w+,\s*|i18n\.Word\(\s*\w+,\s*)\s*"((?:[^"\\]|\\.)*)"\s*[,)]`)
+	call := regexp.MustCompile(`(?:\bl\.f\(|\bl\.s\(|\blaneIn\(\s*\w+,\s*|i18n\.Say\(\s*\w+,\s*|i18n\.Word\(\s*\w+,\s*)\s*"((?:[^"\\]|\\.)*)"\s*[,)]`)
 	var checked int
 	err := filepath.WalkDir("..", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {

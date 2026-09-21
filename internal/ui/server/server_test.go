@@ -165,7 +165,7 @@ func TestHeroRoleIsRememberedAndApplied(t *testing.T) {
 	set := srv.cfg.Settings()
 	set.Role = dota.HardSupport
 	srv.cfg.UpdateSettings(set)
-	srv.roleHero = 0
+	srv.role.TakeSettled()
 	postState(t, h, payload(10, func(s *gsi.State) { s.Map.MatchID = "7002" }))
 	if got := srv.cfg.Settings().Role; got != dota.Mid {
 		t.Fatalf("role on Invoker = %s, want the remembered mid", got)
@@ -397,10 +397,7 @@ func TestHeroRoleFollowsTheLastHero(t *testing.T) {
 			wg.Go(func() { srv.applyHeroRole(hero, srv.cfg.Settings()) })
 		}
 		wg.Wait()
-		srv.roleMu.Lock()
-		hero := srv.roleHero
-		srv.roleHero = 0
-		srv.roleMu.Unlock()
+		hero := srv.role.TakeSettled()
 		if want := srv.cfg.Settings().HeroRoles[fmt.Sprint(hero)]; srv.cfg.Settings().Role != want {
 			t.Fatalf("handled hero %d last, but the role is %s", hero, srv.cfg.Settings().Role)
 		}
