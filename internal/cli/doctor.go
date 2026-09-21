@@ -15,14 +15,14 @@ import (
 	"time"
 
 	"gourdian/internal/ai"
-	"gourdian/internal/config"
-	"gourdian/internal/dotadata"
-	"gourdian/internal/hidewin"
-	"gourdian/internal/install"
-	"gourdian/internal/screen"
-	"gourdian/internal/secrets"
-	"gourdian/internal/server"
-	"gourdian/internal/speech"
+	"gourdian/internal/ai/secrets"
+	"gourdian/internal/data/opendota"
+	"gourdian/internal/sys/config"
+	"gourdian/internal/sys/hidewin"
+	"gourdian/internal/sys/install"
+	"gourdian/internal/ui/screen"
+	"gourdian/internal/ui/server"
+	"gourdian/internal/ui/speech"
 )
 
 type checker struct{ problems int }
@@ -199,7 +199,7 @@ func (c *checker) finishOpenDota(set config.Settings) error {
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		data := dotadata.New(os.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		data := opendota.New(os.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 		switch public, err := data.HasPublicMatches(ctx, set.AccountID); {
 		case err != nil:
 			c.warn("couldn't reach OpenDota: %v", err)

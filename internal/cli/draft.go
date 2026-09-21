@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"gourdian/internal/config"
-	"gourdian/internal/dotadata"
-	"gourdian/internal/screen"
+	"gourdian/internal/data/opendota"
+	"gourdian/internal/sys/config"
+	"gourdian/internal/ui/screen"
 )
 
 // draftCmd photographs the screen while Dota is drafting and says which hero portraits it can
@@ -139,7 +139,7 @@ func heroTable() (screen.Table, map[int]string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	data := dotadata.New(filepath.Join(dir, "cache"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	data := opendota.New(filepath.Join(dir, "cache"), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	data.Start(ctx)

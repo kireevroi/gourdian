@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"os"
 
-	"gourdian/internal/config"
-	"gourdian/internal/install"
+	"gourdian/internal/sys/config"
+	"gourdian/internal/sys/install"
 )
 
 // EnsureInstalled writes or repairs the GSI config so a fresh install works without extra steps.

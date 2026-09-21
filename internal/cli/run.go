@@ -4,7 +4,7 @@ import (
 	"flag"
 
 	"gourdian/internal/app"
-	"gourdian/internal/platform"
+	"gourdian/internal/sys/platform"
 )
 
 // runCmd parses the flags of the `run` command and hands the rest to the app.

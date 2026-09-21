@@ -8,7 +8,7 @@ VERSION := $(shell cat VERSION)
 NUMVERSION := $(firstword $(subst -, ,$(VERSION)))
 # Debian sorts ~ before everything, which is what a prerelease should do against its release.
 DEBVERSION := $(subst -,~,$(VERSION))
-LDFLAGS := -X gourdian/internal/buildinfo.Version=$(VERSION)
+LDFLAGS := -X gourdian/internal/sys/buildinfo.Version=$(VERSION)
 # The architecture the .deb is built for, in Debian's spelling: amd64 or arm64.
 DEBARCH ?= amd64
 
@@ -59,7 +59,7 @@ test: version-check
 notices:
 	go run github.com/google/go-licenses/v2@v2.0.1 report ./... --ignore gourdian --template packaging/notices.tpl > THIRD_PARTY_NOTICES.txt
 	{ printf '\n%s\nGo (runtime and standard library) (BSD-3-Clause)\n\n' "$$(printf '=%.0s' $$(seq 80))"; cat "$$(go env GOROOT)/LICENSE"; \
-	  printf '\n%s\nRusso One font (OFL-1.1), in the dashboard\n\n' "$$(printf '=%.0s' $$(seq 80))"; cat internal/server/web/fonts/OFL.txt; } >> THIRD_PARTY_NOTICES.txt
+	  printf '\n%s\nRusso One font (OFL-1.1), in the dashboard\n\n' "$$(printf '=%.0s' $$(seq 80))"; cat internal/ui/server/web/fonts/OFL.txt; } >> THIRD_PARTY_NOTICES.txt
 
 # Reads the hero portraits out of an installed Dota 2 and regenerates the table the screen
 # reader matches against, including arcana, persona and alternate styles. The pictures

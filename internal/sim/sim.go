@@ -14,9 +14,9 @@ import (
 	"slices"
 	"time"
 
-	"gourdian/internal/coach"
-	"gourdian/internal/dota"
-	"gourdian/internal/gsi"
+	"gourdian/internal/coaching/coach"
+	"gourdian/internal/game/dota"
+	"gourdian/internal/game/gsi"
 )
 
 type Options struct {

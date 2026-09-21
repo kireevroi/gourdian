@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
-	"gourdian/internal/config"
-	"gourdian/internal/install"
+	"gourdian/internal/sys/config"
+	"gourdian/internal/sys/install"
 )
 
 func installCmd(args []string, remove bool) error {

@@ -17,9 +17,9 @@ import (
 	"sort"
 	"strings"
 
-	"gourdian/internal/install"
-	"gourdian/internal/screen"
-	"gourdian/internal/vpk"
+	"gourdian/internal/game/vpk"
+	"gourdian/internal/sys/install"
+	"gourdian/internal/ui/screen"
 )
 
 // heroArt is where Dota keeps the portrait it draws for each hero in the bar along the top.

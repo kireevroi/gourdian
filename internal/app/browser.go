@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"time"
 
-	"gourdian/internal/hidewin"
-	"gourdian/internal/overlay"
+	"gourdian/internal/sys/hidewin"
+	"gourdian/internal/ui/overlay"
 )
 
 // trainerAnswers reports whether a trainer is already serving the dashboard at url.

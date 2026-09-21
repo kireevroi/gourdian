@@ -5,10 +5,10 @@ import (
 	"log/slog"
 	"testing"
 
-	"gourdian/internal/coach"
-	"gourdian/internal/config"
-	"gourdian/internal/dota"
+	"gourdian/internal/coaching/coach"
+	"gourdian/internal/game/dota"
 	"gourdian/internal/sim"
+	"gourdian/internal/sys/config"
 )
 
 // coached runs a simulated match through the trainer and returns the tips one rule gave.

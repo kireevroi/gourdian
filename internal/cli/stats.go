@@ -3,9 +3,9 @@ package cli
 import (
 	"fmt"
 
-	"gourdian/internal/config"
-	"gourdian/internal/model"
-	"gourdian/internal/stats"
+	"gourdian/internal/data/stats"
+	"gourdian/internal/game/model"
+	"gourdian/internal/sys/config"
 )
 
 func statsCmd() error {
