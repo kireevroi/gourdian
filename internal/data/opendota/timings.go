@@ -32,7 +32,7 @@ func (c *Client) ItemTimings(heroID int, item string) ([]ItemTiming, bool) {
 	defer c.mu.Unlock()
 	t, ok, fetch := c.timings.get(key)
 	if fetch {
-		go c.fetchTimings(key)
+		c.goFetch(func() { c.fetchTimings(key) })
 	}
 	return t, ok
 }

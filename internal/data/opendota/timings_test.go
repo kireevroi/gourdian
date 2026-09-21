@@ -54,6 +54,7 @@ func TestFetchesStopWithTheStartContext(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(c.Wait)
 	c.SetBaseURL(srv.URL)
 	ctx, cancel := context.WithCancel(context.Background())
 	c.Start(ctx)

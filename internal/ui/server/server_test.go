@@ -54,6 +54,7 @@ func newTestServer(t testing.TB, mutate func(*config.Settings)) (*Server, http.H
 	openDotaAPI := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(openDotaAPI.Close)
 	data := opendota.New(t.TempDir(), log)
+	t.Cleanup(data.Wait)
 	data.SetBaseURL(openDotaAPI.URL)
 	st, err := stats.Open(dir)
 	if err != nil {
@@ -595,6 +596,7 @@ func TestPersonalTargetsFromHistory(t *testing.T) {
 	os.WriteFile(filepath.Join(cache, "items.json"), []byte(`{"bfury":{"id":145,"dname":"Battle Fury","cost":4100},"manta":{"id":147,"dname":"Manta Style","cost":4650}}`), 0o644)
 	os.WriteFile(filepath.Join(cache, "heroes.json"), []byte(`{"1":{"id":1,"localized_name":"Anti-Mage"}}`), 0o644)
 	data := opendota.New(cache, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(data.Wait)
 	data.SetBaseURL(openDotaAPI.URL)
 	data.Start(t.Context())
 	data.WaitReady(t.Context())

@@ -79,7 +79,7 @@ func (c *Client) Meta() map[int]HeroMeta {
 	defer c.mu.Unlock()
 	m, _, fetch := c.meta.get(struct{}{})
 	if fetch {
-		go c.fetchMeta()
+		c.goFetch(c.fetchMeta)
 	}
 	return m
 }

@@ -35,6 +35,7 @@ func TestReplayRecording(t *testing.T) {
 	}
 	if asking == nil || os.Getenv("LIVE_OPENDOTA") != "" {
 		od = opendota.New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		t.Cleanup(od.Wait)
 		od.Start(t.Context())
 		warm(t, od, path, set.Role)
 		e = coach.New(od, slog.New(slog.NewTextHandler(io.Discard, nil)))

@@ -30,7 +30,8 @@ type Client struct {
 	cacheDir string
 	log      *slog.Logger
 
-	ready chan struct{}
+	ready   chan struct{}
+	fetches sync.WaitGroup
 
 	mu        sync.RWMutex
 	items     map[string]ItemInfo
@@ -64,7 +65,7 @@ func (c *Client) Start(ctx context.Context) {
 	c.mu.Lock()
 	c.ctx = ctx
 	c.mu.Unlock()
-	go func() {
+	c.goFetch(func() {
 		defer close(c.ready)
 		var items map[string]ItemInfo
 		if err := c.getJSON(ctx, "/constants/items", "items.json", constantsMaxAge, &items); err != nil {
@@ -82,7 +83,7 @@ func (c *Client) Start(ctx context.Context) {
 		c.items, c.heroes = items, byID
 		c.mu.Unlock()
 		c.log.Info("dota data loaded", "items", len(items), "heroes", len(byID))
-	}()
+	})
 }
 
 // life is the context passed to Start, which background fetches stop with, or Background
@@ -139,7 +140,7 @@ func (c *Client) heroBuild(heroID int) *Build {
 	defer c.mu.Unlock()
 	b, _, fetch := c.builds.get(heroID)
 	if fetch {
-		go c.fetchBuild(heroID)
+		c.goFetch(func() { c.fetchBuild(heroID) })
 	}
 	return b
 }
@@ -175,7 +176,7 @@ func (c *Client) RankTier(accountID string) int {
 	if !fetch {
 		return tier
 	}
-	go func() {
+	c.goFetch(func() {
 		ctx, cancel := context.WithTimeout(c.life(), 30*time.Second)
 		defer cancel()
 		var player struct {
@@ -192,7 +193,7 @@ func (c *Client) RankTier(accountID string) int {
 		if err != nil {
 			c.log.Warn("rank lookup failed", "err", err)
 		}
-	}()
+	})
 	return 0
 }
 
@@ -265,3 +266,15 @@ func (c *Client) HeroName(id int) string {
 	}
 	return fmt.Sprintf("hero %d", id)
 }
+
+// goFetch runs f in the background and counts it, so Wait can tell when it has finished.
+func (c *Client) goFetch(f func()) {
+	c.fetches.Add(1)
+	go func() {
+		defer c.fetches.Done()
+		f()
+	}()
+}
+
+// Wait blocks until every fetch the client has started is done, including the files they cache.
+func (c *Client) Wait() { c.fetches.Wait() }

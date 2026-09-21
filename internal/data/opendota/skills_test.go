@@ -39,6 +39,7 @@ func TestLiveSkillBuild(t *testing.T) {
 		t.Skip("set LIVE_OPENDOTA=1 to ask the real OpenDota")
 	}
 	c := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(c.Wait)
 	c.Start(t.Context())
 	for _, q := range []struct {
 		hero int

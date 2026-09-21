@@ -49,6 +49,7 @@ func newService(t *testing.T) Service {
 		"15": {"id": 15, "localized_name": "Razor"}}`), 0o644)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	data := opendota.New(cache, log)
+	t.Cleanup(data.Wait)
 	data.SetBaseURL(srv.URL)
 	data.Start(t.Context())
 	data.WaitReady(t.Context())

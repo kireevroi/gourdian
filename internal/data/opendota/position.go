@@ -88,7 +88,7 @@ func (c *Client) proBuild(heroID, pos int, won bool, fallback *Build) *Build {
 		return fallback
 	}
 	if fetch {
-		go c.fetchPositionBuild(key)
+		c.goFetch(func() { c.fetchPositionBuild(key) })
 	}
 	if fallback == nil {
 		return nil
