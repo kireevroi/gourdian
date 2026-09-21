@@ -191,9 +191,8 @@ func (e *Engine) SetOverrides(o map[string]RuleOverride) {
 	e.rebuild()
 }
 
-// newCtx is what rules see for state s. The rule editor's live check builds it the same way,
-// so it shows the values the rule really gets. The caller holds e.mu, and asked for the
-// targets before taking it.
+// newCtx is what rules see for s; the rule editor builds it the same way. The caller holds e.mu,
+// and asked for the targets before taking it.
 func (e *Engine) newCtx(s, prev *gsi.State, set config.Settings, targets Targets, now time.Time) *Ctx {
 	return &Ctx{S: s, Prev: prev, Clock: s.Map.ClockTime, Settings: set, T: set.Timings, Focus: e.focus, RoleNote: e.roleNote,
 		Targets: targets, data: e.data, m: e.match, now: now}

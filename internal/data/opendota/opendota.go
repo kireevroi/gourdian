@@ -121,10 +121,8 @@ func (c *Client) Hero(id int) (HeroInfo, bool) {
 	return h, ok
 }
 
-// BuildFor is what pros bought on the hero in the player's position, from the games they won
-// when there are enough of them, else from all their games there. When pros rarely play the
-// hero there, it's their won games in every position, and without enough of those OpenDota's
-// recent pro games. It's nil while nothing has loaded.
+// BuildFor is pros' build in the player's position, from won games when there are enough, then
+// won games in any position, then OpenDota's recent pro games; nil while nothing has loaded.
 func (c *Client) BuildFor(heroID int, role string) *Build {
 	b := c.proBuild(heroID, 0, true, c.heroBuild(heroID))
 	if pos := dota.Position(role); pos != 0 {

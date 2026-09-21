@@ -7,8 +7,7 @@ import (
 	"time"
 )
 
-// matchupsMaxAge is how long a hero's record against the rest is kept. It moves with the
-// patch, not the hour.
+// matchupsMaxAge is how long a hero's record is kept; it moves with the patch, not the hour.
 const matchupsMaxAge = 3 * 24 * time.Hour
 
 // Matchup is how one hero has fared against another in public games.
@@ -26,13 +25,8 @@ func (m Matchup) WinPct() int {
 	return m.Wins * 100 / m.Games
 }
 
-// Matchups is how a hero has fared against every other, by the other hero's id, or nil until
-// it loads. The answer is from the queried hero's point of view, so to learn what beats an
-// enemy you ask about the enemy: one call covers every hero the player might pick, instead of
-// one call for each.
-//
-// The first call starts the fetch and returns nothing, like the builds do, so the game-state
-// handler never waits on OpenDota.
+// Matchups is heroID's record against each other hero, nil until it loads; ask about an enemy to
+// learn what beats them. A first call only starts the fetch, so the GSI handler never waits.
 func (c *Client) Matchups(heroID int) map[int]Matchup {
 	if heroID <= 0 {
 		return nil

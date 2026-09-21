@@ -64,9 +64,8 @@ func (c *Client) fetchTimings(key timingsKey) {
 	c.timings.done(key, out)
 }
 
-// GoodTiming picks a timing worth aiming for: the earliest bucket holding at least a tenth of
-// the games that wins at least as often as the item does overall. Without one, it's the
-// median timing. It needs enough games to mean something.
+// GoodTiming is the earliest bucket with a tenth of the games that wins as often as the item does
+// overall, else the median timing; it needs enough games to mean something.
 func GoodTiming(buckets []ItemTiming) (int, bool) {
 	var games, wins int
 	for _, b := range buckets {
@@ -90,10 +89,8 @@ func GoodTiming(buckets []ItemTiming) (int, bool) {
 	return 0, false
 }
 
-// CoreItemTimes keeps the timings of finished items costing at least minCost, dropping the
-// components that were combined away soon after they were bought. An item carried for minutes
-// before it became something bigger was a timing of its own, the way the pro builds read it,
-// so the trainer can hold a player to their usual Yasha and not only their usual Manta.
+// CoreItemTimes keeps finished items costing at least minCost, dropping components combined away
+// soon after; one carried for minutes was a timing of its own, so a usual Yasha counts, not only Manta.
 func CoreItemTimes(times map[string]int, items map[string]ItemInfo, minCost int) map[string]int {
 	upgraded := map[string]bool{}
 	for name, t := range times {

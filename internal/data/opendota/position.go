@@ -11,9 +11,8 @@ import (
 	"time"
 )
 
-// OpenDota's itemPopularity mixes every position a hero is played in, won or lost, so a support
-// Pudge's wards end up in a mid Pudge's build. Its SQL explorer over parsed pro matches can split
-// them and keep only the games the hero's team won.
+// itemPopularity mixes every position, won or lost, so a support Pudge's wards land in a mid
+// Pudge's build; the SQL explorer over pro matches can split positions and keep only wins.
 const (
 	// MinProGames is the fewest pro games a build is made from; below it the trainer falls back.
 	MinProGames = 12

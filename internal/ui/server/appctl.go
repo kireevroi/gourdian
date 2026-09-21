@@ -101,9 +101,8 @@ func (s *Server) hudPayload() hud.Payload {
 	snap, tips := s.snapshot(set), s.engine.RecentTips()
 	live := s.alerts.build(snap, tips, set)
 	return hud.Payload{Live: live, Sample: hud.SampleIn(set.HUDWidgets, set.Language),
-		// Choosing is about the player's own pick and so ends when they make it; reading the
-		// screen carries on for the whole draft, because the other side is still picking and
-		// what the trainer knows of them would otherwise go stale and be dropped.
+		// Choosing ends with the player's own pick; reading the screen lasts the whole draft,
+		// since the other side is still picking and what is known of them would go stale.
 		Choosing: pickMatters(snap),
 		Draft:    set.Screen.Draft && draftMatters(snap)}
 }
