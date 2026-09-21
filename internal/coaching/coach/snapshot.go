@@ -182,7 +182,7 @@ func (e *Engine) Snapshot(set config.Settings) Snapshot {
 		}
 		points := 0
 		if e.match != nil {
-			points = e.match.skillSpare()
+			points = e.match.skills.spare()
 		}
 		snap.Skill = skillView(e.data, s, set.Role, set.Language, points)
 	}
@@ -290,8 +290,8 @@ func timers(clock int, daytime bool, set config.Settings, m *match) []Timer {
 		}
 		add(label, "daynight", at)
 	}
-	if m != nil && m.roshanKnown {
-		lo, hi := m.roshanDeadAt+t.RoshanRespawnMin, m.roshanDeadAt+t.RoshanRespawnMax
+	if m != nil && m.roshan.known {
+		lo, hi := m.roshan.deadAt+t.RoshanRespawnMin, m.roshan.deadAt+t.RoshanRespawnMax
 		if clock < lo {
 			add("Roshan window opens", "objective", lo)
 		} else {
@@ -299,7 +299,7 @@ func timers(clock int, daytime bool, set config.Settings, m *match) []Timer {
 		}
 	}
 	if m != nil && m.aegisLeft(clock) > 0 {
-		add("Your Aegis expires", "objective", m.aegisExpires)
+		add("Your Aegis expires", "objective", m.aegis.expires)
 	}
 	if slices.Contains(supports, set.Role) && clock >= 0 {
 		pull := clock - clock%60 + 53

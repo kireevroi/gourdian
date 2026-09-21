@@ -60,23 +60,23 @@ var Fields = []Field{
 		Help: "\"by your team\", \"by the enemy team\" or empty when Dota doesn't say.",
 		text: func(c *Ctx, _ string) string {
 			if c.Settings.Language == "ru" {
-				return map[bool]string{true: "вашей командой", false: "врагами"}[c.m.roshanTeam == c.m.team]
+				return map[bool]string{true: "вашей командой", false: "врагами"}[c.m.roshan.team == c.m.team]
 			}
-			return strings.TrimSpace(teamSuffix(c.m.roshanTeam, c.m.team, "by"))
+			return strings.TrimSpace(teamSuffix(c.m.roshan.team, c.m.team, "by"))
 		}},
 	{ID: "roshan_min", Label: "Earliest Roshan respawn", Group: "Match", Type: "number", Unit: "clock",
 		num: num(func(c *Ctx) float64 {
-			if !c.m.roshanKnown {
+			if !c.m.roshan.known {
 				return 0
 			}
-			return f64(c.m.roshanDeadAt + c.T.RoshanRespawnMin)
+			return f64(c.m.roshan.deadAt + c.T.RoshanRespawnMin)
 		})},
 	{ID: "roshan_max", Label: "Latest Roshan respawn", Group: "Match", Type: "number", Unit: "clock",
 		num: num(func(c *Ctx) float64 {
-			if !c.m.roshanKnown {
+			if !c.m.roshan.known {
 				return 0
 			}
-			return f64(c.m.roshanDeadAt + c.T.RoshanRespawnMax)
+			return f64(c.m.roshan.deadAt + c.T.RoshanRespawnMax)
 		})},
 	{ID: "aegis_holder", Label: "Whose Aegis", Group: "Match", Type: "text",
 		Help: "Yours, your team's or the enemy's.",
@@ -89,7 +89,7 @@ var Fields = []Field{
 		}},
 	{ID: "aegis_expires", Label: "Time your Aegis expires", Group: "Match", Type: "number", Unit: "clock",
 		Help: "Only meaningful while aegis_left is above zero, which is only for your own Aegis.",
-		num:  num(func(c *Ctx) float64 { return f64(c.m.aegisExpires) })},
+		num:  num(func(c *Ctx) float64 { return f64(c.m.aegis.expires) })},
 	{ID: "tower_low", Label: "Weakest tower of yours", Group: "Match", Type: "number", Unit: "percent",
 		Help: "The health left on your lowest standing building, 100 when everything is full.",
 		num:  num(func(c *Ctx) float64 { _, pct := lowestTower(c); return f64(pct) })},
@@ -408,7 +408,7 @@ var Fields = []Field{
 		num:  num(func(c *Ctx) float64 { return f64(c.m.aegisLeft(c.Clock)) })},
 	{ID: "skill_points", Label: "Unspent skill points", Group: "Abilities", Type: "number",
 		Help: "Counted against the fewest the hero has had this match, so innate and auto-levelled abilities don't show up as unspent.",
-		num:  num(func(c *Ctx) float64 { return f64(c.m.skillSpare()) })},
+		num:  num(func(c *Ctx) float64 { return f64(c.m.skills.spare()) })},
 	{ID: "talent_points", Label: "Unspent talents", Group: "Abilities", Type: "number",
 		Help: "Talents have their own points since 7.40, so an unspent one doesn't show up as a skill point.",
 		num:  num(func(c *Ctx) float64 { return f64(talentSpare(c.S)) })},

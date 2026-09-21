@@ -64,7 +64,7 @@ func (e *Engine) Facts(role string) MatchFacts {
 		f.UnderAttack = fmt.Sprintf("%s (lost %d%% in the last 5s)", buildingLabel(key), drop)
 	}
 	f.Abilities = abilityFacts(s)
-	f.SkillPoints = m.skillSpare()
+	f.SkillPoints = m.skills.spare()
 	for _, it := range s.ItemsIn(gsi.Inventory, gsi.Backpack) {
 		f.HasAegis = f.HasAegis || it.Short() == "aegis"
 	}

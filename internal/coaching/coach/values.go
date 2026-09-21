@@ -120,10 +120,10 @@ func (m *match) idleFor(clock int) int {
 
 // sinceRoshan is the seconds since Roshan was last seen dying, or a number no rule reaches.
 func (m *match) sinceRoshan(clock int) int {
-	if !m.roshanKnown {
+	if !m.roshan.known {
 		return neverSeconds
 	}
-	return clock - m.roshanDeadAt
+	return clock - m.roshan.deadAt
 }
 
 // aegisLeft is how long the Aegis has, and only for the player's own. Theirs leaves their
@@ -131,10 +131,10 @@ func (m *match) sinceRoshan(clock int) int {
 // and Dota tells nobody when it does. A countdown on a guess is worse than no countdown, so
 // there isn't one.
 func (m *match) aegisLeft(clock int) int {
-	if !m.aegisKnown || !m.aegisMine || m.aegisUsed || m.aegisExpires <= clock {
+	if !m.aegis.known || !m.aegis.mine || m.aegis.used || m.aegis.expires <= clock {
 		return 0
 	}
-	return m.aegisExpires - clock
+	return m.aegis.expires - clock
 }
 
 // seeChat follows the game's chat lines for what the player's own state doesn't show.
@@ -142,27 +142,27 @@ func (m *match) seeChat(c gsi.Chat, clock int) {
 	team := gsi.TeamNumber(m.team)
 	switch c.Type {
 	case "CHAT_MESSAGE_HERO_KILL": // playerid1 is the hero killed
-		if m.aegisKnown && c.Player1 == m.aegisHolder {
-			m.aegisUsed = true
+		if m.aegis.known && c.Player1 == m.aegis.holder {
+			m.aegis.used = true
 		}
 	case "CHAT_MESSAGE_GLYPH_USED": // playerid1 is the team
 		if c.Player1 == team {
-			m.glyphUsed, m.glyphAt = true, clock
+			m.glyph.used, m.glyph.at = true, clock
 		}
 	// Losing any tower or barracks brings the Glyph back. Value is the team that destroyed it.
 	case "CHAT_MESSAGE_TOWER_KILL", "CHAT_MESSAGE_BARRACKS_KILL":
 		if c.Value != team {
-			m.glyphUsed = false
+			m.glyph.used = false
 		}
 	case "CHAT_MESSAGE_TOWER_DENY":
 		if c.Value == team {
-			m.glyphUsed = false
+			m.glyph.used = false
 		}
 	}
 }
 
 func (m *match) glyphReady(clock, cooldown int) bool {
-	return !m.glyphUsed || clock >= m.glyphAt+cooldown
+	return !m.glyph.used || clock >= m.glyph.at+cooldown
 }
 
 // reincarnated is the Aegis bringing the player back: their HP hits 0 as it leaves the inventory.
@@ -182,11 +182,11 @@ func aegisWhose(c *Ctx) string {
 	m := c.m
 	_, has := c.S.FindItem("aegis", gsi.Inventory, gsi.Backpack)
 	switch {
-	case m.aegisMine || has:
+	case m.aegis.mine || has:
 		return "mine"
-	case m.aegisTeam == "":
+	case m.aegis.team == "":
 		return ""
-	case m.aegisTeam == m.team:
+	case m.aegis.team == m.team:
 		return "team"
 	}
 	return "enemy"
