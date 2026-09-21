@@ -11,6 +11,7 @@ import (
 	"gourdian/internal/coach"
 	"gourdian/internal/config"
 	"gourdian/internal/dota"
+	"gourdian/internal/position"
 )
 
 // roleChosenFor is how long a position chosen while picking a hero waits for one to appear.
@@ -91,9 +92,8 @@ func (s *Server) handleRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snapNow := s.engine.Snapshot(set)
-	// Chosen while still picking a hero, so there is no hero to remember it against yet.
-	// Hold on to it: the moment one appears it becomes the player's own pick for the match,
-	// rather than being overwritten by what they happened to play on that hero last time.
+	// No hero to remember it against yet, so hold it: when one appears it must beat what they
+	// happened to play on that hero last time.
 	if pickMatters(snapNow) {
 		s.roleMu.Lock()
 		s.roleChosen, s.roleChosenAt = set.Role, time.Now()
@@ -189,27 +189,17 @@ func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings 
 	return set
 }
 
-// roleFor tries the role last played on the hero, then the player's most common role on it
-// (imported matches count), then the hero's own roles from OpenDota.
+// roleFor gathers what is known about the hero and lets position.Choose decide.
 func (s *Server) roleFor(heroID int, set config.Settings) (role, note string) {
+	c := position.Candidates{Remembered: set.HeroRoles[strconv.Itoa(heroID)], Usual: s.usualRole(heroID)}
 	name := fmt.Sprintf("hero %d", heroID)
 	if s.data != nil {
 		name = s.data.HeroName(heroID)
-	}
-	if r, ok := set.HeroRoles[strconv.Itoa(heroID)]; ok {
-		return r, roleSay(set.Language, "what you played on %s last time", name)
-	}
-	if r := s.usualRole(heroID); r != "" {
-		return r, roleSay(set.Language, "your usual role on %s", name)
-	}
-	if s.data != nil {
 		if info, ok := s.data.Hero(heroID); ok {
-			if r := roleFromHeroRoles(info.Roles); r != "" {
-				return r, roleSay(set.Language, "a guess for %s", name)
-			}
+			c.HeroRoles = info.Roles
 		}
 	}
-	return "", ""
+	return position.Choose(c, name, set.Language)
 }
 
 func (s *Server) usualRole(heroID int) string {
@@ -218,16 +208,4 @@ func (s *Server) usualRole(heroID int) string {
 		s.log.Warn("read the usual role", "hero", heroID, "err", err)
 	}
 	return role
-}
-
-// roleFromHeroRoles reads OpenDota's hero roles, which list the main ones first.
-func roleFromHeroRoles(roles []string) string {
-	support, carry := slices.Index(roles, "Support"), slices.Index(roles, "Carry")
-	switch {
-	case support >= 0 && (carry < 0 || support < carry):
-		return dota.SoftSupport
-	case carry >= 0:
-		return dota.Carry
-	}
-	return ""
 }

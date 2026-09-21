@@ -459,22 +459,6 @@ func TestSettingsThatCantBeSavedSayThat(t *testing.T) {
 	}
 }
 
-func TestRoleFromHeroRoles(t *testing.T) {
-	cases := map[string][]string{
-		dota.SoftSupport: {"Support", "Disabler", "Nuker", "Initiator"},
-		dota.Carry:       {"Carry", "Pusher", "Escape"},
-		"":               {"Initiator", "Durable"},
-	}
-	for want, roles := range cases {
-		if got := roleFromHeroRoles(roles); got != want {
-			t.Errorf("roleFromHeroRoles(%v) = %q, want %q", roles, got, want)
-		}
-	}
-	if got := roleFromHeroRoles([]string{"Carry", "Support"}); got != dota.Carry {
-		t.Errorf("the first listed role wins, got %q", got)
-	}
-}
-
 func TestLaningMidSwitchesRoleUnlessPlayerPicked(t *testing.T) {
 	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.SoftSupport })
 	for clock := 0; clock <= 160; clock++ {
