@@ -1,8 +1,9 @@
-import { $, esc, api, toast, t, tp, events, onSettings } from './app.js';
+import { $, esc, api, toast, t, tp, events, onSettings, saveSettings } from './app.js';
 
 const LH_TARGET_10 = { carry: 65, mid: 60, offlane: 40 };
 const NS = 'http://www.w3.org/2000/svg';
 let data = null;
+let goal = null;
 
 function svgEl(tag, attrs, parent) {
   const el = document.createElementNS(NS, tag);
@@ -246,7 +247,9 @@ function render() {
   const mmrLabels = mmr.map((e) => fmtDate(e.date));
   mmrLabels.detail = mmr.map((e) => `${new Date(e.date).toLocaleString(locale())}${e.note ? ' · ' + t(e.note) : ''}`);
   if (mmr.length) {
-    lineChart($('c-mmr'), { title: 'MMR over time', xLabels: mmrLabels, series: [{ name: 'MMR', color: 'var(--series-1)', values: mmr.map((e) => e.mmr) }] });
+    const target = goalRank();
+    lineChart($('c-mmr'), { title: 'MMR over time', xLabels: mmrLabels, series: [{ name: 'MMR', color: 'var(--series-1)', values: mmr.map((e) => e.mmr) }],
+      reference: target ? { value: target.mmr, label: `${target.name} · ${fmt(target.mmr)}` } : null });
   } else {
     $('c-mmr').innerHTML = '<div class="empty">No MMR logged yet. Log it after each session and watch the trend.</div>';
   }
@@ -269,6 +272,48 @@ function render() {
   renderMistakes(ms, labels);
   renderHeroes(ms);
   renderMatches(ms);
+}
+
+const goalRank = () => (goal ? goal.ranks.find((r) => r.tier === goal.goal) : null);
+const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${fmt(Math.abs(n))}`;
+
+function renderGoal() {
+  const sel = $('mmr-goal'), box = $('mmr-forecast');
+  box.replaceChildren();
+  if (!goal) return;
+  const groups = new Map();
+  for (const r of goal.ranks) {
+    if (!groups.has(r.medal)) groups.set(r.medal, document.createElement('optgroup'));
+    groups.get(r.medal).label = r.medal;
+    groups.get(r.medal).appendChild(new Option(`${r.name} · ${fmt(r.mmr)}`, r.tier));
+  }
+  sel.replaceChildren(new Option(t('No target'), 0), ...groups.values());
+  sel.value = goal.goal;
+  const rank = goalRank(), f = goal.forecast;
+  const line = (cls, text) => { const el = document.createElement('div'); if (cls) el.className = cls; el.textContent = text; box.appendChild(el); };
+  if (!rank) { line('', t('Pick a rank to see how long the climb takes.')); return; }
+  if (!f) { line('', t('Log your MMR to see how far it is.')); return; }
+  if (f.status === 'reached') { line('', tp('{rank} reached.', { rank: rank.name })); return; }
+  const head = document.createElement('div');
+  const b = document.createElement('b');
+  b.textContent = tp('{rank}: {n} MMR to go', { rank: rank.name, n: fmt(f.goal - f.mmr) });
+  head.appendChild(b);
+  const parts = [];
+  if (f.matches_left) parts.push(tp('about {n} ranked matches', { n: fmt(f.matches_left) }));
+  if (f.days_left > 365) parts.push(t('over a year at this pace'));
+  else if (f.days_left) parts.push(tp('about {n} days, around {date}', { n: fmt(f.days_left), date: fmtDate(Date.now() + f.days_left * 864e5) }));
+  if (parts.length) head.append(` · ${parts.join(' · ')}`);
+  box.appendChild(head);
+  const since = fmtDate(f.since);
+  if (f.status === 'early') line('pace', t('Log your MMR after a few more matches to see how long that takes.'));
+  else if (f.status === 'stalled') line('pace', tp('Not getting closer: {change} MMR since {date}.', { change: signed(f.change), date: since }));
+  else if (f.matches) line('pace', tp('Pace since {date}: {change} MMR over {n} ranked matches', { date: since, change: signed(f.change), n: fmt(f.matches) }));
+  else line('pace', tp('Pace since {date}: {change} MMR', { date: since, change: signed(f.change) }));
+}
+
+async function loadGoal() {
+  try { goal = await api('/api/mmr/goal'); } catch (e) { goal = null; }
+  renderGoal();
 }
 
 function renderCurve(ms) {
@@ -420,7 +465,9 @@ const isTurbo = (m) => m.game_mode === TURBO;
 async function load() {
   loadReviews();
   loadGoals();
+  const goalLoaded = loadGoal();
   data = await api('/api/stats');
+  await goalLoaded;
   data.matches = data.matches || [];
   const heroes = [...new Set(data.matches.map((m) => m.hero))].sort();
   const sel = $('f-hero'), current = sel.value;
@@ -447,8 +494,14 @@ $('mmr-form').addEventListener('submit', async (e) => {
   $('mmr-value').value = ''; $('mmr-note').value = '';
   load();
 });
+$('mmr-goal').addEventListener('change', async (e) => {
+  if (!(await saveSettings({ mmr_goal: Number(e.target.value) }))) renderGoal();
+});
 events.on('match', () => load());
 // The first load waits for the settings, which bring the language, so charts aren't labelled in English.
 let loaded = false;
-onSettings(() => { if (!loaded) { loaded = true; load(); } });
+onSettings((c) => {
+  if (!loaded) { loaded = true; load(); return; }
+  if (goal && (c.settings.mmr_goal || 0) !== goal.goal) loadGoal().then(render);
+});
 events.start();

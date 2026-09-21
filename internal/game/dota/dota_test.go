@@ -63,3 +63,42 @@ func TestTalentDueAt(t *testing.T) {
 		}
 	}
 }
+
+func TestRankFloor(t *testing.T) {
+	for tier, want := range map[int]int{11: 0, 15: 616, 21: 770, 51: 3080, 53: 3388, 65: 4466, 71: 4620, 75: 5420, 80: 5620} {
+		if got, ok := RankFloor(tier); !ok || got != want {
+			t.Errorf("RankFloor(%d) = %d/%v, want %d", tier, got, ok, want)
+		}
+	}
+	for _, tier := range []int{0, 10, 16, 76, 81, 90} {
+		if _, ok := RankFloor(tier); ok {
+			t.Errorf("RankFloor(%d) took a number that isn't a rank", tier)
+		}
+	}
+}
+
+func TestRankTiersClimb(t *testing.T) {
+	tiers := RankTiers()
+	if len(tiers) != 36 || tiers[0] != 11 || tiers[len(tiers)-1] != 80 {
+		t.Fatalf("RankTiers = %v, want Herald 1 to Immortal, five stars a medal", tiers)
+	}
+	prev := -1
+	for _, tier := range tiers {
+		floor, ok := RankFloor(tier)
+		if !ok || floor <= prev {
+			t.Errorf("rank %d starts at %d/%v, after %d", tier, floor, ok, prev)
+		}
+		prev = floor
+	}
+}
+
+func TestRankName(t *testing.T) {
+	for _, c := range []struct {
+		tier       int
+		lang, want string
+	}{{53, "en", "Legend 3"}, {71, "ru", "Божество 1"}, {80, "en", "Immortal"}, {0, "en", ""}} {
+		if got := RankName(c.tier, c.lang); got != c.want {
+			t.Errorf("RankName(%d, %s) = %q, want %q", c.tier, c.lang, got, c.want)
+		}
+	}
+}

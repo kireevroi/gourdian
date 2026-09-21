@@ -85,6 +85,7 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		"timers":     func(s *Settings) { widgetByID(s, WidgetTimers).Count = 0 },
 		"kind":       func(s *Settings) { widgetByID(s, WidgetTimers).Kinds = []string{"lotus"} },
 		"same keys":  func(s *Settings) { s.Hotkeys.Dashboard = "shift+ctrl+f10" },
+		"mmr goal":   func(s *Settings) { s.MMRGoal = 56 },
 	} {
 		s := base.Clone()
 		mutate(&s)

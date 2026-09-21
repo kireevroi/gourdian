@@ -1,12 +1,16 @@
 package server
 
 import (
-	"gourdian/internal/game/model"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"gourdian/internal/data/mmr"
+	"gourdian/internal/game/model"
+	"gourdian/internal/sys/config"
 )
 
 func TestMMRPromptAfterARealMatch(t *testing.T) {
@@ -85,5 +89,41 @@ func TestAMatchMarkedRankedStaysRanked(t *testing.T) {
 	}
 	if p := srv.mmr.Pending(); p == nil || !p.Ranked {
 		t.Fatalf("the prompt for a match marked ranked went away: %+v", p)
+	}
+}
+
+func TestMMRGoalForecastsTheChosenRank(t *testing.T) {
+	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Language = "ru" })
+	for _, e := range []model.MMREntry{{Date: time.Now().AddDate(0, 0, -10), MMR: 3000}, {Date: time.Now(), MMR: 3040}} {
+		if err := srv.stats.AppendMMR(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put := func(body string) int {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(body)))
+		return rec.Code
+	}
+	if code := put(`{"mmr_goal":56}`); code != http.StatusBadRequest {
+		t.Fatalf("Legend 6 isn't a rank, but saving it gave %d", code)
+	}
+	if code := put(`{"mmr_goal":51}`); code != http.StatusOK {
+		t.Fatalf("saving Legend 1 as the goal: status %d", code)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/mmr/goal", nil))
+	var got struct {
+		Goal     int          `json:"goal"`
+		Ranks    []rankChoice `json:"ranks"`
+		Forecast *mmr.Forecast
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("status %d, %v: %s", rec.Code, err, rec.Body)
+	}
+	if got.Goal != 51 || len(got.Ranks) != 36 || got.Ranks[20].Name != "Легенда 1" || got.Ranks[20].MMR != 3080 {
+		t.Fatalf("goal %d, ranks %+v", got.Goal, got.Ranks)
+	}
+	if f := got.Forecast; f == nil || f.Goal != 3080 || f.Status != mmr.Closing || f.DaysLeft != 10 {
+		t.Fatalf("forecast %+v, want 40 to go at +40 in 10 days", f)
 	}
 }

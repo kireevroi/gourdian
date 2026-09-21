@@ -173,6 +173,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/mmr", s.handleMMRList)
 	mux.HandleFunc("POST /api/mmr", s.handleMMR)
 	mux.HandleFunc("POST /api/mmr/change", s.handleMMRChange)
+	mux.HandleFunc("GET /api/mmr/goal", s.handleMMRGoal)
 	mux.HandleFunc("GET /api/mmr/prompt", s.handleMMRPrompt)
 	mux.HandleFunc("PUT /api/matches/{id}/ranked", s.handleMatchRanked)
 	mux.HandleFunc("POST /api/matches/{id}/mmr", s.handleMatchMMR)

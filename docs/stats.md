@@ -4,9 +4,33 @@
 
 Everything lives in `trainer.data` in the app folder: matches, per-minute samples, tips, item timings, MMR, reviews, goals and your rules.
 
-- **Stats page**: MMR, rolling win rate, last hits at 10:00, GPM, deaths, last-hit curves, mistakes per match, weekly goals, reviews and a hero table.
+- **Stats page**: MMR and the time to a target rank, rolling win rate, last hits at 10:00, GPM, deaths, last-hit curves, mistakes per match, weekly goals, reviews and a hero table.
 - **Import**: Settings › Match history adds your last 50 matches from OpenDota (your Friend ID is learned in your first match). OpenDota needs Expose Public Match Data turned on in Dota.
 - **Recordings**: every match's game data is saved to `recordings\` (the newest 20 are kept), so rules can be tested on real games.
+
+## Time to a rank
+
+Pick a **Target rank** on the MMR chart and the page tells you how far away it is and how long
+the climb takes at your recent pace. The target also shows as a line on the chart.
+
+The pace comes from your MMR log. It is measured from the entry about 30 days before your
+latest one (or your first entry, if the log is newer than that) up to the latest:
+
+- **Matches**: the MMR you gained, divided by the ranked matches you played in that time. The
+  estimate needs at least 5 matches. A match counts when OpenDota says it was ranked or when you
+  logged MMR against it. Matches you played without the trainer running count only after you
+  import them.
+- **Days**: the MMR you gained, divided by the days the stretch covers, counted from today. The
+  estimate needs at least a week of log. Breaks between sessions are part of the pace, so it
+  only holds if you keep playing as often as you have been.
+
+If your MMR has gone down or stayed flat over that time, the page says so and gives no
+estimate.
+
+Valve doesn't publish the MMR each medal starts at, so these are the thresholds players have
+measured: 154 MMR a star from Herald to Ancient (Legend 1 is 3080), 200 a star in Divine
+(Divine 1 is 4620) and Immortal from 5620. The squish in patch 7.41e only rescaled MMR inside
+Immortal, so none of these moved.
 
 ## CSV export
 
