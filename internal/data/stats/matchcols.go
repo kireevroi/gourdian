@@ -15,9 +15,8 @@ type matchCol struct {
 	dest      func(m *model.MatchSummary) any
 }
 
-// matchCols are the matches table's columns, in order. The table's schema, inserts and reads
-// all come from here, so a new field is one line here plus a migration adding its column to
-// older files.
+// matchCols are the matches table's columns, in order; its schema, inserts and reads come from
+// here, so a new field is one line here plus a migration adding the column to older files.
 var matchCols = []matchCol{
 	{"match_id", "TEXT PRIMARY KEY", func(m *model.MatchSummary) any { return m.MatchID }, func(m *model.MatchSummary) any { return &m.MatchID }},
 	{"ended_at", "TEXT", func(m *model.MatchSummary) any { return timeValue(m.EndedAt) }, func(m *model.MatchSummary) any { return timeCol{&m.EndedAt} }},
@@ -54,6 +53,7 @@ var matchCols = []matchCol{
 	{"enemy_heroes", "TEXT", func(m *model.MatchSummary) any { return jsonValue(m.EnemyHeroes) }, func(m *model.MatchSummary) any { return stringsCol{&m.EnemyHeroes} }},
 	{"last_hits_at", "TEXT", func(m *model.MatchSummary) any { return jsonValue(m.LastHitsAt) }, func(m *model.MatchSummary) any { return countsCol{&m.LastHitsAt} }},
 	{"death_clocks", "TEXT", func(m *model.MatchSummary) any { return jsonValue(m.DeathClocks) }, func(m *model.MatchSummary) any { return intsCol{&m.DeathClocks} }},
+	{"last_hits_by_minute", "TEXT", func(m *model.MatchSummary) any { return jsonValue(m.LastHitsByMinute) }, func(m *model.MatchSummary) any { return intsCol{&m.LastHitsByMinute} }},
 	{"tip_counts", "TEXT", func(m *model.MatchSummary) any { return jsonValue(m.TipCounts) }, func(m *model.MatchSummary) any { return countsCol{&m.TipCounts} }},
 }
 

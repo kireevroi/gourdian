@@ -236,6 +236,7 @@ func (s *Server) Run(ctx context.Context) {
 	defer s.bg.Leave()
 	s.bg.Go(func(context.Context) { s.resumePending() })
 	s.bg.Go(s.learnGameModes)
+	s.bg.Go(s.learnLastHitCurves)
 	s.bg.Go(func(context.Context) { s.providers.StartupCheck() })
 	s.bg.Go(func(context.Context) { s.ensurePiper() })
 	tick := time.NewTicker(400 * time.Millisecond)

@@ -23,11 +23,11 @@ type MatchSummary struct {
 	XPM         int            `json:"xpm"`
 	LastHitsAt  map[string]int `json:"last_hits_at"`
 	DeathClocks []int          `json:"death_clocks"`
-	TipCounts   map[string]int `json:"tip_counts"`
-	RankTier    int            `json:"rank_tier,omitempty"`
-	// GameMode is how OpenDota numbers the mode, once it has said; 0 until then. It is kept
-	// because Turbo pays about twice the gold and experience, so its numbers can't be mixed
-	// with anything else's.
+	// LastHitsByMinute is OpenDota's per-minute count, for matches the trainer didn't sample live.
+	LastHitsByMinute []int          `json:"-"`
+	TipCounts        map[string]int `json:"tip_counts"`
+	RankTier         int            `json:"rank_tier,omitempty"`
+	// GameMode is OpenDota's mode number, 0 until it says; kept since Turbo pays about double.
 	GameMode  int    `json:"game_mode,omitempty"`
 	Simulated bool   `json:"simulated,omitempty"`
 	Ranked    bool   `json:"ranked,omitempty"`
@@ -55,13 +55,10 @@ type MatchSummary struct {
 // GameModeTurbo is the mode that pays double, as OpenDota numbers the modes.
 const GameModeTurbo = 23
 
-// Turbo reports whether the match was played in Turbo, where a player earns roughly twice the
-// gold and experience they would elsewhere. Its last hits, GPM, XPM and item timings say
-// nothing about a normal game, so everything the trainer works out from history leaves it
-// out. A match OpenDota hasn't described yet counts as normal, which nearly all of them are.
+// Turbo reports a Turbo match, which pays about double, so history leaves it out. A match
+// OpenDota hasn't described yet counts as normal, as nearly all are.
 func (m MatchSummary) Turbo() bool { return m.GameMode == GameModeTurbo }
 
-// Match sources.
 const (
 	SourceLive     = "live"
 	SourceOpenDota = "opendota"

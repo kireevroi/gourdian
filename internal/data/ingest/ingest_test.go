@@ -107,6 +107,18 @@ func TestImportAddsMissingMatchesOnce(t *testing.T) {
 	}
 }
 
+// An imported match keeps OpenDota's whole per-minute count, so the last-hit curve can draw it.
+func TestAnImportedMatchKeepsItsLastHitCurve(t *testing.T) {
+	s := newService(t)
+	if _, err := s.Import(t.Context(), accountID, 5, nil); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := s.Stats.Matches()
+	if c := rows[0].LastHitsByMinute; len(c) != 9 || c[5] != 11 {
+		t.Fatalf("curve = %v, want OpenDota's nine minutes", c)
+	}
+}
+
 func TestRoleFor(t *testing.T) {
 	cases := []struct {
 		d    opendota.PlayerDetail

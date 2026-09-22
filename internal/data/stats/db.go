@@ -77,9 +77,8 @@ func Open(configDir string) (*Store, error) {
 	return s, nil
 }
 
-// migrations bring a data file made by an older version up to date, in order and each once;
-// PRAGMA user_version counts how many a file has had. Add new ones at the end and never
-// change one that has shipped.
+// migrations bring an older data file up to date, in order and each once, counted by PRAGMA
+// user_version. Add new ones at the end and never change one that has shipped.
 var migrations = []func(tx *sql.Tx) error{
 	// 1 (1.2): reviews say whether the last game's focus was followed.
 	func(tx *sql.Tx) error { return addColumn(tx, "reviews", "followed_focus", "TEXT") },
@@ -90,12 +89,13 @@ var migrations = []func(tx *sql.Tx) error{
 			CREATE INDEX IF NOT EXISTS matches_role ON matches(role)`)
 		return err
 	},
-	// 3 (1.8): which mode a match was played in, so Turbo can be kept out of the numbers.
-	// The default matters: a column added without one leaves NULL in every row already
-	// there, and a match reads its numbers straight into ints.
+	// 3 (1.8): the game mode, so Turbo can be kept out of the numbers. It needs a default, or
+	// the rows already there get NULL, which a match's int fields can't read.
 	func(tx *sql.Tx) error {
 		return addColumn(tx, "matches", "game_mode", "INTEGER NOT NULL DEFAULT 0")
 	},
+	// 4 (1.9): OpenDota's per-minute last hits, for the curve of a match not sampled live.
+	func(tx *sql.Tx) error { return addColumn(tx, "matches", "last_hits_by_minute", "TEXT") },
 }
 
 func migrate(db *sql.DB) error {

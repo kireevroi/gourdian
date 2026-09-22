@@ -55,6 +55,20 @@ func TestExtractParsedMatch(t *testing.T) {
 	}
 }
 
+func TestExtractKeepsTheWholeLastHitCurve(t *testing.T) {
+	d, _ := Extract(loadMatch(t, "match_parsed.json"), 100000001, 0)
+	if len(d.LastHitsByMinute) != 9 || d.LastHitsByMinute[0] != 0 || d.LastHitsByMinute[5] != 11 {
+		t.Fatalf("curve = %v, want lh_t's nine minutes", d.LastHitsByMinute)
+	}
+	if u, _ := Extract(loadMatch(t, "match_basic.json"), 0, 21); u.LastHitsByMinute != nil {
+		t.Fatalf("an unparsed match has no lh_t, but the curve is %v", u.LastHitsByMinute)
+	}
+	long := &Match{Players: []MatchPlayer{{AccountID: 1, LHT: make([]int, 150)}}}
+	if d, _ := Extract(long, 1, 0); len(d.LastHitsByMinute) != maxCurveMinute+1 {
+		t.Fatalf("kept %d minutes, want no more than the live curve's %d", len(d.LastHitsByMinute), maxCurveMinute+1)
+	}
+}
+
 func TestExtractFallsBackToHeroAndHandlesUnparsed(t *testing.T) {
 	m := loadMatch(t, "match_basic.json")
 	if m.Parsed() {
