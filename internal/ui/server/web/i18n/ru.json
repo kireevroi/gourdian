@@ -796,7 +796,7 @@
     "All pick and ranked": "Обычные и рейтинговые",
     "Turbo": "Турбо",
     "Mode": "Режим",
-    "Press Ctrl+Shift+1 to 5 in game to say which position you are playing, and the heroes worth taking will appear.": "Нажмите Ctrl+Shift+1…5 в игре, чтобы указать позицию, — и появятся герои, которых стоит брать."
+    "Say which position you are playing — the Position buttons at the top, or Ctrl+Shift+1 to 5 in game — and the heroes worth taking will appear.": "Укажите позицию — кнопками «Позиция» наверху или Ctrl+Shift+1…5 в игре, — и появятся герои, которых стоит брать."
   },
   "patterns": [
     [

@@ -181,7 +181,7 @@ func (s *Server) speakPicks(st *gsi.State, set config.Settings) {
 	c.mu.Unlock()
 	// Nothing to say until they have named a position. The check is cheap, which matters
 	// twice a second.
-	if !s.rolePickedInDraft() {
+	if !s.role.Mine(set.Role) {
 		return
 	}
 	snap := s.snapshot(set)

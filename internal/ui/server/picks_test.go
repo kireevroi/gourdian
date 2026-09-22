@@ -56,24 +56,34 @@ func roleSet(srv *Server, role string) config.Settings {
 	return set
 }
 
-// Pick help is for the draft, once the player has said their position: the heroes worth taking
-// depend on it, so the trainer asks rather than offering whatever they played last.
-func TestPickBoardShowsDuringTheDraft(t *testing.T) {
-	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.HardSupport })
-	seed(t, srv, 10)
-	draft := payload(-60, func(s *gsi.State) {
-		s.Hero = &gsi.Hero{} // Dota's hero block before the pick: id 0
-		s.Map.GameState = gsi.StateHeroSelection
+// heroSelect is Dota mid-draft: the hero block is there but empty until the player picks.
+func heroSelect(match string) *gsi.State {
+	return payload(-60, func(s *gsi.State) {
+		s.Hero = &gsi.Hero{}
+		s.Map.MatchID, s.Map.GameState = match, gsi.StateHeroSelection
 	})
-	postState(t, h, draft)
+}
+
+// A position the trainer worked out for itself buys a question, not a list of heroes:
+// offering carry heroes to someone about to play offlane is worse than saying nothing.
+func TestPickBoardAsksWhenThePositionWasGuessed(t *testing.T) {
+	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.Carry })
+	seed(t, srv, 10)
+	// A match on Lion, which the trainer settles as hard support from the player's record.
+	postState(t, h, payload(10, func(s *gsi.State) { s.Hero.ID = 26 }))
+	if got := srv.cfg.Settings().Role; got != dota.HardSupport {
+		t.Fatalf("the trainer settled on %q, want the position it works out from Lion", got)
+	}
+
+	postState(t, h, heroSelect("7002"))
 	snap := srv.snapshot(srv.cfg.Settings())
 	switch {
 	case snap.Picks == nil:
 		t.Fatal("nothing at all during the draft; it should be asking for a position")
 	case !snap.Picks.NeedPosition:
-		t.Errorf("didn't ask for a position: %+v", snap.Picks)
+		t.Errorf("didn't ask for a position it guessed: %+v", snap.Picks)
 	case len(snap.Picks.Best)+len(snap.Picks.Fresh)+len(snap.Picks.Avoid) != 0:
-		t.Errorf("named heroes without being told the position: %+v", snap.Picks)
+		t.Errorf("named heroes for a position it guessed: %+v", snap.Picks)
 	}
 
 	setRole(t, srv, dota.HardSupport)
@@ -85,9 +95,29 @@ func TestPickBoardShowsDuringTheDraft(t *testing.T) {
 		t.Error("still asking for a position after being given one")
 	}
 
-	postState(t, h, payload(10, func(s *gsi.State) { s.Hero.ID = 26 })) // picked and playing
+	postState(t, h, payload(10, func(s *gsi.State) { s.Hero.ID = 26 }))
 	if snap := srv.snapshot(srv.cfg.Settings()); snap.Picks != nil {
 		t.Fatal("pick help still shown once the hero is picked")
+	}
+}
+
+// The answer stands from wherever it was given: naming a position in the dashboard while
+// queueing used to be dropped, and the draft then asked for one already set.
+func TestPickBoardTakesThePositionNamedBeforeTheDraft(t *testing.T) {
+	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.Carry })
+	seed(t, srv, 10)
+	setRole(t, srv, dota.HardSupport)
+
+	postState(t, h, heroSelect("7001"))
+	snap := srv.snapshot(srv.cfg.Settings())
+	if snap.Picks == nil {
+		t.Fatal("no board at all during the draft")
+	}
+	if snap.Picks.NeedPosition {
+		t.Errorf("asked again for a position already named: %+v", snap.Picks)
+	}
+	if len(snap.Picks.Best) == 0 {
+		t.Errorf("named no heroes for the position given: %+v", snap.Picks)
 	}
 }
 

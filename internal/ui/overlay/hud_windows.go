@@ -397,10 +397,14 @@ func (u *ui) setPositionKeys(on bool) {
 	}
 	u.positionKeys = on
 	for i := range dota.Roles {
-		if on {
-			pRegisterHotKey.Call(u.hwnd, uintptr(hotkeyPosition+i), modControl|modShift|modNoRepeat, uintptr('1'+i))
-		} else {
+		if !on {
 			pUnregisterHotKey.Call(u.hwnd, uintptr(hotkeyPosition+i))
+			continue
+		}
+		// A key another program holds leaves the player pressing it to no effect, and the
+		// pick advice waiting for a position it will never hear.
+		if r, _, _ := pRegisterHotKey.Call(u.hwnd, uintptr(hotkeyPosition+i), modControl|modShift|modNoRepeat, uintptr('1'+i)); r == 0 {
+			u.log.Warn("position hotkey is taken by another program", "hotkey", fmt.Sprintf("Ctrl+Shift+%d", i+1))
 		}
 	}
 }

@@ -32,7 +32,7 @@ type briefingCache struct {
 func (s *Server) snapshot(set config.Settings) coach.Snapshot {
 	snap := s.engine.Snapshot(set)
 	switch {
-	case pickMatters(snap) && s.rolePickedInDraft():
+	case pickMatters(snap) && s.role.Mine(set.Role):
 		snap.Picks = s.pickBoard(set)
 	case pickMatters(snap):
 		// They haven't said which position they are playing. Which heroes are worth taking
