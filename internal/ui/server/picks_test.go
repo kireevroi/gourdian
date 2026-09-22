@@ -56,9 +56,8 @@ func roleSet(srv *Server, role string) config.Settings {
 	return set
 }
 
-// Pick help is for the draft, and only once the player has said which position they are
-// playing: which heroes are worth taking depends entirely on that, and the trainer asks
-// rather than offering heroes for whatever they happened to play last.
+// Pick help is for the draft, once the player has said their position: the heroes worth taking
+// depend on it, so the trainer asks rather than offering whatever they played last.
 func TestPickBoardShowsDuringTheDraft(t *testing.T) {
 	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.HardSupport })
 	seed(t, srv, 10)
@@ -214,7 +213,7 @@ func TestTheDraftStaysOnScreenAfterYouPick(t *testing.T) {
 	}
 	postState(t, h, payload(-90, choosing))
 	setRole(t, srv, dota.Mid)
-	postDraft(t, srv, `{"ours":[17],"theirs":[35,26]}`)
+	seeDraft(t, srv, `{"ours":[17],"theirs":[35,26]}`)
 
 	before := srv.snapshot(srv.cfg.Settings()).Picks
 	if before == nil || len(before.Best) == 0 {
@@ -244,9 +243,8 @@ func TestTheDraftStaysOnScreenAfterYouPick(t *testing.T) {
 	}
 }
 
-// The overlay reads the screen only while the trainer asks it to, so that has to last the
-// whole draft. It used to stop the moment the player picked, and the reading it had already
-// taken was then dropped for going stale, so the other side vanished a few seconds later.
+// The screen has to be read for the whole draft. Reading used to stop at the player's pick, and
+// the last reading then went stale, so the other side vanished a few seconds later.
 func TestTheScreenIsReadForTheWholeDraft(t *testing.T) {
 	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Screen.Draft = true })
 	choosing := func(s *gsi.State) {
@@ -290,9 +288,8 @@ func TestTheScreenIsNotReadWhenTurnedOff(t *testing.T) {
 	}
 }
 
-// Pick advice is worked out for a position, so the position keys have to work while the
-// player is still choosing a hero. They used to come alive only once a match had started,
-// which is after the one moment they matter most.
+// The position keys have to work while the player is still choosing a hero; they used to come
+// alive only once the match started, after the one moment they matter most.
 func TestThePositionCanBeSetWhileChoosing(t *testing.T) {
 	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Role = dota.Carry })
 	choosing := func(s *gsi.State) {

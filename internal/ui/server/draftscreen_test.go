@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -19,6 +20,14 @@ func postDraft(t *testing.T, srv *Server, body string) int {
 	w := httptest.NewRecorder()
 	srv.handleDraftSeen(w, req)
 	return w.Code
+}
+
+// seeDraft posts the same reading twice, as two screen reads in a row of a settled draft do:
+// a hero only reaches the board once two readings agree on it.
+func seeDraft(t *testing.T, srv *Server, body string) int {
+	t.Helper()
+	postDraft(t, srv, body)
+	return postDraft(t, srv, body)
 }
 
 // A reading off the screen is refused until the player has asked for it, because it means the
@@ -43,7 +52,7 @@ func TestAReadingReachesThePickBoard(t *testing.T) {
 		s.Map.GameState = gsi.StateHeroSelection
 		s.Map.MatchID = "m1"
 	}))
-	if code := postDraft(t, srv, `{"ours":[17],"theirs":[35,26,14]}`); code != http.StatusOK {
+	if code := seeDraft(t, srv, `{"ours":[17],"theirs":[35,26,14]}`); code != http.StatusOK {
 		t.Fatalf("the reading was refused: %d", code)
 	}
 	got := func() []int { _, t := srv.sides("m1"); return t }()
@@ -65,7 +74,7 @@ func TestAReadingIsTidiedUp(t *testing.T) {
 		s.Map.GameState = gsi.StateHeroSelection
 		s.Map.MatchID = "m1"
 	}))
-	if code := postDraft(t, srv, `{"theirs":[35,35,0,-4,26]}`); code != http.StatusOK {
+	if code := seeDraft(t, srv, `{"theirs":[35,35,0,-4,26]}`); code != http.StatusOK {
 		t.Fatalf("refused: %d", code)
 	}
 	if got := func() []int { _, t := srv.sides("m1"); return t }(); len(got) != 2 || got[0] != 35 || got[1] != 26 {
@@ -122,7 +131,7 @@ func TestTheBoardFollowsTheDraftAsItFillsIn(t *testing.T) {
 		{`{"theirs":[35,26,14]}`, 3},
 		{`{"theirs":[35,26,14,2,25]}`, 5},
 	} {
-		if code := postDraft(t, srv, step.body); code != http.StatusOK {
+		if code := seeDraft(t, srv, step.body); code != http.StatusOK {
 			t.Fatalf("reading %q refused: %d", step.body, code)
 		}
 		if got := seen(); got != step.want {
@@ -131,5 +140,72 @@ func TestTheBoardFollowsTheDraftAsItFillsIn(t *testing.T) {
 	}
 	if got := seen(); got != 5 {
 		t.Errorf("the board ended with %d enemies, want the whole side", got)
+	}
+}
+
+func TestAHeroJoinsOnceTwoReadingsAgreeAndThenStays(t *testing.T) {
+	var s sightings
+	s.see([]int{35})
+	if len(s.kept) != 0 {
+		t.Fatalf("one reading put %v on the board", s.kept)
+	}
+	s.see([]int{35, 26})
+	if !slices.Equal(s.kept, []int{35}) {
+		t.Fatalf("kept %v after two readings of 35, want [35]", s.kept)
+	}
+	s.see([]int{26})
+	s.see(nil)
+	if !slices.Equal(s.kept, []int{35, 26}) {
+		t.Fatalf("kept %v, want a hero missing from later readings to stay", s.kept)
+	}
+}
+
+func TestAOneOffMisreadNeverJoins(t *testing.T) {
+	var s sightings
+	for _, reading := range [][]int{{35}, {35, 99}, {35}, {35, 99}} {
+		s.see(reading)
+	}
+	if slices.Contains(s.kept, 99) {
+		t.Fatalf("kept %v; 99 was never read twice in a row", s.kept)
+	}
+}
+
+func TestASideHoldsNoMoreThanFive(t *testing.T) {
+	var s sightings
+	all := []int{1, 2, 3, 4, 5, 6, 7}
+	s.see(all)
+	s.see(all)
+	if len(s.kept) != 5 {
+		t.Fatalf("kept %d heroes, want the five a side can have", len(s.kept))
+	}
+}
+
+// With one portrait flickering between read and missed, each reading used to change the other
+// side, which restarted the wait for the picks to settle, so the advice was never read again.
+func TestTheAdviceComesAgainWhenAPortraitFlickers(t *testing.T) {
+	srv, h, _ := newTestServer(t, func(s *config.Settings) {
+		s.Role = dota.Mid
+		s.Screen.Draft = true
+	})
+	postState(t, h, payload(-90, func(s *gsi.State) {
+		s.Hero = &gsi.Hero{}
+		s.Map.GameState = gsi.StateHeroSelection
+		s.Map.MatchID = "m1"
+	}))
+	var c pickCache
+	at := time.Now()
+	c.sayNow(dota.Mid, nil, at)
+	spoken := 0
+	for _, body := range []string{`{"theirs":[35,26]}`, `{"theirs":[35,26]}`, `{"theirs":[35]}`,
+		`{"theirs":[35,26]}`, `{"theirs":[35]}`, `{"theirs":[35,26]}`, `{"theirs":[35]}`} {
+		postDraft(t, srv, body)
+		_, theirs := srv.sides("m1")
+		at = at.Add(2 * time.Second)
+		if c.sayNow(dota.Mid, theirs, at) {
+			spoken++
+		}
+	}
+	if spoken != 1 {
+		t.Fatalf("the advice was read out %d times as the portrait flickered, want once", spoken)
 	}
 }
