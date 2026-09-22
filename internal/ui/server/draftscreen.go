@@ -12,23 +12,40 @@ import (
 	"gourdian/internal/ui/screen"
 )
 
-// draftBoard holds what the overlay has read off the screen during the current draft. It is
-// the only way a player's tools can learn what the other side took: Valve sends the draft to
-// spectators, not to players, so the trainer reads the portraits the game has already drawn.
+// draftBoard is the draft read off the screen, since Valve sends it to spectators, not players.
 type draftBoard struct {
 	mu      sync.Mutex
 	matchID string
 	at      time.Time
-	ours    []int
-	theirs  []int
+	ours    sightings
+	theirs  sightings
 }
 
-// draftFresh is how long a reading stands without being renewed. The overlay sends one every
-// couple of seconds while the draft is open; once it stops, the board goes with it.
+// sightings is one side of the draft: a hero joins once two readings in a row show it, then stays,
+// since a pick can't be undone and a flickering portrait mustn't take it off the board.
+type sightings struct {
+	kept []int
+	last []int // heroes the previous reading showed that aren't kept yet
+}
+
+func (s *sightings) see(reading []int) {
+	var fresh []int
+	for _, id := range reading {
+		switch {
+		case slices.Contains(s.kept, id):
+		case slices.Contains(s.last, id) && len(s.kept) < screen.Slots:
+			s.kept = append(s.kept, id)
+		default:
+			fresh = append(fresh, id)
+		}
+	}
+	s.last = fresh
+}
+
+// draftFresh is how long a reading stands unrenewed; the overlay sends one every couple of seconds.
 const draftFresh = 20 * time.Second
 
-// sides is who each team has taken, or nothing when the screen hasn't been read or the
-// reading has gone stale.
+// sides is who each team has taken, or nothing when the reading is missing or stale.
 func (s *Server) sides(matchID string) (ours, theirs []int) {
 	b := &s.draft
 	b.mu.Lock()
@@ -36,11 +53,10 @@ func (s *Server) sides(matchID string) (ours, theirs []int) {
 	if b.matchID != matchID || time.Since(b.at) > draftFresh {
 		return nil, nil
 	}
-	return slices.Clone(b.ours), slices.Clone(b.theirs)
+	return slices.Clone(b.ours.kept), slices.Clone(b.theirs.kept)
 }
 
-// handleHeroNames gives the overlay the hero numbers, which it needs to say what it saw and
-// which only this side of the trainer fetches.
+// handleHeroNames gives the overlay the hero ids it names readings by, which only this side fetches.
 func (s *Server) handleHeroNames(w http.ResponseWriter, r *http.Request) {
 	ids := map[string]int{}
 	for _, h := range s.data.Heroes() {
@@ -49,8 +65,7 @@ func (s *Server) handleHeroNames(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, ids)
 }
 
-// handleDraftSeen takes a reading from the overlay, which is the part of the trainer running
-// where the screen is.
+// handleDraftSeen takes a reading from the overlay, the part of the trainer where the screen is.
 func (s *Server) handleDraftSeen(w http.ResponseWriter, r *http.Request) {
 	var seen struct {
 		Ours   []int       `json:"ours"`
@@ -71,23 +86,22 @@ func (s *Server) handleDraftSeen(w http.ResponseWriter, r *http.Request) {
 	b := &s.draft
 	b.mu.Lock()
 	if b.matchID != snap.MatchID {
-		b.ours, b.theirs = nil, nil
+		b.ours, b.theirs = sightings{}, sightings{}
 	}
 	b.matchID, b.at = snap.MatchID, time.Now()
-	was := slices.Concat(b.ours, b.theirs)
-	b.ours, b.theirs = keepHeroes(seen.Ours), keepHeroes(seen.Theirs)
-	ours, theirs := slices.Clone(b.ours), slices.Clone(b.theirs)
+	was := slices.Concat(b.ours.kept, b.theirs.kept)
+	b.ours.see(keepHeroes(seen.Ours))
+	b.theirs.see(keepHeroes(seen.Theirs))
+	ours, theirs := slices.Clone(b.ours.kept), slices.Clone(b.theirs.kept)
 	found := len(theirs)
 	b.mu.Unlock()
 
-	// A hero read off the screen is the one thing the trainer says that nothing can check
-	// against Dota, so write down what it was: a wrong one only ever comes to light later.
+	// A hero read off the screen can't be checked against Dota, so log it: a wrong one shows later.
 	if !slices.Equal(was, slices.Concat(ours, theirs)) {
 		s.log.Info("read the draft off the screen", "ours", s.named(ours), "theirs", s.named(theirs))
 	}
 
-	// Where the portraits turned out to be is worth keeping: the next draft on this screen
-	// then costs nothing to find.
+	// Remember where the portraits were, so the next draft on this screen costs nothing to find.
 	if seen.Bar != nil && seen.Screen != "" && seen.Bar.Ready() {
 		s.rememberBar(seen.Screen, *seen.Bar)
 	}
@@ -97,8 +111,7 @@ func (s *Server) handleDraftSeen(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]int{"theirs": found})
 }
 
-// keepHeroes drops repeats and anything that isn't a hero id, so a bad reading can't put a
-// number the rest of the trainer has never heard of into the pick advice.
+// keepHeroes drops repeats and non-hero ids, so a bad reading can't reach the pick advice.
 func keepHeroes(ids []int) []int {
 	var out []int
 	for _, id := range ids {
