@@ -316,7 +316,7 @@ function renderPicks(p) {
       p.enemies.map((h) => `<span class="enemy">${h.img ? `<img src="${esc(imgURL(h.img))}" alt="">` : ''}${esc(h.hero)}</span>`).join('') + '</div>'
     : '';
   const ask = p.need_position
-    ? `<div class="notes">${t('Press Ctrl+Shift+1 to 5 in game to say which position you are playing, and the heroes worth taking will appear.')}</div>`
+    ? `<div class="notes">${t('Say which position you are playing — the Position buttons at the top, or Ctrl+Shift+1 to 5 in game — and the heroes worth taking will appear.')}</div>`
     : '';
   const notes = (p.notes || []).length
     ? `<div class="notes">${p.notes.map((n) => `<div>${esc(n)}</div>`).join('')}</div>` : '';

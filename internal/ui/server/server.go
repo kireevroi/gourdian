@@ -559,6 +559,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		s.settingsProblem(w, err)
 		return
 	}
+	if next.Role != prev.Role {
+		s.role.Own()
+	}
 	if snap := s.engine.Snapshot(next); snap.InMatch && snap.Hero != nil && !strings.HasPrefix(snap.MatchID, "sim-") {
 		s.rememberHeroRole(snap.Hero.ID, next.Role)
 		if next.Role != prev.Role {

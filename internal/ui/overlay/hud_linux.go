@@ -649,8 +649,10 @@ func (u *xui) setPositionKeys(on bool) {
 	for i := range dota.Roles {
 		h := hotkey.Hotkey{Ctrl: true, Shift: true, Key: strconv.Itoa(i + 1)}
 		if on {
+			// A key another program holds leaves the player pressing it to no effect, and the
+			// pick advice waiting for a position it will never hear.
 			if err := u.grabKey(h, actPosition+action(i)); err != nil {
-				u.log.Debug("position hotkey unavailable", "err", err)
+				u.log.Warn("position hotkey unavailable", "hotkey", h.String(), "err", err)
 			}
 		} else if code, ok := u.keycodes[h.Keysym()]; ok {
 			u.ungrab(grab{code, xMods(h)})

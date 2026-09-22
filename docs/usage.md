@@ -17,7 +17,7 @@ The F-key shortcuts can be changed on the Settings page.
 
 Tips, targets and the AI coach depend on your position. When a match starts on a hero, the trainer uses the position you played on it last time, then your most common position on it in your history, then a guess from the hero's roles. The HUD shows the choice until 2:30.
 
-The keys work while you are choosing a hero as well as in the match. That matters: pick help is worked out for a position, and until you say which one you are playing the trainer goes on what you played last, so the advice would otherwise be for the wrong position at the one moment you are acting on it. Choosing a position during the draft reads the advice out again for it, and sticks: taking a hero you usually play elsewhere doesn't quietly put it back.
+The keys work while you are choosing a hero as well as in the match, and so does the dashboard: a position you set before you queue counts as much as one you press mid-draft. That matters, because pick help is worked out for a position and is offered only while that position is your own answer. Choosing one during the draft reads the advice out again for it, and sticks: taking a hero you usually play elsewhere doesn't quietly put it back.
 
 If you don't pick one, the trainer watches which lane your hero stands in from 0:45 to 2:30 (up to 5:00 if it started late), and switches when that doesn't fit, saying so. Mid lane means mid. In a side lane, early wards or a support position mean the support position, otherwise the core one. A position you pick yourself is never overridden.
 
@@ -55,9 +55,9 @@ Look settings: width, text size, background opacity (0% shows text only), whole-
 
 ## Pick help
 
-While you're still choosing a hero, press **Ctrl+Shift+1…5** to say which position you're playing. The HUD and the dashboard then rank the heroes worth taking in it, and each line says why it's there.
+While you're choosing a hero, the HUD and the dashboard rank the heroes worth taking in your position, and each line says why it's there. Your position is whichever one you last set yourself — in the dashboard while you queue, on the settings page, or with **Ctrl+Shift+1…5** in game. Saying a different one while you're still choosing swaps the advice over and reads it out again.
 
-Nothing is offered until you say. Which heroes are worth taking depends entirely on the position, and the trainer would rather ask than hand you carry heroes because that's what you played last night. Saying a different position while you're still choosing swaps the advice over and reads it out again.
+The one time no heroes are offered is when the position isn't yours: the trainer works one out for itself when a match starts on a hero, from what you played on it last time, and after that it asks rather than hand you carry heroes because that's what you played last night. Which heroes are worth taking depends entirely on the position, so a guess is worth less than a question.
 
 A hero's score starts at an even game and moves with three things:
 

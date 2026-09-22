@@ -15,10 +15,6 @@ import (
 	"gourdian/internal/sys/config"
 )
 
-// rolePickedInDraft reports whether the player has named the position they are about to play.
-// Until they have, there is no advice to give about which hero to take.
-func (s *Server) rolePickedInDraft() bool { return s.role.Picked(time.Now()) }
-
 // applyDetectedRole switches to the position the hero laned in, unless the player chose one.
 func (s *Server) applyDetectedRole(res coach.Result, matchID string, set config.Settings) config.Settings {
 	if res.DetectedRole == "" || s.role.Locked(matchID) {
@@ -33,6 +29,7 @@ func (s *Server) applyDetectedRole(res coach.Result, matchID string, set config.
 		return set
 	}
 	lang := set.Language
+	s.role.Guessed(set.Role)
 	s.engine.SetRoleNote(i18n.Say(lang, "you laned %s", laneIn(lang, res.DetectedLane)))
 	s.applyFocus(set.Role, s.engine.HeroID())
 	s.publishSettingsLater()
@@ -72,6 +69,9 @@ func (s *Server) handleRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snapNow := s.engine.Snapshot(set)
+	// Their answer stands from wherever it was given -- the dashboard while queueing as much
+	// as the in-game keys once the draft is open.
+	s.role.Own()
 	// No hero to remember it against yet, so hold it: when one appears it must beat what they
 	// happened to play on that hero last time.
 	if pickMatters(snapNow) {
@@ -126,18 +126,20 @@ func (s *Server) rememberHeroRole(heroID int, role string) {
 // applyHeroRole picks the role when a match starts on a different hero. The pre-game
 // role line tells the player where the choice came from.
 func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings {
-	s.role.OnNewHero(heroID, time.Now(), func(chosen string) {
+	s.role.OnNewHero(heroID, time.Now(), func(chosen string) (guessed string) {
 		role, note := s.roleFor(heroID, set)
 		// A position chosen while still picking beats anything worked out from the hero: they
 		// said which one they are playing, and they said it about this game.
 		if chosen != "" {
 			role, note = chosen, i18n.Say(set.Language, "your pick")
 			defer s.rememberHeroRole(heroID, chosen)
+		} else {
+			guessed = role
 		}
 		s.engine.SetRoleNote(note)
 		defer func() { s.applyFocus(s.cfg.Settings().Role, heroID) }()
 		if role == "" {
-			return
+			return ""
 		}
 		// Compared with the settings now, not set: another post may have changed them since.
 		changed := false
@@ -149,13 +151,15 @@ func (s *Server) applyHeroRole(heroID int, set config.Settings) config.Settings 
 		})
 		if err != nil {
 			s.log.Error("apply hero role", "err", err)
-			return
+			return ""
 		}
+		// Nothing moved, so whoever put that position there still owns it.
 		if !changed {
-			return
+			return ""
 		}
 		s.publishSettingsLater()
 		s.log.Info("role set for hero", "role", role, "why", note)
+		return guessed
 	})
 	return set
 }
