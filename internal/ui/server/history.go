@@ -163,6 +163,11 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		curve[minute] = x.LastHits
 		resp.LastHitsByMinute[x.MatchID] = curve
 	}
+	for _, m := range resp.Matches {
+		if _, sampled := resp.LastHitsByMinute[m.MatchID]; !sampled && len(m.LastHitsByMinute) > 0 {
+			resp.LastHitsByMinute[m.MatchID] = m.LastHitsByMinute
+		}
+	}
 	for _, name := range stats.Files {
 		if fi, err := os.Stat(filepath.Join(s.stats.Dir(), name)); err == nil {
 			resp.Files = append(resp.Files, statsFile{Name: name, Size: fi.Size(), Modified: fi.ModTime()})

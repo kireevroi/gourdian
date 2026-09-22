@@ -20,9 +20,10 @@ func TestMatchRoundTrip(t *testing.T) {
 		MatchID: "8001", HeroID: 1, Hero: "Anti-Mage", Role: "carry", Team: "radiant", Result: "win",
 		EndedAt: time.Date(2026, 9, 17, 20, 0, 0, 0, time.UTC), DurationSec: 2400, Kills: 7, Deaths: 3, Assists: 9,
 		LastHits: 310, Denies: 12, GPM: 610, XPM: 700, RankTier: 43,
-		LastHitsAt:  map[string]int{"5:00": 31, "10:00": 70},
-		DeathClocks: []int{490, 1320},
-		TipCounts:   map[string]int{"no_tp": 2, "stash": 1},
+		LastHitsAt:       map[string]int{"5:00": 31, "10:00": 70},
+		DeathClocks:      []int{490, 1320},
+		LastHitsByMinute: []int{0, 4, 9, 15},
+		TipCounts:        map[string]int{"no_tp": 2, "stash": 1},
 	}
 	if err := st.AppendMatch(want); err != nil {
 		t.Fatal(err)
@@ -33,7 +34,8 @@ func TestMatchRoundTrip(t *testing.T) {
 	}
 	m := got[0]
 	if m.MatchID != want.MatchID || m.GPM != 610 || m.RankTier != 43 || !m.EndedAt.Equal(want.EndedAt) ||
-		m.LastHitsAt["10:00"] != 70 || !slices.Equal(m.DeathClocks, want.DeathClocks) || m.TipCounts["no_tp"] != 2 {
+		m.LastHitsAt["10:00"] != 70 || !slices.Equal(m.DeathClocks, want.DeathClocks) || m.TipCounts["no_tp"] != 2 ||
+		!slices.Equal(m.LastHitsByMinute, want.LastHitsByMinute) {
 		t.Fatalf("round trip mismatch: %+v", m)
 	}
 }
@@ -327,7 +329,8 @@ func TestMatchKeepsEveryField(t *testing.T) {
 	m := model.MatchSummary{MatchID: "m1", HeroID: 26, Hero: "Lion", Role: "hard_support", Team: "radiant", Result: "win",
 		EndedAt: time.Date(2026, 9, 19, 20, 0, 0, 0, time.UTC), DurationSec: 2400, Kills: 3, Deaths: 4, Assists: 20,
 		LastHits: 40, Denies: 5, GPM: 300, XPM: 400, LastHitsAt: map[string]int{"10:00": 12}, DeathClocks: []int{300, 900},
-		TipCounts: map[string]int{"no_tp": 2}, RankTier: 45, GameMode: model.GameModeTurbo, Simulated: true, Ranked: true, Source: model.SourcePractice,
+		LastHitsByMinute: []int{0, 4, 9},
+		TipCounts:        map[string]int{"no_tp": 2}, RankTier: 45, GameMode: model.GameModeTurbo, Simulated: true, Ranked: true, Source: model.SourcePractice,
 		Parsed: true, LaneRole: 3, NetWorth: 9000, HeroDamage: 12000, TowerDamage: 500, ObsPlaced: 8, SenPlaced: 6,
 		CampsStacked: 4, TeamfightParticipation: 0.75, GPMPct: 0.4, LHPct: 0.3, HeroDamagePct: 0.2,
 		EnemyHeroes: []string{"Axe", "Lina"}}
@@ -449,9 +452,8 @@ func TestMatchesWhere(t *testing.T) {
 	}
 }
 
-// Turbo pays about twice the gold and experience, so it is left out of everything worked out
-// from history unless a caller asks for it on purpose. A caller that forgets gets the safe
-// answer rather than a quietly skewed one.
+// Turbo pays about double, so history leaves it out unless a caller asks on purpose; one that
+// forgets gets the safe answer, not a quietly skewed one.
 func TestTurboIsLeftOutUnlessAskedFor(t *testing.T) {
 	st, err := Open(t.TempDir())
 	if err != nil {
@@ -524,10 +526,8 @@ func ids(matches []model.MatchSummary) []string {
 	return out
 }
 
-// A data file made by an older version has to open and keep working. A migration added in the
-// middle of the list rather than at the end is skipped by every file that has already passed
-// that point, and a column added without a default leaves NULL in every row already there;
-// either way the next version reads nothing but errors.
+// An older data file has to open and keep working. A migration inserted mid-list is skipped by
+// files already past it, and a column added without a default leaves NULL; either way reads fail.
 func TestAnOlderDataFileStillOpens(t *testing.T) {
 	dir := t.TempDir()
 	st, err := Open(dir)
@@ -544,16 +544,18 @@ func TestAnOlderDataFileStillOpens(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Put the file back the way the version before this one left it: no game_mode, and the
-	// migration count from before it was written.
+	// Put the file back the way 1.7 left it, two migrations ago: no game_mode and no last-hit
+	// curve, so both columns are added to a file that already has rows.
 	db, err := sql.Open("sqlite", filepath.Join(dir, DataFile))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`ALTER TABLE matches DROP COLUMN game_mode`); err != nil {
-		t.Fatal(err)
+	for _, column := range []string{"game_mode", "last_hits_by_minute"} {
+		if _, err := db.Exec(`ALTER TABLE matches DROP COLUMN ` + column); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, len(migrations)-1)); err != nil {
+	if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, len(migrations)-2)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -574,6 +576,9 @@ func TestAnOlderDataFileStillOpens(t *testing.T) {
 	}
 	if matches[0].GameMode != 0 || matches[0].Turbo() {
 		t.Errorf("a match from before the mode was recorded reads as %d", matches[0].GameMode)
+	}
+	if matches[0].LastHitsByMinute != nil {
+		t.Errorf("a match from before curves were kept reads as %v", matches[0].LastHitsByMinute)
 	}
 	if _, err := st.MatchesWhere(MatchFilter{Real: true}); err != nil {
 		t.Errorf("filtering an upgraded data file: %v", err)

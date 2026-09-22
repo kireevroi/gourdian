@@ -92,6 +92,7 @@ type PlayerDetail struct {
 	TeamfightParticipation float64
 	RankTier               int
 	LastHitsAt             map[int]int
+	LastHitsByMinute       []int
 	DeathTimes             []int
 	ItemTimes              map[string]int
 	Percentiles            map[string]float64
@@ -99,6 +100,9 @@ type PlayerDetail struct {
 	LaneOpponents          []int
 	NetWorthRank           int
 }
+
+// maxCurveMinute is as far as a match's last-hit curve is kept, as far as the live one goes.
+const maxCurveMinute = 90
 
 // Extract finds the player by account id, or by hero when the profile is private, and
 // flattens their row plus who they played with and against.
@@ -120,6 +124,7 @@ func Extract(m *Match, accountID int64, heroID int) (PlayerDetail, bool) {
 		RankTier: p.RankTier, LastHitsAt: map[int]int{}, ItemTimes: p.FirstPurchaseTime, Percentiles: map[string]float64{},
 		NetWorthRank: 1,
 	}
+	d.LastHitsByMinute = slices.Clone(p.LHT[:min(len(p.LHT), maxCurveMinute+1)])
 	for _, minute := range []int{5, 10, 15, 20, 30} {
 		if minute < len(p.LHT) {
 			d.LastHitsAt[minute] = p.LHT[minute]
@@ -182,9 +187,8 @@ func (c *Client) Match(ctx context.Context, matchID string) (*Match, error) {
 // parseRetryAt is how often the parse is requested again while waiting.
 const parseRetryAt = 10 * time.Minute
 
-// WaitParsed requests a parse and polls until the match is parsed or ctx ends, asking again
-// every 10 minutes in case the request was dropped. progress, if set, is called on each poll
-// with how long the wait has taken. It returns the unparsed match if ctx ends first.
+// WaitParsed requests a parse and polls, asking again every 10 minutes in case it was dropped, until
+// the match is parsed or ctx ends, returning it unparsed then; progress gets the wait so far.
 func (c *Client) WaitParsed(ctx context.Context, matchID string, progress func(waited time.Duration)) (*Match, error) {
 	m, err := c.Match(ctx, matchID)
 	if err == nil && m.Parsed() {

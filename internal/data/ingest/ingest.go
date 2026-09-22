@@ -101,6 +101,9 @@ func applyDetail(row *model.MatchSummary, d opendota.PlayerDetail, enemies []str
 	if row.LastHitsAt == nil {
 		row.LastHitsAt = map[string]int{}
 	}
+	if len(row.LastHitsByMinute) == 0 {
+		row.LastHitsByMinute = d.LastHitsByMinute
+	}
 	for minute, lh := range d.LastHitsAt {
 		key := fmt.Sprintf("%d:00", minute)
 		if _, ok := row.LastHitsAt[key]; !ok {
