@@ -336,7 +336,8 @@ func TestMatchKeepsEveryField(t *testing.T) {
 		EnemyHeroes: []string{"Axe", "Lina"}}
 	v := reflect.ValueOf(m)
 	for i := range v.NumField() {
-		if name := v.Type().Field(i).Name; name != "Items" && v.Field(i).IsZero() {
+		// Items live in their own table, and Resumed only travels from the engine to the server.
+		if name := v.Type().Field(i).Name; name != "Items" && name != "Resumed" && v.Field(i).IsZero() {
 			t.Fatalf("the sample leaves %s empty; set it so its column is checked", name)
 		}
 	}

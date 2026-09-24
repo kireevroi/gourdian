@@ -353,14 +353,18 @@ func (s *Server) recordMatch(m *model.MatchSummary, set config.Settings) {
 	if acct, _ := s.accountID.Load().(string); acct != "" {
 		m.RankTier = s.data.RankTier(acct)
 	}
-	if err := s.stats.AppendMatch(*m); errors.Is(err, stats.ErrDuplicate) {
+	switch err := s.stats.AppendMatch(*m); {
+	case errors.Is(err, stats.ErrDuplicate) && m.Resumed:
+		// Recorded early when Dota went quiet; the match went on, so its end replaces that.
+		// Everything else after a match already happened then.
+		s.finishResumed(m)
+		return
+	case errors.Is(err, stats.ErrDuplicate):
 		s.log.Info("match already recorded; not saving it again", "match", m.MatchID)
 		return
-	} else if err != nil {
-		s.log.Error("save match summary", "err", err)
-	}
-	if err := s.stats.AppendItems(m.Items); err != nil {
-		s.log.Error("save item timings", "err", err)
+	case err != nil:
+		s.log.Error("save match summary; this match isn't in your statistics", "match", m.MatchID, "err", err)
+		return
 	}
 	s.drillResult(*m, set)
 	s.askForMMR(m)
@@ -372,6 +376,20 @@ func (s *Server) recordMatch(m *model.MatchSummary, set config.Settings) {
 		s.rememberHeroRole(m.HeroID, m.Role)
 	}
 	s.afterMatch(*m, set)
+}
+
+// finishResumed replaces the record of a match that was saved when Dota stopped sending
+// updates, now that it has really ended.
+func (s *Server) finishResumed(m *model.MatchSummary) {
+	if err := s.stats.UpdateMatch(m.MatchID, func(row *model.MatchSummary) { row.TakeLive(*m) }); err != nil {
+		s.log.Error("update the match that came back", "match", m.MatchID, "err", err)
+		return
+	}
+	if err := s.stats.AppendItems(m.Items); err != nil {
+		s.log.Error("save item timings", "err", err)
+	}
+	s.hub.publish("match", m)
+	s.log.Info("match that came back recorded", "match", m.MatchID, "result", m.Result)
 }
 
 func speakable(tip coach.Tip, level string) bool {

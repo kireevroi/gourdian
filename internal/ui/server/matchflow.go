@@ -109,6 +109,11 @@ func (s *Server) afterMatch(m model.MatchSummary, set config.Settings) {
 		default:
 			s.log.Warn("OpenDota didn't parse the replay in time; reviewing with live data", "match", m.MatchID)
 		}
+		// Reviewed as recorded now: a match that went quiet and came back has its real end by then.
+		if row, err := s.stats.Match(m.MatchID); err == nil {
+			row.Items = m.Items
+			m = row
+		}
 		s.reviewMatch(m, s.cfg.Settings(), false, detail)
 	})
 }

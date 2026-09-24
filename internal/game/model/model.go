@@ -50,6 +50,22 @@ type MatchSummary struct {
 
 	// Items bought during a live match, saved to items.csv rather than matches.csv.
 	Items []ItemTiming `json:"-"`
+
+	// Resumed marks a live match that was already recorded when Dota stopped sending updates
+	// and that then came back, so this summary replaces the early one.
+	Resumed bool `json:"-"`
+}
+
+// TakeLive copies what the game itself reported from a later summary of the same match,
+// keeping what OpenDota and the player added since.
+func (m *MatchSummary) TakeLive(live MatchSummary) {
+	m.HeroID, m.Hero, m.Role, m.Team, m.Result, m.EndedAt = live.HeroID, live.Hero, live.Role, live.Team, live.Result, live.EndedAt
+	m.DurationSec, m.Kills, m.Deaths, m.Assists = live.DurationSec, live.Kills, live.Deaths, live.Assists
+	m.LastHits, m.Denies, m.GPM, m.XPM = live.LastHits, live.Denies, live.GPM, live.XPM
+	m.LastHitsAt, m.DeathClocks, m.TipCounts = live.LastHitsAt, live.DeathClocks, live.TipCounts
+	if live.RankTier != 0 {
+		m.RankTier = live.RankTier
+	}
 }
 
 // GameModeTurbo is the mode that pays double, as OpenDota numbers the modes.

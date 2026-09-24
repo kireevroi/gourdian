@@ -12,7 +12,13 @@ import (
 )
 
 func (s *Store) AppendMatch(m model.MatchSummary) error {
-	err := s.tx(func(tx *sql.Tx) error { return appendMatch(tx, m) })
+	// The item timings go in with the match, so a match is never saved without them.
+	err := s.tx(func(tx *sql.Tx) error {
+		if err := appendMatch(tx, m); err != nil {
+			return err
+		}
+		return appendItems(tx, m.Items)
+	})
 	if err == nil {
 		s.history.Add(1)
 	}
