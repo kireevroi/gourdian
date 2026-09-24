@@ -1,6 +1,7 @@
 package server
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -494,6 +495,41 @@ func TestTheAdviceWaitsForAWaveOfPicksToFinish(t *testing.T) {
 }
 
 // setRole is the position hotkey, as the overlay sends it.
+// Counters arrive after the draft update that asks for them, and must still reach the board.
+func TestSavedStratzTokenBringsCountersToTheBoard(t *testing.T) {
+	srv, h, _ := newTestServer(t, func(s *config.Settings) { s.Screen.Draft = true })
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer tok" {
+			t.Errorf("sent %q", r.Header.Get("Authorization"))
+		}
+		io.WriteString(w, `{"data":{"heroStats":{"heroVsHeroMatchup":{"advantage":[{"heroId":35,"vs":[{"heroId2":17,"matchCount":40000,"synergy":-6}]}]}}}}`)
+	}))
+	defer fake.Close()
+	srv.counters.SetURL(fake.URL)
+	for i := range 5 {
+		srv.stats.AppendMatch(model.MatchSummary{
+			MatchID: "storm" + string(rune('a'+i)), Hero: "Storm Spirit", HeroID: 17, Role: dota.Mid,
+			Result: "win", Source: model.SourceLive, EndedAt: time.Now().Add(-time.Duration(i+1) * time.Hour)})
+	}
+
+	req := httptest.NewRequest("PUT", "/api/stratz/key", strings.NewReader(`{"key":"Bearer tok "}`))
+	w := httptest.NewRecorder()
+	srv.handleStratzKey(w, req)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"stratz_key"`) {
+		t.Fatalf("saving the token returned %d: %s", w.Code, w.Body)
+	}
+
+	postState(t, h, heroSelect("m1"))
+	setRole(t, srv, dota.Mid)
+	seeDraft(t, srv, `{"theirs":[35]}`)
+	srv.pickBoard(srv.cfg.Settings())
+	srv.counters.Wait()
+	b := srv.pickBoard(srv.cfg.Settings())
+	if b == nil || len(b.Best) == 0 || !slices.ContainsFunc(b.Best[0].Why, func(s string) bool { return strings.HasPrefix(s, "+6% against") }) {
+		t.Errorf("the counter never reached the board: %+v", b)
+	}
+}
+
 func setRole(t *testing.T, srv *Server, role string) {
 	t.Helper()
 	req := httptest.NewRequest("POST", "/api/role", strings.NewReader(`{"role":"`+role+`"}`))

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gourdian/internal/data/opendota"
+	"gourdian/internal/data/stratz"
 	"gourdian/internal/game/dota"
 	"gourdian/internal/game/model"
 )
@@ -329,14 +330,13 @@ func TestAnEmptyTuningFallsBackToTheDefaults(t *testing.T) {
 	}
 }
 
-// against builds an enemy's record against other heroes, as OpenDota reports it: from the
-// enemy's point of view.
-func against(enemy int, wins map[int]int, games int) map[int]map[int]opendota.Matchup {
-	out := map[int]opendota.Matchup{}
+// against builds an enemy's edges from its win rate against each hero, as STRATZ reports them.
+func against(enemy int, wins map[int]int, games int) map[int]map[int]stratz.Edge {
+	out := map[int]stratz.Edge{}
 	for hero, pct := range wins {
-		out[hero] = opendota.Matchup{HeroID: hero, Games: games, Wins: games * pct / 100}
+		out[hero] = stratz.Edge{Games: games, Pct: float64(pct - 50)}
 	}
-	return map[int]map[int]opendota.Matchup{enemy: out}
+	return map[int]map[int]stratz.Edge{enemy: out}
 }
 
 // A hero the enemy's pick loses to should rise, and one it beats should fall.
@@ -386,7 +386,7 @@ func TestAThinMatchupBarelyCounts(t *testing.T) {
 func TestCounteringIsCapped(t *testing.T) {
 	in := Input{Role: dota.Mid, Tuning: DefaultTuning(), History: games(1, "Good", 20, 10, time.Hour)}
 	in.Enemies = []int{35, 26, 14, 8, 11}
-	in.Matchups = map[int]map[int]opendota.Matchup{}
+	in.Matchups = map[int]map[int]stratz.Edge{}
 	for _, enemy := range in.Enemies {
 		for e, m := range against(enemy, map[int]int{1: 0}, 9000) {
 			in.Matchups[e] = m
@@ -498,5 +498,24 @@ func TestTheirPicksAreNotSuggested(t *testing.T) {
 	}
 	if len(b.Enemies) != 2 {
 		t.Errorf("the other side's picks went missing from the board: %+v", b.Enemies)
+	}
+}
+
+// Axe at 51% is no reason to try him, until the other side takes the Anti-Mage he beats.
+func TestAHardCounterEarnsAStrangerItsPlace(t *testing.T) {
+	in := Input{Role: dota.Offlane, Rank: 54, Tuning: DefaultTuning(),
+		Heroes: []opendota.HeroInfo{{ID: 1, LocalizedName: "Anti-Mage"}, {ID: 2, LocalizedName: "Axe"}},
+		Meta:   map[int]opendota.HeroMeta{1: bracketMeta(5, 1000, 500), 2: bracketMeta(5, 1000, 510)}}
+	if b := Rank(in, now); b != nil && len(b.Fresh) != 0 {
+		t.Fatalf("an average hero was suggested with no draft: %+v", b.Fresh)
+	}
+	in.Enemies = []int{1}
+	in.Matchups = map[int]map[int]stratz.Edge{1: {2: {Games: 41000, Pct: -6.4}}}
+	b := Rank(in, now)
+	if len(b.Fresh) != 1 || b.Fresh[0].Name != "Axe" {
+		t.Fatalf("the counter wasn't offered: %+v", b.Fresh)
+	}
+	if !slices.Contains(b.Fresh[0].Why, "+6% against Anti-Mage") {
+		t.Errorf("the reason doesn't name who he counters: %q", b.Fresh[0].Why)
 	}
 }

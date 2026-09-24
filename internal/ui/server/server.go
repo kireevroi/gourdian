@@ -35,6 +35,7 @@ import (
 	"gourdian/internal/data/mmr"
 	"gourdian/internal/data/opendota"
 	"gourdian/internal/data/stats"
+	"gourdian/internal/data/stratz"
 	"gourdian/internal/game/dota"
 	"gourdian/internal/game/gsi"
 	"gourdian/internal/game/model"
@@ -59,6 +60,7 @@ type Server struct {
 	data     *opendota.Client
 	speaker  *speech.Speaker
 	keys     *secrets.Store
+	counters *stratz.Client
 	rules    *rules.Store
 	log      *slog.Logger
 	workDir  string
@@ -99,6 +101,11 @@ func New(cfg *config.Store, engine *coach.Engine, st *stats.Store, data *opendot
 		rec: &sim.Recorder{Dir: filepath.Join(workDir, "recordings"), Log: log}}
 	s.bg = tasks.New()
 	s.keys = secrets.Open(workDir)
+	s.counters = stratz.New(cacheDir, func() string {
+		key, _ := s.keys.Get(stratzKey)
+		return key
+	}, log)
+	s.counters.Start(s.bg.Context())
 	ai.SetToolsDir(workDir)
 	store, err := rules.Open(workDir, st)
 	if err != nil {
@@ -194,6 +201,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/ai/setup", s.handleAISetupStart)
 	mux.HandleFunc("DELETE /api/ai/setup", s.handleAISetupStop)
 	mux.HandleFunc("PUT /api/ai/providers/{id}/key", s.handleProviderKey)
+	mux.HandleFunc("PUT /api/stratz/key", s.handleStratzKey)
 	mux.HandleFunc("GET /api/ai/providers/{id}/models", s.handleProviderModels)
 	mux.HandleFunc("POST /api/ai/providers/{id}/test", s.handleProviderTest)
 	mux.HandleFunc("POST /api/picks/ask", s.handlePicksAsk)
@@ -483,6 +491,7 @@ type settingsResponse struct {
 	VoiceLangs []string `json:"voice_langs,omitempty"`
 	// NaturalVoice is Piper's state on a Linux desktop.
 	NaturalVoice *naturalVoice `json:"natural_voice,omitempty"`
+	StratzKey    string        `json:"stratz_key,omitempty"`
 }
 
 func (s *Server) settingsResponse() settingsResponse {
@@ -506,6 +515,7 @@ func (s *Server) settingsResponse() settingsResponse {
 		HotkeyProblems: s.overlay.hotkeyProblems(),
 		VoiceLangs:     s.voiceLangs(),
 		NaturalVoice:   s.naturalVoiceStatus(),
+		StratzKey:      s.stratzKeyMasked(),
 	}
 }
 

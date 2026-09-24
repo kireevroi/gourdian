@@ -46,9 +46,8 @@ type Client struct {
 	heroAbilities map[string][]string
 	abilities     map[string]abilityInfo
 
-	timings  lazy[timingsKey, []ItemTiming]
-	meta     lazy[struct{}, map[int]HeroMeta]
-	matchups lazy[int, map[int]Matchup]
+	timings lazy[timingsKey, []ItemTiming]
+	meta    lazy[struct{}, map[int]HeroMeta]
 }
 
 func New(cacheDir string, log *slog.Logger) *Client {

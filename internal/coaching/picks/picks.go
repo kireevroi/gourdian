@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gourdian/internal/data/opendota"
+	"gourdian/internal/data/stratz"
 	"gourdian/internal/game/dota"
 	"gourdian/internal/game/model"
 )
@@ -69,7 +70,7 @@ const (
 	fitBonus = 3
 	rustyCap = 5
 
-	// counterCap is small: OpenDota's pairs are ~100 games across every position.
+	// counterCap keeps a counter to ordering heroes: it is measured across every position.
 	counterCap = 8
 
 	even = 50
@@ -131,7 +132,7 @@ type Input struct {
 	Meta     map[int]opendota.HeroMeta
 	Enemies  []int
 	Allies   []int
-	Matchups map[int]map[int]opendota.Matchup
+	Matchups map[int]map[int]stratz.Edge
 }
 
 type words string
@@ -206,7 +207,7 @@ func Rank(in Input, now time.Time) *Board {
 	slices.SortFunc(b.Avoid, func(a, c Hero) int { return byScore(c, a) })
 	b.Best = b.Best[:min(len(b.Best), t.Show)]
 	b.Avoid = b.Avoid[:min(len(b.Avoid), t.Avoid)]
-	b.Fresh = fresh(in, t, byHero, gone, bracket, w, max(0, t.Show-len(b.Best)))
+	b.Fresh = fresh(in, t, byHero, gone, info, bracket, w, max(0, t.Show-len(b.Best)))
 	for _, id := range in.Enemies {
 		b.Enemies = append(b.Enemies, Hero{ID: id, Name: info[id].LocalizedName, Img: info[id].Img,
 			Roles: in.Meta[id].Roles})
@@ -295,16 +296,19 @@ func counter(in Input, heroID int, info map[int]opendota.HeroInfo, h *Hero, w wo
 		return 0
 	}
 	total, counted := 0.0, 0
-	worst, worstID := 0.0, 0
+	best, bestID, worst, worstID := 0.0, 0, 0.0, 0
 	for _, enemy := range in.Enemies {
 		m, ok := in.Matchups[enemy][heroID]
 		if !ok || m.Games == 0 {
 			continue
 		}
-		// The record is the enemy's against this hero.
-		edge := float64(even-m.WinPct()) * float64(m.Games) / float64(m.Games+MatchupMinGames)
+		// The edge is the enemy's over this hero.
+		edge := -m.Pct * float64(m.Games) / float64(m.Games+MatchupMinGames)
 		total += edge
 		counted++
+		if edge > best {
+			best, bestID = edge, enemy
+		}
 		if edge < worst {
 			worst, worstID = edge, enemy
 		}
@@ -313,15 +317,17 @@ func counter(in Input, heroID int, info map[int]opendota.HeroInfo, h *Hero, w wo
 		return 0
 	}
 	term := clamp(int(math.Round(total)), counterCap)
+	name := func(id int) string {
+		if n := info[id].LocalizedName; n != "" {
+			return n
+		}
+		return w.s("their picks", "их пики")
+	}
 	switch {
 	case term > 0:
-		h.Why = append(h.Why, w.f("+%d%% against their picks", "+%d%% против их пиков", term))
-	case term < 0 && worstID != 0:
-		name := info[worstID].LocalizedName
-		if name == "" {
-			name = w.f("their picks", "их пики")
-		}
-		h.Why = append(h.Why, w.f("%d%% against %s", "%d%% против %s", term, name))
+		h.Why = append(h.Why, w.f("+%d%% against %s", "+%d%% против %s", term, name(bestID)))
+	case term < 0:
+		h.Why = append(h.Why, w.f("%d%% against %s", "%d%% против %s", term, name(worstID)))
 	}
 	return term
 }
@@ -393,25 +399,26 @@ func fit(roles []string, role string) int {
 	return 0
 }
 
-func fresh(in Input, t Tuning, played map[int]*record, gone map[int]bool, bracket int, w words, room int) []Hero {
+func fresh(in Input, t Tuning, played map[int]*record, gone map[int]bool, info map[int]opendota.HeroInfo, bracket int, w words, room int) []Hero {
 	if len(in.Meta) == 0 || t.Fresh == 0 || room == 0 {
 		return nil
 	}
 	var out []Hero
-	for _, info := range in.Heroes {
-		if r := played[info.ID]; gone[info.ID] || r != nil && r.games >= t.MinGames {
+	for _, hero := range in.Heroes {
+		if r := played[hero.ID]; gone[hero.ID] || r != nil && r.games >= t.MinGames {
 			continue
 		}
-		m, ok := in.Meta[info.ID]
+		m, ok := in.Meta[hero.ID]
 		if !ok {
 			continue
 		}
-		pct, games := m.WinPct(bracket)
-		if games == 0 || pct < freshPct {
+		h := Hero{ID: hero.ID, Name: hero.LocalizedName, Img: hero.Img}
+		edge := counter(in, hero.ID, info, &h, w)
+		// A hard counter earns a stranger its place as much as the meta does.
+		if pct, games := m.WinPct(bracket); games == 0 || pct+edge < freshPct {
 			continue
 		}
-		h := Hero{ID: info.ID, Name: info.LocalizedName, Img: info.Img}
-		h.Score = even + metaTerm(m, bracket, &h, w) + fit(m.Roles, in.Role) + counter(in, info.ID, nil, &h, w)
+		h.Score = even + metaTerm(m, bracket, &h, w) + fit(m.Roles, in.Role) + edge
 		out = append(out, h)
 	}
 	slices.SortFunc(out, byScore)
