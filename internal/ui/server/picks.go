@@ -13,6 +13,7 @@ import (
 	"gourdian/internal/coaching/picks"
 	"gourdian/internal/data/opendota"
 	"gourdian/internal/data/stats"
+	"gourdian/internal/data/stratz"
 	"gourdian/internal/game/dota"
 	"gourdian/internal/game/gsi"
 	"gourdian/internal/i18n"
@@ -63,21 +64,23 @@ func (c *pickCache) forget() {
 func (s *Server) pickBoard(set config.Settings) *picks.Board {
 	rank := s.rankTier()
 	allies, enemies := s.sides(s.engine.Snapshot(set).MatchID)
-	// Rank and meta arrive after the first draft update; leave them out and an empty board
-	// sticks all day.
+	// Rank, meta and matchups arrive after the draft update that asks for them; leave them out
+	// and the board made without them sticks.
 	meta := s.data.Meta()
-	key := fmt.Sprintf("%s/%d/%d/%d/%+v/%v/%s", set.Role, s.stats.HistoryVersion(), rank, len(meta),
+	against := s.matchups(enemies, rank)
+	key := fmt.Sprintf("%s/%d/%d/%d/%d/%+v/%v/%s", set.Role, s.stats.HistoryVersion(), rank, len(meta), len(against),
 		set.Picks, append(allies, enemies...), time.Now().Format(time.DateOnly))
 	c := &s.picks
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.key != key {
-		c.key, c.board = key, s.readPickBoard(set, rank, meta, allies, enemies)
+		c.key, c.board = key, s.readPickBoard(set, rank, meta, allies, enemies, against)
 	}
 	return c.board
 }
 
-func (s *Server) readPickBoard(set config.Settings, rank int, meta map[int]opendota.HeroMeta, allies, enemies []int) *picks.Board {
+func (s *Server) readPickBoard(set config.Settings, rank int, meta map[int]opendota.HeroMeta, allies, enemies []int,
+	against map[int]map[int]stratz.Edge) *picks.Board {
 	history, err := s.stats.MatchesWhere(stats.MatchFilter{Role: set.Role, Since: time.Now().Add(-set.Picks.Window()), Real: true})
 	if err != nil {
 		s.log.Warn("no match history for pick help", "err", err)
@@ -92,17 +95,17 @@ func (s *Server) readPickBoard(set config.Settings, rank int, meta map[int]opend
 		Meta:     meta,
 		Enemies:  enemies,
 		Allies:   allies,
-		Matchups: s.matchups(enemies),
+		Matchups: against,
 	}, time.Now())
 }
 
-func (s *Server) matchups(enemies []int) map[int]map[int]opendota.Matchup {
+func (s *Server) matchups(enemies []int, rank int) map[int]map[int]stratz.Edge {
 	if len(enemies) == 0 {
 		return nil
 	}
-	out := make(map[int]map[int]opendota.Matchup, len(enemies))
+	out := make(map[int]map[int]stratz.Edge, len(enemies))
 	for _, id := range enemies {
-		if against := s.data.Matchups(id); len(against) > 0 {
+		if against := s.counters.Against(id, rank); len(against) > 0 {
 			out[id] = against
 		}
 	}

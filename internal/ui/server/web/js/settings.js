@@ -50,6 +50,8 @@ onSettings((c) => {
   $('voice-missing').hidden = !(!c.natural_voice && s.language !== 'en' && s.voice === 'system' && c.voice_langs && !c.voice_langs.includes(s.language));
 
   $('screen-draft').checked = !!(s.screen && s.screen.draft);
+  $('stratz-key').placeholder = c.stratz_key ? tp('Token {key} saved · paste a new one', { key: c.stratz_key }) : t('Paste your STRATZ token');
+  $('stratz-remove').hidden = !c.stratz_key;
   for (const [id, key] of PICK_FIELDS) {
     if (document.activeElement !== $(id)) $(id).value = s.picks[key];
   }
@@ -163,6 +165,15 @@ for (const [id, key] of PICK_FIELDS) {
 }
 $('picks-reset').addEventListener('click', () => saveSettings({ picks: null }));
 $('screen-draft').addEventListener('change', (e) => saveSettings({ screen: { draft: e.target.checked } }));
+async function saveStratz(key) {
+  try { setSettings(await api('/api/stratz/key', { method: 'PUT', body: { key } })); } catch (e) { toast(e.message, true); }
+}
+$('stratz-key').addEventListener('change', (e) => {
+  const key = e.target.value.trim();
+  e.target.value = '';
+  if (key) saveStratz(key);
+});
+$('stratz-remove').addEventListener('click', () => saveStratz(''));
 
 $('rec-auto').addEventListener('change', (e) => saveSettings({ recording: { auto: e.target.checked } }));
 $('rec-keep').addEventListener('change', (e) => saveSettings({ recording: { keep: Number(e.target.value) } }));
