@@ -98,6 +98,19 @@ Filename: "{app}\{#AppExe}"; Parameters: "quit"; RunOnceId: "QuitApp"; Flags: ru
 Filename: "{app}\{#AppExe}"; Parameters: "uninstall -quiet"; RunOnceId: "RemoveGameConfig"; Flags: runhidden waituntilterminated
 
 [Code]
+{ What the app keeps in its folder. Upgrades into another folder move these, and uninstalling
+  deletes only these when asked: the folder may have been one the player already used. }
+function DataFiles(): TArrayOfString;
+begin
+  Result := ['trainer.data', 'trainer.data-wal', 'trainer.data-shm', 'config.json', 'config.json.bad',
+    'config.json.tmp', 'secrets.json', 'secrets.json.tmp', 'rules.json', 'draft-seen'];
+end;
+
+function DataDirs(): TArrayOfString;
+begin
+  Result := ['stats', 'recordings', 'logs', 'cache', 'tools', 'piper'];
+end;
+
 procedure QuitRunning(Exe: String);
 var
   ResultCode: Integer;
@@ -173,11 +186,12 @@ begin
 end;
 
 { Moves the data from the previous install's folder into the new one: the data file, settings,
-  API keys and the stats, recordings, logs and cache folders. }
+  API keys, rules, and the stats, recordings, logs, cache, AI tools and voice folders. }
 function MoveData(FromDir, ToDir: String): String;
 var
   I: Integer;
-  Dirs: TArrayOfString;
+  Files: String;
+  Names, Dirs: TArrayOfString;
 begin
   Result := '';
   if (FileExists(AddBackslash(FromDir) + 'trainer.data') and FileExists(AddBackslash(ToDir) + 'trainer.data')) or
@@ -187,13 +201,16 @@ begin
       'The ones in ' + FromDir + ' stay there.', mbInformation, MB_OK, IDOK);
     Exit;
   end;
-  if not Robocopy(RoboPath(FromDir) + ' ' + RoboPath(ToDir) +
-      ' trainer.data trainer.data-wal trainer.data-shm config.json secrets.json /MOV') then
+  Files := '';
+  Names := DataFiles();
+  for I := 0 to GetArrayLength(Names) - 1 do
+    Files := Files + ' ' + Names[I];
+  if not Robocopy(RoboPath(FromDir) + ' ' + RoboPath(ToDir) + Files + ' /MOV') then
   begin
     Result := 'Couldn''t move your settings and statistics from ' + FromDir + ' to ' + ToDir + '.';
     Exit;
   end;
-  Dirs := ['stats', 'recordings', 'logs', 'cache'];
+  Dirs := DataDirs();
   for I := 0 to GetArrayLength(Dirs) - 1 do
     if DirExists(AddBackslash(FromDir) + Dirs[I]) and
        not Robocopy(RoboPath(AddBackslash(FromDir) + Dirs[I]) + ' ' + RoboPath(AddBackslash(ToDir) + Dirs[I]) + ' /E /MOVE') then
@@ -223,6 +240,8 @@ end;
 procedure RemoveOldApp(Dir: String);
 var
   Found: TFindRec;
+  I: Integer;
+  Dirs: TArrayOfString;
 begin
   Dir := AddBackslash(Dir);
   DeleteFile(Dir + '{#AppExe}');
@@ -238,10 +257,9 @@ begin
   finally
     FindClose(Found);
   end;
-  RemoveDir(Dir + 'stats');
-  RemoveDir(Dir + 'recordings');
-  RemoveDir(Dir + 'logs');
-  RemoveDir(Dir + 'cache');
+  Dirs := DataDirs();
+  for I := 0 to GetArrayLength(Dirs) - 1 do
+    RemoveDir(Dir + Dirs[I]);
   RemoveDir(RemoveBackslash(Dir));
 end;
 
@@ -251,10 +269,27 @@ begin
     RemoveOldApp(WizardForm.PrevAppDir);
 end;
 
+{ Deletes what the app keeps in its folder, and the folder once nothing else is in it. Never the
+  whole folder: it may be one the player chose that holds other things too. }
+procedure DeleteData(Dir: String);
+var
+  I: Integer;
+  Names: TArrayOfString;
+begin
+  Dir := AddBackslash(Dir);
+  Names := DataFiles();
+  for I := 0 to GetArrayLength(Names) - 1 do
+    DeleteFile(Dir + Names[I]);
+  Names := DataDirs();
+  for I := 0 to GetArrayLength(Names) - 1 do
+    DelTree(Dir + Names[I], True, True, True);
+  RemoveDir(RemoveBackslash(Dir));
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if (CurUninstallStep = usPostUninstall) and not UninstallSilent then
     if MsgBox('Also delete your statistics, recordings and settings?' + #13#10 + #13#10 +
               'Choose No to keep them for a future install.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
-      DelTree(ExpandConstant('{app}'), True, True, True);
+      DeleteData(ExpandConstant('{app}'));
 end;

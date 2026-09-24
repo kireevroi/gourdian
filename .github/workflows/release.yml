@@ -21,10 +21,10 @@ jobs:
           go-version-file: go.mod
       - name: The tag is the version
         run: |
-          case "$GITHUB_REF_NAME" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "a release tag looks like v1.2.3 or v1.2.3-beta.1, not $GITHUB_REF_NAME" >&2; exit 1 ;;
-          esac
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
+            echo "a release tag looks like v1.2.3 or v1.2.3-beta.1, not $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
           echo "${GITHUB_REF_NAME#v}" > VERSION
       - run: make test
       # winres stamps the exe's version info from VERSION
@@ -88,6 +88,8 @@ jobs:
         shell: powershell
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
+          # Windows version resources are four numbers, so a prerelease suffix is left off that one.
+          $numversion = $version.Split('-')[0]
           $stage = Join-Path $env:RUNNER_TEMP 'stage'
           New-Item -ItemType Directory -Force $stage | Out-Null
           $exe = Join-Path $stage 'Gourdian.exe'
@@ -99,9 +101,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             # Inno Setup signs the installer and uninstaller with the same script ($q is a quote, $f the file).
             $tool = '/Sgourdian=powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $q' + $sign + '$q $f'
-            & $env:ISCC /Q "/DAppVersion=$version" $tool (Join-Path $stage 'Gourdian.iss')
+            & $env:ISCC /Q "/DAppVersion=$version" "/DNumVersion=$numversion" $tool (Join-Path $stage 'Gourdian.iss')
           } else {
-            & $env:ISCC /Q "/DAppVersion=$version" /DUnsigned (Join-Path $stage 'Gourdian.iss')
+            & $env:ISCC /Q "/DAppVersion=$version" "/DNumVersion=$numversion" /DUnsigned (Join-Path $stage 'Gourdian.iss')
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $setup = Join-Path $stage "Gourdian-Setup-$version.exe"
