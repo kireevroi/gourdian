@@ -244,6 +244,17 @@ func (e *Engine) Update(s *gsi.State, set config.Settings) Result {
 	if !s.InMatch() {
 		return res
 	}
+	if m := e.match; m != nil && m.finished {
+		if m.expired && m.gsiID != "0" {
+			// The match went quiet long enough to be recorded, and now it's back (a crash or a
+			// long disconnect): carry on with it, and replace the early record when it ends.
+			m.finished, m.expired, m.resumed = false, false, true
+		} else {
+			// The last match is over and this is another with the same id, as every lobby and
+			// bot game is "0" to Dota.
+			e.match = nil
+		}
+	}
 	if e.match == nil {
 		e.match = newMatch(s.Map.MatchID, now)
 		e.tips = nil
@@ -351,6 +362,7 @@ func (e *Engine) Expire(idle time.Duration) *model.MatchSummary {
 	if e.match == nil || e.match.finished || e.now().Sub(e.lastInMatch) < idle {
 		return nil
 	}
+	e.match.expired = true
 	return e.finish("unknown")
 }
 
@@ -428,6 +440,7 @@ func (e *Engine) finish(result string) *model.MatchSummary {
 		TipCounts:   m.counts,
 		Simulated:   simulated,
 		Items:       e.matchItems(m, s.Hero),
+		Resumed:     m.resumed,
 	}
 }
 
@@ -476,6 +489,9 @@ type match struct {
 	team     string
 	last     *gsi.State
 	finished bool
+	// expired is set when Expire finished the match; resumed once it came back after that.
+	expired bool
+	resumed bool
 
 	fired  map[string]int
 	counts map[string]int

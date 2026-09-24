@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -336,7 +337,8 @@ func TestMatchKeepsEveryField(t *testing.T) {
 		EnemyHeroes: []string{"Axe", "Lina"}}
 	v := reflect.ValueOf(m)
 	for i := range v.NumField() {
-		if name := v.Type().Field(i).Name; name != "Items" && v.Field(i).IsZero() {
+		// Items live in their own table, and Resumed only travels from the engine to the server.
+		if name := v.Type().Field(i).Name; name != "Items" && name != "Resumed" && v.Field(i).IsZero() {
 			t.Fatalf("the sample leaves %s empty; set it so its column is checked", name)
 		}
 	}
@@ -582,5 +584,42 @@ func TestAnOlderDataFileStillOpens(t *testing.T) {
 	}
 	if _, err := st.MatchesWhere(MatchFilter{Real: true}); err != nil {
 		t.Errorf("filtering an upgraded data file: %v", err)
+	}
+}
+
+// A data folder whose name has characters that mean something in a URI still holds the file.
+func TestDataFileInAnOddlyNamedFolder(t *testing.T) {
+	names := []string{"Dota #2", "100%", "a%20b"}
+	if runtime.GOOS != "windows" {
+		names = append(names, "what?") // Windows allows no ? in a name
+	}
+	for _, name := range names {
+		dir := filepath.Join(t.TempDir(), name)
+		st, err := Open(dir)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		st.Close()
+		if _, err := os.Stat(filepath.Join(dir, DataFile)); err != nil {
+			t.Errorf("%s: the data file isn't in the folder: %v", name, err)
+		}
+	}
+}
+
+func TestCSVCellsNeverRunAsFormulas(t *testing.T) {
+	for in, want := range map[string]string{
+		"=HYPERLINK(\"http://x\")": "'=HYPERLINK(\"http://x\")",
+		"+1+2":                     "'+1+2",
+		"-sum(A1)":                 "'-sum(A1)",
+		"@cmd":                     "'@cmd",
+		"\tx":                      "'\tx",
+		"-12":                      "-12",
+		"-0.5":                     "-0.5",
+		"Buy a TP scroll":          "Buy a TP scroll",
+		"":                         "",
+	} {
+		if got := cell(in); got != want {
+			t.Errorf("cell(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

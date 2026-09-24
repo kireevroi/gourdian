@@ -174,9 +174,22 @@ func readRows(path string) ([]map[string]string, error) {
 func project(header []string, row map[string]string) []string {
 	out := make([]string, len(header))
 	for i, col := range header {
-		out[i] = row[col]
+		out[i] = cell(row[col])
 	}
 	return out
+}
+
+// cell keeps a spreadsheet from running text as a formula: a tip, review or rule name that
+// starts with =, +, -, @ or a control character gets a leading apostrophe, which Excel and
+// LibreOffice read as "this is text". Numbers, negative ones included, are left alone.
+func cell(v string) string {
+	if v == "" || !strings.ContainsRune("=+-@\t\r", rune(v[0])) {
+		return v
+	}
+	if _, err := strconv.ParseFloat(v, 64); err == nil {
+		return v
+	}
+	return "'" + v
 }
 
 func sortedKeys(m map[string]int) []string {

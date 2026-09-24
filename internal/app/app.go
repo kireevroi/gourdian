@@ -64,14 +64,32 @@ func Run(o Options) error {
 		log.Warn("config.json had settings the trainer can't use; they're back to their defaults, and the file as it was is config.json.bad", "settings", reset)
 	}
 	cfg := store.Get()
-	addr := cmp.Or(o.Listen, cfg.Listen)
+	// -listen moves the trainer, and Dota's game-state config has to follow it.
+	cfg.Listen = cmp.Or(o.Listen, cfg.Listen)
+
+	// The port is claimed before anything else starts, so launching a second copy only opens
+	// the dashboard: it never works on the data file next to the running one.
+	ln, err := net.Listen("tcp", cfg.Listen)
+	if err != nil {
+		// Launching again from the menu while it runs should just show the dashboard.
+		url := "http://" + config.DashboardHost(cfg.Listen)
+		if o.Open && trainerAnswers(url) {
+			openBrowser(url)
+			return nil
+		}
+		return fmt.Errorf("listen on %s (is the trainer already running?): %w", cfg.Listen, err)
+	}
+	defer ln.Close()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	cacheDir := filepath.Join(dir, "cache")
 	data := opendota.New(cacheDir, log)
-	if !o.Background {
+	if o.Background {
+		// Started at sign-in: nothing goes to OpenDota until Dota or the dashboard needs it.
+		data.Prepare(ctx)
+	} else {
 		data.Start(ctx)
 	}
 
@@ -102,9 +120,7 @@ func Run(o Options) error {
 	srv := server.New(store, engine, st, data, speaker, dir, cacheDir, log)
 	defer srv.Close()
 	srv.OnQuit(stop)
-	if o.Background {
-		srv.OnFirstGSI(func() { data.Start(ctx) })
-	}
+	srv.SetListen(cfg.Listen)
 	if o.Record {
 		if _, err := srv.StartRecording(); err != nil {
 			return err
@@ -112,18 +128,8 @@ func Run(o Options) error {
 	}
 	go srv.Run(ctx)
 
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		// Launching again from the menu while it runs should just show the dashboard.
-		url := "http://" + config.DashboardHost(addr)
-		if o.Open && trainerAnswers(url) {
-			openBrowser(url)
-			return nil
-		}
-		return fmt.Errorf("listen on %s (is the trainer already running?): %w", addr, err)
-	}
 	httpSrv := &http.Server{
-		Handler:           srv.Handler(),
+		Handler:           server.Guard(srv.Handler()),
 		ReadHeaderTimeout: 10 * time.Second,
 		// Dashboard event streams never finish on their own; ending them on Ctrl+C lets Shutdown return.
 		BaseContext: func(net.Listener) context.Context { return ctx },

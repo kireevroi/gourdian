@@ -20,7 +20,8 @@ options=('!debug')
 build() {
 	cd "$startdir/../.."
 	export CGO_ENABLED=0 GOFLAGS='-buildvcs=false -trimpath'
-	go build -ldflags "-s -w -X gourdian/internal/sys/buildinfo.Version=$pkgver" -o "$srcdir/gourdian" ./cmd/gourdian
+	# The version as VERSION spells it: pkgver can't hold a prerelease's hyphen.
+	go build -ldflags "-s -w -X gourdian/internal/sys/buildinfo.Version=$(tr -d '[:space:]' < VERSION)" -o "$srcdir/gourdian" ./cmd/gourdian
 }
 
 package() {

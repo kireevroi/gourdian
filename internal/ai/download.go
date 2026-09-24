@@ -50,6 +50,8 @@ func get(ctx context.Context, url string) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
+var errChecksum = errors.New("the download didn't match the checksum its publisher gave, so it wasn't used")
+
 // download saves a file, checking it against the expected SHA-256 as it arrives when the
 // publisher gives one.
 func download(ctx context.Context, url string, to io.Writer, wantSHA string, progress func(string)) (int64, error) {
@@ -64,7 +66,7 @@ func download(ctx context.Context, url string, to io.Writer, wantSHA string, pro
 		return 0, err
 	}
 	if wantSHA != "" && !strings.EqualFold(hex.EncodeToString(sum.Sum(nil)), wantSHA) {
-		return 0, errors.New("the download didn't match the checksum its publisher gave, so it wasn't used")
+		return 0, errChecksum
 	}
 	return n, nil
 }

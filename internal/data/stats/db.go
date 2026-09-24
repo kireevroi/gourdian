@@ -57,7 +57,7 @@ func Open(configDir string) (*Store, error) {
 	}
 	path := filepath.Join(configDir, DataFile)
 	// _txlock=immediate keeps two writers from deadlocking mid-transaction.
-	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_txlock=immediate")
+	db, err := sql.Open("sqlite", "file:"+uriPath.Replace(path)+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_txlock=immediate")
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +76,10 @@ func Open(configDir string) (*Store, error) {
 	}
 	return s, nil
 }
+
+// uriPath escapes what a file: URI would read as something other than the path, so a data
+// folder named like "Dota #2" or "100%" still opens the file inside it.
+var uriPath = strings.NewReplacer("%", "%25", "?", "%3f", "#", "%23")
 
 // migrations bring an older data file up to date, in order and each once, counted by PRAGMA
 // user_version. Add new ones at the end and never change one that has shipped.

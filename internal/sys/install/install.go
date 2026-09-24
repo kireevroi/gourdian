@@ -39,8 +39,12 @@ func WSLPath(p string) string {
 }
 
 func steamRoots() []string {
+	var registered []string
+	if root := registeredSteamRoot(); root != "" {
+		registered = []string{root}
+	}
 	if runtime.GOOS == "windows" {
-		return []string{`C:\Program Files (x86)\Steam`, `C:\Program Files\Steam`}
+		return append(registered, `C:\Program Files (x86)\Steam`, `C:\Program Files\Steam`)
 	}
 	home, _ := os.UserHomeDir()
 	data := os.Getenv("XDG_DATA_HOME")
@@ -57,15 +61,19 @@ func steamRoots() []string {
 		filepath.Join(home, "snap", "steam", "common", ".local", "share", "Steam"),
 	}
 	if platform.WSL() {
-		roots = append([]string{"/mnt/c/Program Files (x86)/Steam", "/mnt/c/Program Files/Steam"}, roots...)
+		roots = append(append(registered, "/mnt/c/Program Files (x86)/Steam", "/mnt/c/Program Files/Steam"), roots...)
 	}
 	return roots
 }
 
-// sameDir resolves symlinks, since ~/.steam/steam usually points at ~/.local/share/Steam.
+// sameDir resolves symlinks, since ~/.steam/steam usually points at ~/.local/share/Steam. On
+// Windows it also ignores case: the registry spells Steam's folder in lower case.
 func sameDir(p string) string {
 	if real, err := filepath.EvalSymlinks(p); err == nil {
-		return real
+		p = real
+	}
+	if runtime.GOOS == "windows" {
+		p = strings.ToLower(p)
 	}
 	return p
 }
