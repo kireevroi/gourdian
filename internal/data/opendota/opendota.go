@@ -32,6 +32,7 @@ type Client struct {
 
 	ready   chan struct{}
 	fetches sync.WaitGroup
+	started bool // hero and item data has been asked for; under mu
 
 	mu        sync.RWMutex
 	items     map[string]ItemInfo
@@ -61,9 +62,30 @@ func New(cacheDir string, log *slog.Logger) *Client {
 	}
 }
 
+// Start loads hero and item data now; background fetches end with ctx.
 func (c *Client) Start(ctx context.Context) {
+	c.Prepare(ctx)
+	c.begin()
+}
+
+// Prepare is Start that waits for something to ask for data before loading it, so an app
+// started at sign-in stays off the network until Dota sends data or the dashboard wants some.
+func (c *Client) Prepare(ctx context.Context) {
 	c.mu.Lock()
 	c.ctx = ctx
+	c.mu.Unlock()
+}
+
+// begin loads hero and item data the first time it is called after Prepare or Start. Before
+// either, it does nothing: a client nobody started stays off the network.
+func (c *Client) begin() {
+	c.mu.Lock()
+	ctx := c.ctx
+	if ctx == nil || c.started {
+		c.mu.Unlock()
+		return
+	}
+	c.started = true
 	c.mu.Unlock()
 	c.goFetch(func() {
 		defer close(c.ready)
@@ -99,6 +121,7 @@ func (c *Client) life() context.Context {
 
 // Items returns the shared item table (nil until loaded); callers must not modify it.
 func (c *Client) Items() map[string]ItemInfo {
+	c.begin()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.items
@@ -106,6 +129,7 @@ func (c *Client) Items() map[string]ItemInfo {
 
 // Heroes lists every hero that has loaded.
 func (c *Client) Heroes() []HeroInfo {
+	c.begin()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	out := make([]HeroInfo, 0, len(c.heroes))
@@ -116,6 +140,7 @@ func (c *Client) Heroes() []HeroInfo {
 }
 
 func (c *Client) Hero(id int) (HeroInfo, bool) {
+	c.begin()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	h, ok := c.heroes[id]
@@ -146,7 +171,7 @@ func (c *Client) heroBuild(heroID int) *Build {
 }
 
 func (c *Client) fetchBuild(heroID int) {
-	<-c.ready
+	c.awaitReady()
 	ctx, cancel := context.WithTimeout(c.life(), time.Minute)
 	defer cancel()
 	var pop Popularity
@@ -188,11 +213,14 @@ func (c *Client) RankTier(accountID string) int {
 		}
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		// A failed lookup is kept too, as 0, and never asked for again.
-		c.rankTiers.done(accountID, player.RankTier)
+		// A failed lookup is asked again after a while, so one network hiccup at start doesn't
+		// leave the whole session without a rank.
 		if err != nil {
-			c.log.Warn("rank lookup failed", "err", err)
+			c.rankTiers.fail(accountID)
+			c.log.Warn("rank lookup failed; will retry", "err", err)
+			return
 		}
+		c.rankTiers.done(accountID, player.RankTier)
 	})
 	return 0
 }
@@ -253,10 +281,17 @@ func (c *Client) SetBaseURL(u string) {
 
 // WaitReady blocks until hero and item data has loaded (or failed to).
 func (c *Client) WaitReady(ctx context.Context) {
+	c.begin()
 	select {
 	case <-c.ready:
 	case <-ctx.Done():
 	}
+}
+
+// awaitReady starts loading hero and item data if nothing has yet, and waits for it.
+func (c *Client) awaitReady() {
+	c.begin()
+	<-c.ready
 }
 
 // HeroName returns the hero's display name, or "hero <id>" if unknown.

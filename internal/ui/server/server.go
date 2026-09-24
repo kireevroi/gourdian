@@ -84,6 +84,9 @@ type Server struct {
 	overlay overlayReport
 	alerts  alertQueue
 
+	// listen is the address the trainer serves on, which -listen can move from config.json's.
+	listen atomic.Value
+
 	dirty     atomic.Bool
 	importing atomic.Bool
 	accountID atomic.Value
@@ -283,13 +286,6 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 			s.log.Warn("unexpected GSI field type; continuing without it", "field", typeErr.Field, "value", typeErr.Value)
 		}
 	}
-	if extras := st.Extras(); len(extras) > 0 {
-		if seen, _ := s.feed.extras.Load().(string); seen != strings.Join(extras, ",") {
-			s.feed.extras.Store(strings.Join(extras, ","))
-			s.log.Info("Dota also sends these game-state blocks", "blocks", extras)
-		}
-		s.noteDraft(&st)
-	}
 	cfg := s.cfg.Get()
 	if st.Auth == nil || subtle.ConstantTimeCompare([]byte(st.Auth.Token), []byte(cfg.Token)) != 1 {
 		if firstFew(&s.feed.authWarns) {
@@ -297,6 +293,13 @@ func (s *Server) handleGSI(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
+	}
+	if extras := st.Extras(); len(extras) > 0 {
+		if seen, _ := s.feed.extras.Load().(string); seen != strings.Join(extras, ",") {
+			s.feed.extras.Store(strings.Join(extras, ","))
+			s.log.Info("Dota also sends these game-state blocks", "blocks", extras)
+		}
+		s.noteDraft(&st)
 	}
 	s.feed.first.Do(func() {
 		if s.feed.onFirst != nil {
@@ -521,7 +524,11 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if raw, ok := keys["picks"]; ok && string(raw) == "null" {
 			set.Picks = picks.DefaultTuning()
 		}
-		return json.Unmarshal(body, set)
+		// A CLI path is run as a program, so it's only ever set by hand in config.json.
+		paths := maps.Clone(set.AI.CLIPaths)
+		err := json.Unmarshal(body, set)
+		set.AI.CLIPaths = paths
+		return err
 	}
 	check := func(set config.Settings) error {
 		if set.Voice == config.VoiceSystem && s.speaker == nil {
@@ -606,6 +613,17 @@ func (s *Server) speechName() string {
 
 // OnQuit sets what Quit in the tray menu does.
 func (s *Server) OnQuit(quit func()) { s.quit = quit }
+
+// SetListen says where the trainer actually listens, when -listen overrides config.json.
+func (s *Server) SetListen(addr string) { s.listen.Store(addr) }
+
+// listenAddr is where Dota must send game state: SetListen's address, or config.json's.
+func (s *Server) listenAddr() string {
+	if addr, _ := s.listen.Load().(string); addr != "" {
+		return addr
+	}
+	return s.cfg.Get().Listen
+}
 
 // OnFirstGSI runs f once, when Dota sends its first update; set it before serving.
 func (s *Server) OnFirstGSI(f func()) { s.feed.onFirst = f }

@@ -56,7 +56,7 @@ func (c *Client) AbilityName(name string) string {
 }
 
 func (c *Client) fetchSkillBuild(key positionKey) {
-	<-c.ready
+	c.awaitReady()
 	ctx, cancel := context.WithTimeout(c.life(), time.Minute)
 	defer cancel()
 	// Won games in the position, then all games there, then the same in every position.

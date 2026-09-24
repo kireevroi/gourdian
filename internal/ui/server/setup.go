@@ -27,7 +27,7 @@ func (s *Server) setupChecks() []setupCheck {
 		return []setupCheck{{Label: "Dota 2 not found", Detail: "Dota 2 wasn't found in your Steam libraries. Install it through Steam, then restart Gourdian."}}
 	}
 	var checks []setupCheck
-	want := install.Render(config.GSIURI(cfg.Listen), cfg.Token)
+	want := install.Render(config.GSIURI(s.listenAddr()), cfg.Token)
 	for _, d := range dirs {
 		if got, err := os.ReadFile(install.CfgPath(d)); err == nil && string(got) == want {
 			checks = append(checks, setupCheck{Label: "Dota is set up to send game data", OK: true})
@@ -51,7 +51,7 @@ func (s *Server) setupChecks() []setupCheck {
 		}
 	}
 	if platform.LinuxDesktop() {
-		steam := "Or show the HUD in the Steam overlay: press Shift+Tab, open the web browser, go to " + config.DashboardHost(cfg.Listen) + "/overlay.html and pin it."
+		steam := "Or show the HUD in the Steam overlay: press Shift+Tab, open the web browser, go to " + config.DashboardHost(s.listenAddr()) + "/overlay.html and pin it."
 		switch reported, hudErr := s.overlay.hudState(); {
 		case hudErr != "":
 			checks = append(checks, setupCheck{Label: "The HUD can't show over Dota", Detail: hudErr + ". " + steam})
@@ -92,7 +92,7 @@ func (s *Server) handleSetupInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, d := range dirs {
-		if _, err := install.Write(d, config.GSIURI(cfg.Listen), cfg.Token); err != nil {
+		if _, err := install.Write(d, config.GSIURI(s.listenAddr()), cfg.Token); err != nil {
 			http.Error(w, "couldn't write the Dota config: "+err.Error(), http.StatusInternalServerError)
 			return
 		}

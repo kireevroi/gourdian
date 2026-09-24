@@ -443,6 +443,9 @@ func TestSettingsThatCantBeSavedSayThat(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("a read-only folder doesn't stop a write on Windows")
 	}
+	if os.Geteuid() == 0 {
+		t.Skip("a read-only folder doesn't stop root")
+	}
 	srv, h, dir := newTestServer(t, nil)
 	if err := os.Chmod(dir, 0o500); err != nil {
 		t.Fatal(err)
