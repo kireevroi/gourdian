@@ -19,33 +19,24 @@ import (
 	"gourdian/internal/sys/config"
 )
 
-// pickCache keeps the board, which the draft asks for on every tick, until something it is
-// made of changes: the match history, the player's rank, the hero meta, or the day, since old
-// games drop out of the window.
+// pickCache keeps the board until something it is made of changes.
 type pickCache struct {
 	mu    sync.Mutex
 	key   string
 	board *picks.Board
 
-	// drafting is whether the last update came from a draft, so the picks are read out once
-	// when one opens. Dota doesn't always set the match id during hero selection, so the
-	// draft is spotted by the change of state rather than by the match it belongs to.
-	drafting bool
-	// spokenFor is the position the picks were last read out for. Changing position changes
-	// the advice entirely, so it is worth hearing again.
-	spokenFor string
-	// spokenAgainst is the other side as it stood when the advice was last read out, and seen
-	// is the board now, timed so a run of picks is heard about once rather than hero by hero.
+	// Dota doesn't always set the match id during hero selection, so the draft is spotted by
+	// the change of state.
+	drafting      bool
+	spokenFor     string
 	spokenAgainst []int
 	seen          []int
 	seenAt        time.Time
 }
 
-// waveQuiet is how long the other side has to stop picking before the advice is read out
-// again: without a pause to gather them, a wave of three heroes is three interruptions.
+// waveQuiet gathers a wave of enemy picks into one reading.
 const waveQuiet = 6 * time.Second
 
-// sayNow reports whether the advice is worth reading out, and records that it was.
 func (c *pickCache) sayNow(role string, enemies []int, now time.Time) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -54,8 +45,7 @@ func (c *pickCache) sayNow(role string, enemies []int, now time.Time) bool {
 	}
 	switch {
 	case c.spokenFor != role:
-	// Only a side that has grown is news. A reading the overlay stops renewing shrinks the
-	// board, and saying the same heroes again as it recovers is not another wave.
+		// Only growth: a stale reading shrinks the side, and its recovery is not a new wave.
 	case len(enemies) > len(c.spokenAgainst) && now.Sub(c.seenAt) >= waveQuiet:
 	default:
 		return false
@@ -70,14 +60,11 @@ func (c *pickCache) forget() {
 	c.mu.Unlock()
 }
 
-// pickBoard is the heroes worth taking in this position: the player's own record, weighed
-// against how each hero is doing at their rank.
 func (s *Server) pickBoard(set config.Settings) *picks.Board {
 	rank := s.rankTier()
 	allies, enemies := s.sides(s.engine.Snapshot(set).MatchID)
-	// Everything the board is made of belongs in the key. The rank and the hero meta arrive
-	// from OpenDota after the first draft update, so without them an early empty board would
-	// be kept all day; without the tuning, changing a setting would appear to do nothing.
+	// Rank and meta arrive after the first draft update; leave them out and an empty board
+	// sticks all day.
 	meta := s.data.Meta()
 	key := fmt.Sprintf("%s/%d/%d/%d/%+v/%v/%s", set.Role, s.stats.HistoryVersion(), rank, len(meta),
 		set.Picks, append(allies, enemies...), time.Now().Format(time.DateOnly))
@@ -109,9 +96,6 @@ func (s *Server) readPickBoard(set config.Settings, rank int, meta map[int]opend
 	}, time.Now())
 }
 
-// matchups is each enemy hero's record against the rest, which is what the pick advice
-// weighs a hero against. OpenDota answers in the background, so the first draft against a
-// hero says nothing about it and the next one does.
 func (s *Server) matchups(enemies []int) map[int]map[int]opendota.Matchup {
 	if len(enemies) == 0 {
 		return nil
@@ -125,7 +109,6 @@ func (s *Server) matchups(enemies []int) map[int]map[int]opendota.Matchup {
 	return out
 }
 
-// rankTier is the player's medal, or 0 while OpenDota hasn't answered.
 func (s *Server) rankTier() int {
 	acct, _ := s.accountID.Load().(string)
 	if acct == "" {
@@ -134,8 +117,6 @@ func (s *Server) rankTier() int {
 	return s.data.RankTier(acct)
 }
 
-// draftState reports whether a game state is one Dota shows while the player is still
-// choosing a hero.
 func draftState(state string) bool {
 	switch state {
 	case gsi.StateWaitForPlayers, gsi.StateHeroSelection, gsi.StateStrategyTime:
@@ -144,22 +125,14 @@ func draftState(state string) bool {
 	return false
 }
 
-// pickMatters reports whether the player is still choosing a hero: Dota says it's the draft
-// and has no hero for them yet. (It used to ask for a match in progress without a hero, which
-// never happens, so pick help never showed.)
 func pickMatters(snap coach.Snapshot) bool {
 	return snap.Connected && snap.Hero == nil && draftState(snap.GameState)
 }
 
-// draftMatters reports whether the draft is still going on, whether or not the player has
-// taken a hero. They usually pick early and then watch the rest of it happen, and what the
-// other side is taking matters to them the whole time even though their own pick is settled.
 func draftMatters(snap coach.Snapshot) bool {
 	return snap.Connected && draftState(snap.GameState)
 }
 
-// drafting is pickMatters for a game state straight off the wire, so the hot path can tell a
-// draft from a match without building a whole snapshot.
 func drafting(st *gsi.State) bool {
 	if st.Map == nil || (st.Hero != nil && st.Hero.ID != 0) {
 		return false
@@ -167,9 +140,6 @@ func drafting(st *gsi.State) bool {
 	return draftState(st.Map.GameState)
 }
 
-// speakPicks reads the pick advice out while the player is choosing: once for each position
-// they name, and again after each wave of picks from the other side, which is when the advice
-// has actually changed.
 func (s *Server) speakPicks(st *gsi.State, set config.Settings) {
 	c := &s.picks
 	if !drafting(st) {
@@ -179,8 +149,6 @@ func (s *Server) speakPicks(st *gsi.State, set config.Settings) {
 	c.mu.Lock()
 	c.drafting = true
 	c.mu.Unlock()
-	// Nothing to say until they have named a position. The check is cheap, which matters
-	// twice a second.
 	if !s.role.Mine(set.Role) {
 		return
 	}
@@ -201,17 +169,25 @@ func (s *Server) speakPicks(st *gsi.State, set config.Settings) {
 	s.askDraft(set, false)
 }
 
-// pickLine is the advice as it is written on screen and as it is read out. Who the other side
-// has comes first: a second reading is prompted by their picks, and without them it is the
-// same sentence over again.
+// sayHeroes is four because bans can't be seen: two suggestions were often both banned.
+const sayHeroes = 4
+
+// pickLine puts the other side first, since their picks are what prompts a second reading.
 func pickLine(b *picks.Board, role, lang string) (text, speech string) {
-	var names []string
-	for _, h := range b.Best[:min(len(b.Best), 2)] {
+	var names, strangers []string
+	for _, h := range b.Best[:min(len(b.Best), sayHeroes)] {
 		names = append(names, h.Name)
+	}
+	for _, h := range b.Fresh[:min(len(b.Fresh), sayHeroes-len(names))] {
+		strangers = append(strangers, h.Name)
 	}
 	named := dota.RoleName(role, lang)
 	text = i18n.Say(lang, "Best %s picks: %s", named, strings.Join(names, " · "))
 	speech = i18n.Say(lang, "Best %s picks: %s", named, strings.Join(names, ", ")) + "."
+	if len(strangers) > 0 {
+		fresh := i18n.Say(lang, "New to you: %s", strings.Join(strangers, ", "))
+		text, speech = text+" · "+fresh, speech+" "+fresh+"."
+	}
 	if len(b.Avoid) > 0 {
 		avoid := i18n.Say(lang, "Avoid %s", b.Avoid[0].Name)
 		text, speech = text+" · "+avoid, speech+" "+avoid+"."

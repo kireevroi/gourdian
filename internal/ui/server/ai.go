@@ -332,6 +332,13 @@ func (s *Server) askDraft(set config.Settings, forced bool) bool {
 	prompt := prompts.DraftPrompt(prompts.DraftInput{Context: s.aiContext(set), Role: set.Role, Board: snap.Picks})
 	s.hub.publish("ai_status", "thinking")
 	s.bg.Go(func(ctx context.Context) {
+		// Deferred first to run after busy clears: the new position's question was refused.
+		moved := false
+		defer func() {
+			if moved {
+				s.askDraft(s.cfg.Settings(), forced)
+			}
+		}()
 		defer s.ai.busy.Store(false)
 		defer s.hub.publish("ai_status", "idle")
 		ctx, cancel := context.WithTimeout(ctx, aiTimeout)
@@ -342,10 +349,14 @@ func (s *Server) askDraft(set config.Settings, forced bool) bool {
 			s.providers.Failed(provider, err)
 			return
 		}
-		// The answer is worthless once the player has picked, so it is dropped rather than
-		// shown late.
-		if now := s.snapshot(s.cfg.Settings()); !pickMatters(now) {
+		now := s.cfg.Settings()
+		if !pickMatters(s.snapshot(now)) {
 			s.log.Info("AI coach answered the draft too late", "provider", provider.Info().ID)
+			return
+		}
+		if now.Role != set.Role {
+			s.log.Info("AI coach answered for a position the player left", "asked", set.Role, "now", now.Role)
+			moved = true
 			return
 		}
 		s.emitTips(snap.MatchID, []coach.Tip{{Rule: "ai", Category: "ai", Severity: coach.Info,

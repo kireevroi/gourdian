@@ -401,6 +401,21 @@ func TestTheAdviceIsReadAgainWhenThePositionChanges(t *testing.T) {
 	}
 }
 
+func TestTheAdviceNamesEnoughHeroesToSurviveBans(t *testing.T) {
+	board := &picks.Board{Role: dota.Offlane,
+		Best:  []picks.Hero{{ID: 49, Name: "Dawnbreaker"}, {ID: 85, Name: "Undying"}},
+		Fresh: []picks.Hero{{ID: 82, Name: "Meepo"}, {ID: 88, Name: "Nyx Assassin"}, {ID: 1, Name: "Anti-Mage"}}}
+	_, speech := pickLine(board, dota.Offlane, "en")
+	for _, want := range []string{"Dawnbreaker", "Undying", "New to you: Meepo, Nyx Assassin."} {
+		if !strings.Contains(speech, want) {
+			t.Errorf("the advice is missing %q: %q", want, speech)
+		}
+	}
+	if strings.Contains(speech, "Anti-Mage") {
+		t.Errorf("named more than %d heroes: %q", sayHeroes, speech)
+	}
+}
+
 // A second reading has to say what has changed, or it is the same sentence twice.
 func TestTheAdviceSaysWhoTheOtherSideHas(t *testing.T) {
 	board := &picks.Board{

@@ -207,9 +207,7 @@ func TestTheRustPenaltyIsCapped(t *testing.T) {
 	}
 }
 
-// TrustAfter is the knob that decides the short-hot-streak question, so turning it off must
-// flip the answer: taken at face value the shorter, better record wins; shrunk, it doesn't.
-// (The rates are kept modest so neither record runs into yoursCap, which would hide this.)
+// Rates stay modest so neither record hits yoursCap, which would hide the flip.
 func TestTrustAfterDecidesWhetherAStreakWins(t *testing.T) {
 	in := Input{Role: dota.Mid}
 	in.History = append(games(1, "Steady", 40, 24, time.Hour), games(2, "Lucky", 8, 5, time.Hour)...)
@@ -474,5 +472,31 @@ func TestNoNotesWithoutADraft(t *testing.T) {
 	in := Input{Role: dota.Mid, Tuning: DefaultTuning(), History: games(1, "Mine", 5, 3, time.Hour)}
 	if notes := Rank(in, now).Notes; len(notes) != 0 {
 		t.Errorf("notes appeared with no draft: %q", notes)
+	}
+}
+
+// The own side stays: Dota shows hovered heroes in the same bar.
+func TestTheirPicksAreNotSuggested(t *testing.T) {
+	in := Input{Role: dota.Mid, Rank: 43, Tuning: DefaultTuning(),
+		History: append(games(1, "Hovered", 10, 8, time.Hour), games(2, "Theirs", 10, 8, time.Hour)...),
+		Heroes:  []opendota.HeroInfo{{ID: 5, LocalizedName: "Strong"}, {ID: 6, LocalizedName: "Other"}},
+		Meta:    map[int]opendota.HeroMeta{5: bracketMeta(4, 1000, 560), 6: bracketMeta(4, 1000, 550)}}
+	in.Allies, in.Enemies = []int{1}, []int{2, 5}
+	b := Rank(in, now)
+	for _, list := range [][]Hero{b.Best, b.Fresh, b.Avoid} {
+		for _, h := range list {
+			if h.ID == 2 || h.ID == 5 {
+				t.Errorf("suggested %s, whom the other side has", h.Name)
+			}
+		}
+	}
+	if _, ok := find(b.Best, "Hovered"); !ok {
+		t.Errorf("a hero on the player's own side was dropped: %+v", b.Best)
+	}
+	if len(b.Fresh) != 1 || b.Fresh[0].Name != "Other" {
+		t.Errorf("the hero still free wasn't offered: %+v", b.Fresh)
+	}
+	if len(b.Enemies) != 2 {
+		t.Errorf("the other side's picks went missing from the board: %+v", b.Enemies)
 	}
 }
