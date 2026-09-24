@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -588,7 +589,11 @@ func TestAnOlderDataFileStillOpens(t *testing.T) {
 
 // A data folder whose name has characters that mean something in a URI still holds the file.
 func TestDataFileInAnOddlyNamedFolder(t *testing.T) {
-	for _, name := range []string{"Dota #2", "what?", "100%", "a%20b"} {
+	names := []string{"Dota #2", "100%", "a%20b"}
+	if runtime.GOOS != "windows" {
+		names = append(names, "what?") // Windows allows no ? in a name
+	}
+	for _, name := range names {
 		dir := filepath.Join(t.TempDir(), name)
 		st, err := Open(dir)
 		if err != nil {
