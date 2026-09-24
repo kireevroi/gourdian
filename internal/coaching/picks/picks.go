@@ -1,6 +1,4 @@
-// Package picks ranks the heroes worth choosing in a position. It scores each hero in
-// percentage points around an even game, so every part of the score can be printed as the
-// reason for it, and it imports only the trainer's vocabulary and data, never its server.
+// Package picks ranks heroes for a position in percentage points around an even game.
 package picks
 
 import (
@@ -17,46 +15,30 @@ import (
 
 const day = 24 * time.Hour
 
-// Tuning is what the ranking can be adjusted by, since what counts as recent depends on how
-// much you play. Whole days and whole games, because these are numbers a player sets.
 type Tuning struct {
-	// Days is how far back the match history is read. It can be generous: HalfLifeDays, not
-	// this, decides how much an old game counts, so the cutoff should fall where a match is
-	// already worth almost nothing rather than somewhere a good hero drops off a cliff.
-	Days int `json:"days"`
-	// HalfLifeDays is how long it takes a match to count half as much as a fresh one.
+	// HalfLifeDays, not Days, decides how much an old game counts.
+	Days         int `json:"days"`
 	HalfLifeDays int `json:"half_life_days"`
-	// TrustAfter is the number of games at which a hero's own record counts for half of what
-	// it says; with fewer it is pulled further towards an even game. It is what keeps a short
-	// hot streak from outranking a long steady record.
+	// TrustAfter is the game count at which a hero's record counts for half of what it says.
 	TrustAfter int `json:"trust_after"`
-	// MinGames is how many matches on a hero make its record worth ranking at all.
-	MinGames int `json:"min_games"`
-	// AvoidPct is the win rate below which a hero is listed as one to avoid.
-	AvoidPct int `json:"avoid_pct"`
-	// Show, Fresh and Avoid are how many heroes each list holds. Fresh 0 turns off the
-	// suggestions of heroes the player doesn't play.
+	MinGames   int `json:"min_games"`
+	AvoidPct   int `json:"avoid_pct"`
+	// Fresh 0 turns off heroes the player doesn't play.
 	Show  int `json:"show"`
 	Fresh int `json:"fresh"`
 	Avoid int `json:"avoid"`
 }
 
-// MatchupMinGames is how many games a pair of heroes must have met in before their record
-// against each other counts for anything.
 const MatchupMinGames = 200
 
 func DefaultTuning() Tuning {
 	return Tuning{Days: 365, HalfLifeDays: 45, TrustAfter: 20, MinGames: 3, AvoidPct: 40, Show: 4, Fresh: 2, Avoid: 2}
 }
 
-// Window is how far back the history is read, for asking the data file for that much of it.
 func (t Tuning) Window() time.Duration { return day * time.Duration(t.Days) }
 
 func (t Tuning) halfLife() time.Duration { return day * time.Duration(t.HalfLifeDays) }
 
-// rustyAfter is how long since the last game before a hero is called rusty, and the step it
-// fades by after that. Weighting already counts a stale record for less, which says "no
-// evidence"; the fade says the different thing, that the player's hands have gone off it.
 func (t Tuning) rustyAfter() time.Duration { return t.halfLife() }
 
 func (t Tuning) Validate() error {
@@ -78,60 +60,34 @@ func (t Tuning) Validate() error {
 }
 
 const (
-	// freshPct is the win rate a hero the player has never played has to be doing to be worth
-	// mentioning at all. Half of everything is above average by definition -- measured over
-	// the whole roster the median is 49.7% and 56 of 127 heroes clear 50% -- so an average
-	// hero is not a reason to try something new. 52% is the top sixth of the roster.
+	// freshPct: the roster median is 49.7%, so 52% (the top sixth) is the bar for a stranger.
 	freshPct = 52
 
-	// The score caps: what the player's own record is worth against the patch and against the
-	// hero's roles. These are the shape of the model rather than a matter of taste, so they
-	// are not tuned from the dashboard like picks.Tuning is.
-	//
-	// TODO: tune. They were picked by hand and never measured. yoursCap in particular
-	// saturates: any weighted record above about 65% hits it, so a player's two best heroes
-	// tie and fall back to which they have played more.
+	// TODO: tune. yoursCap saturates above about 65%, so the best two heroes tie.
 	yoursCap = 15
 	metaCap  = 6
 	fitBonus = 3
 	rustyCap = 5
 
-	// counterCap is small on purpose. OpenDota's pairs are a hundred-odd games each and are
-	// measured across every position, so five points of edge is within the noise; the term
-	// is here to order heroes that are otherwise level, not to pick one.
+	// counterCap is small: OpenDota's pairs are ~100 games across every position.
 	counterCap = 8
 
-	// even is the score of a hero with nothing for or against it.
 	even = 50
 )
 
-// Board is the pick advice for one position.
 type Board struct {
 	Role string `json:"role"`
-	// Best is the player's own pool, ranked. Fresh is heroes they don't play that the meta
-	// likes, kept apart so nothing ever tells them to first-pick a hero they've never played.
-	Best  []Hero `json:"best,omitempty"`
-	Fresh []Hero `json:"fresh,omitempty"`
-	Avoid []Hero `json:"avoid,omitempty"`
-	// Enemies are the heroes on the other side, once they are known.
-	Enemies []Hero `json:"enemies,omitempty"`
-	// Notes are what the two line-ups are short of or heavy in, once enough of them is known
-	// to say anything.
-	Notes []string `json:"notes,omitempty"`
-	// NeedPosition says the player hasn't named the position they are about to play, so
-	// there is no advice about which hero to take -- only a question. Which heroes are worth
-	// taking depends entirely on the position, and the trainer would rather ask than guess
-	// from whatever was played last.
+	// Fresh is kept apart so nothing tells them to first-pick a hero they've never played.
+	Best    []Hero   `json:"best,omitempty"`
+	Fresh   []Hero   `json:"fresh,omitempty"`
+	Avoid   []Hero   `json:"avoid,omitempty"`
+	Enemies []Hero   `json:"enemies,omitempty"`
+	Notes   []string `json:"notes,omitempty"`
+	// NeedPosition: the trainer asks rather than guess the position from the last game.
 	NeedPosition bool `json:"need_position,omitempty"`
 }
 
-// WithoutSuggestions is the board with the advice about which hero to take taken out, leaving
-// what the draft looks like: who the other side took and what the two line-ups are short of.
-//
-// It is what is left in the two cases where naming heroes would be wrong. Once the player has
-// taken one, their pick is settled but the rest of the draft is not, and knowing it is what
-// tells them what to buy. Before they have said which position they are playing, the trainer
-// has nothing to base a hero on and asks instead.
+// WithoutSuggestions keeps the draft and drops the advice, for after the pick or before a position.
 func (b *Board) WithoutSuggestions() *Board {
 	if b == nil {
 		return nil
@@ -143,7 +99,6 @@ func (b *Board) WithoutSuggestions() *Board {
 	return left
 }
 
-// Empty reports whether the board has nothing to show.
 func (b *Board) Empty() bool {
 	if b == nil {
 		return true
@@ -152,15 +107,10 @@ func (b *Board) Empty() bool {
 }
 
 type Hero struct {
-	ID   int    `json:"id,omitempty"`
-	Name string `json:"hero"`
-	Img  string `json:"img,omitempty"`
-	// Score is the hero's chances in percentage points: 50 is an even game.
-	Score int `json:"score"`
-	// Games, Wins and WinPct are the player's plain record over Window, whatever the score
-	// makes of it.
-	// Roles are what the hero is for, as OpenDota tags them: shown for the other side, so the
-	// kind of trouble they are is plain without knowing every hero.
+	ID        int      `json:"id,omitempty"`
+	Name      string   `json:"hero"`
+	Img       string   `json:"img,omitempty"`
+	Score     int      `json:"score"`
 	Roles     []string `json:"roles,omitempty"`
 	Games     int      `json:"games,omitempty"`
 	Wins      int      `json:"wins,omitempty"`
@@ -170,26 +120,20 @@ type Hero struct {
 	Why       []string `json:"why,omitempty"`
 }
 
-// Input is everything a board is made from. History is the player's matches, already filtered
-// to the position or not; Rank is their OpenDota rank tier, 0 when unknown; Meta and Heroes are
-// nil until OpenDota answers, and the board is made without them.
+// Meta and Heroes are nil until OpenDota answers.
 type Input struct {
-	Role    string
-	Lang    string
-	Rank    int
-	Tuning  Tuning
-	History []model.MatchSummary
-	Heroes  []opendota.HeroInfo
-	Meta    map[int]opendota.HeroMeta
-	// Enemies are the heroes the other team has taken, when the trainer can see them, Allies
-	// the player's own side, and Matchups each enemy's record against the rest. All are empty
-	// when the draft can't be seen, and then the board simply says nothing about it.
+	Role     string
+	Lang     string
+	Rank     int
+	Tuning   Tuning
+	History  []model.MatchSummary
+	Heroes   []opendota.HeroInfo
+	Meta     map[int]opendota.HeroMeta
 	Enemies  []int
 	Allies   []int
 	Matchups map[int]map[int]opendota.Matchup
 }
 
-// words formats a reason in the player's language, the way coach.sources does.
 type words string
 
 func (w words) f(en, ru string, args ...any) string {
@@ -199,7 +143,6 @@ func (w words) f(en, ru string, args ...any) string {
 	return fmt.Sprintf(en, args...)
 }
 
-// s is f for a line that takes no values.
 func (w words) s(en, ru string) string {
 	if w == "ru" {
 		return ru
@@ -207,23 +150,19 @@ func (w words) s(en, ru string) string {
 	return en
 }
 
-// record is one hero's history in the position.
 type record struct {
 	id          int
 	name        string
 	games, wins int
-	// weight and weighted are the same games counted by how recent they are.
+	// weighted counts the same games by how recent they are.
 	weight, weighted   float64
 	last               time.Time
 	deaths, deathGames int
 	lh10, lh10Games    int
 }
 
-// Rank scores every hero the player has a record on, plus the ones the meta likes that they
-// don't play, and returns nil when there is nothing worth saying.
 func Rank(in Input, now time.Time) *Board {
-	// Settings are validated before they get here, so an unusable tuning means a caller that
-	// didn't fill one in. Ranking on the defaults beats ranking on zeroes.
+	// An invalid tuning means a caller didn't fill one in.
 	t := in.Tuning
 	if t.Validate() != nil {
 		t = DefaultTuning()
@@ -236,9 +175,10 @@ func Rank(in Input, now time.Time) *Board {
 		info[h.ID] = h
 	}
 
+	gone := taken(in)
 	b := &Board{Role: in.Role}
 	for _, r := range byHero {
-		if r.games < t.MinGames {
+		if r.games < t.MinGames || gone[r.id] {
 			continue
 		}
 		h := Hero{ID: r.id, Name: r.name, Games: r.games, Wins: r.wins, WinPct: r.wins * 100 / r.games}
@@ -266,10 +206,7 @@ func Rank(in Input, now time.Time) *Board {
 	slices.SortFunc(b.Avoid, func(a, c Hero) int { return byScore(c, a) })
 	b.Best = b.Best[:min(len(b.Best), t.Show)]
 	b.Avoid = b.Avoid[:min(len(b.Avoid), t.Avoid)]
-	// Heroes the player has never touched only fill the room their own leave. Being shown a
-	// stranger is worth something when there is nothing else to say and nothing at all when
-	// there are heroes they actually play.
-	b.Fresh = fresh(in, t, byHero, bracket, w, max(0, t.Show-len(b.Best)))
+	b.Fresh = fresh(in, t, byHero, gone, bracket, w, max(0, t.Show-len(b.Best)))
 	for _, id := range in.Enemies {
 		b.Enemies = append(b.Enemies, Hero{ID: id, Name: info[id].LocalizedName, Img: info[id].Img,
 			Roles: in.Meta[id].Roles})
@@ -281,11 +218,19 @@ func Rank(in Input, now time.Time) *Board {
 	return b
 }
 
+// Only their side: ours can be a hover, and dropping it hides the hero about to be locked.
+func taken(in Input) map[int]bool {
+	gone := map[int]bool{}
+	for _, id := range in.Enemies {
+		gone[id] = true
+	}
+	return gone
+}
+
 func byScore(a, b Hero) int {
 	return cmp.Or(b.Score-a.Score, b.Games-a.Games, cmp.Compare(a.Name, b.Name))
 }
 
-// gather sums the player's matches in the position, each weighted by how recent it is.
 func gather(in Input, t Tuning, now time.Time) map[int]*record {
 	since := now.Add(-t.Window())
 	byHero := map[int]*record{}
@@ -320,8 +265,7 @@ func gather(in Input, t Tuning, now time.Time) map[int]*record {
 	return byHero
 }
 
-// yours is what the player's own record is worth, shrunk towards an even game by how few
-// games it rests on, so a short hot streak can't outrank a long steady record.
+// yours shrinks the record towards even by how few games it rests on.
 func yours(r *record, h *Hero, t Tuning, w words) int {
 	if r.weight == 0 {
 		return 0
@@ -332,7 +276,6 @@ func yours(r *record, h *Hero, t Tuning, w words) int {
 	return term
 }
 
-// metaTerm is how the hero is doing in public games at the player's own bracket.
 func metaTerm(m opendota.HeroMeta, bracket int, h *Hero, w words) int {
 	pct, games := m.WinPct(bracket)
 	if games == 0 {
@@ -347,9 +290,6 @@ func metaTerm(m opendota.HeroMeta, bracket int, h *Hero, w words) int {
 	return clamp(pct-even, metaCap)
 }
 
-// counter is how the hero fares against the ones the other team has already taken. Each pair
-// is shrunk by how few games it rests on, and the whole term is capped low, because these are
-// small samples measured across every position.
 func counter(in Input, heroID int, info map[int]opendota.HeroInfo, h *Hero, w words) int {
 	if len(in.Enemies) == 0 || len(in.Matchups) == 0 {
 		return 0
@@ -361,7 +301,7 @@ func counter(in Input, heroID int, info map[int]opendota.HeroInfo, h *Hero, w wo
 		if !ok || m.Games == 0 {
 			continue
 		}
-		// The record is the enemy's against this hero, so the hero's edge is what is left.
+		// The record is the enemy's against this hero.
 		edge := float64(even-m.WinPct()) * float64(m.Games) / float64(m.Games+MatchupMinGames)
 		total += edge
 		counted++
@@ -386,14 +326,9 @@ func counter(in Input, heroID int, info map[int]opendota.HeroInfo, h *Hero, w wo
 	return term
 }
 
-// LeastForShape is how much of a line-up has to be known before anything is said about its
-// shape. With two heroes picked, "nobody here can stun" is not a gap, it is the draft not
-// having happened yet.
+// LeastForShape: with two heroes picked, "nobody can stun" is not a gap.
 const LeastForShape = 4
 
-// notes are what the two sides are short of or heavy in. They are drawn only from what
-// OpenDota tags each hero as, so they stay the sort of thing anyone would say looking at the
-// board, rather than pretending to judge a line-up.
 func notes(in Input, w words) []string {
 	var out []string
 	has := func(ids []int, role string) int {
@@ -439,7 +374,6 @@ func notes(in Input, w words) []string {
 	return out
 }
 
-// roleFit is the OpenDota roles that suit each position.
 var roleFit = map[string][]string{
 	dota.Carry:       {"Carry"},
 	dota.Mid:         {"Carry", "Nuker"},
@@ -448,8 +382,7 @@ var roleFit = map[string][]string{
 	dota.HardSupport: {"Support"},
 }
 
-// fit nudges a hero by how well OpenDota's roles suit the position. It stays small: the
-// player's own record already knows far more about what suits them than a role tag does.
+// fit stays small: the player's own record knows more than a role tag.
 func fit(roles []string, role string) int {
 	switch {
 	case dota.Core(role) && slices.Contains(roles, "Support"):
@@ -460,15 +393,13 @@ func fit(roles []string, role string) int {
 	return 0
 }
 
-// fresh is the heroes the player doesn't play that are doing well at their bracket. They are
-// kept in their own list, never mixed into the ranked pool.
-func fresh(in Input, t Tuning, played map[int]*record, bracket int, w words, room int) []Hero {
+func fresh(in Input, t Tuning, played map[int]*record, gone map[int]bool, bracket int, w words, room int) []Hero {
 	if len(in.Meta) == 0 || t.Fresh == 0 || room == 0 {
 		return nil
 	}
 	var out []Hero
 	for _, info := range in.Heroes {
-		if r := played[info.ID]; r != nil && r.games >= t.MinGames {
+		if r := played[info.ID]; gone[info.ID] || r != nil && r.games >= t.MinGames {
 			continue
 		}
 		m, ok := in.Meta[info.ID]
