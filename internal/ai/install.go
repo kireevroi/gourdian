@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -118,6 +120,8 @@ func downloadClaude(ctx context.Context, progress func(string)) (string, error) 
 type ghAsset struct {
 	Name string `json:"name"`
 	URL  string `json:"browser_download_url"`
+	// Digest is GitHub's checksum of the file, "sha256:<hex>".
+	Digest string `json:"digest"`
 }
 
 type ghRelease struct {
@@ -125,13 +129,22 @@ type ghRelease struct {
 	Assets  []ghAsset `json:"assets"`
 }
 
-func assetURL(rel ghRelease, name string) string {
+func findAsset(rel ghRelease, name string) (ghAsset, bool) {
 	for _, a := range rel.Assets {
 		if a.Name == name {
-			return a.URL
+			return a, true
 		}
 	}
-	return ""
+	return ghAsset{}, false
+}
+
+// sha256 is the asset's SHA-256 in hex, or "" when GitHub gave none.
+func (a ghAsset) sha256() string {
+	sum, ok := strings.CutPrefix(a.Digest, "sha256:")
+	if !ok || len(sum) != 64 {
+		return ""
+	}
+	return sum
 }
 
 // codexAsset is the release file with this machine's Codex CLI; Linux builds come packed.
@@ -148,7 +161,7 @@ func codexAsset() (asset, binary string, err error) {
 }
 
 // installCodex downloads the Codex CLI from its GitHub release. The npm package only wraps
-// this same binary, so this skips Node.js.
+// this same binary, so this skips Node.js. The file must match the checksum GitHub lists for it.
 func installCodex(ctx context.Context, progress func(string)) error {
 	target, binary, err := codexAsset()
 	if err != nil {
@@ -158,9 +171,13 @@ func installCodex(ctx context.Context, progress func(string)) error {
 	if err := getJSON(ctx, codexAPI, &rel); err != nil {
 		return err
 	}
-	url := assetURL(rel, target)
-	if url == "" {
+	a, ok := findAsset(rel, target)
+	if !ok {
 		return fmt.Errorf("the Codex release %s has no %s", rel.TagName, target)
+	}
+	sum := a.sha256()
+	if sum == "" {
+		return fmt.Errorf("GitHub gave no checksum for %s, so it wasn't installed", target)
 	}
 	dir := ToolsBin()
 	if dir == "" {
@@ -169,19 +186,25 @@ func installCodex(ctx context.Context, progress func(string)) error {
 	say(progress, "Downloading the Codex CLI "+rel.TagName+"…")
 	path := filepath.Join(dir, binary)
 	if !strings.HasSuffix(target, ".tar.gz") {
-		return downloadExe(ctx, url, path, progress)
+		return downloadExe(ctx, a.URL, sum, path, progress)
 	}
-	return downloadTarred(ctx, url, strings.TrimSuffix(target, ".tar.gz"), path, progress)
+	return downloadTarred(ctx, a.URL, sum, strings.TrimSuffix(target, ".tar.gz"), path, progress)
 }
 
-// downloadTarred saves one program out of a .tar.gz release.
-func downloadTarred(ctx context.Context, url, member, path string, progress func(string)) error {
+// maxTool is the most a downloaded program may weigh.
+const maxTool = 512 << 20
+
+// downloadTarred saves one program out of a .tar.gz release whose SHA-256 is wantSHA. The
+// program only replaces the old copy once the whole archive has been checked.
+func downloadTarred(ctx context.Context, url, wantSHA, member, path string, progress func(string)) error {
 	body, err := get(ctx, url)
 	if err != nil {
 		return err
 	}
 	defer body.Close()
-	gz, err := gzip.NewReader(&counter{r: body, progress: progress})
+	sum := sha256.New()
+	archive := io.TeeReader(body, sum)
+	gz, err := gzip.NewReader(&counter{r: archive, progress: progress})
 	if err != nil {
 		return err
 	}
@@ -197,6 +220,9 @@ func downloadTarred(ctx context.Context, url, member, path string, progress func
 		if filepath.Base(h.Name) != member || h.Typeflag != tar.TypeReg {
 			continue
 		}
+		if h.Size > maxTool {
+			return fmt.Errorf("%s is %d MB, more than a program should be", member, h.Size>>20)
+		}
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
 		}
@@ -205,8 +231,20 @@ func downloadTarred(ctx context.Context, url, member, path string, progress func
 		if err != nil {
 			return err
 		}
-		_, err = io.Copy(f, io.LimitReader(tr, 512<<20))
-		f.Close()
+		n, err := io.Copy(f, tr)
+		if err == nil && n != h.Size {
+			err = fmt.Errorf("%s arrived cut short", member)
+		}
+		if err == nil {
+			// The rest of the archive counts towards its checksum too.
+			_, err = io.Copy(io.Discard, archive)
+		}
+		if err == nil && !strings.EqualFold(hex.EncodeToString(sum.Sum(nil)), wantSHA) {
+			err = errChecksum
+		}
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
 		if err != nil {
 			os.Remove(tmp)
 			return err
@@ -217,7 +255,7 @@ func downloadTarred(ctx context.Context, url, member, path string, progress func
 
 // downloadExe saves a program next to the trainer's other tools, replacing any older copy
 // once the whole download has arrived.
-func downloadExe(ctx context.Context, url, path string, progress func(string)) error {
+func downloadExe(ctx context.Context, url, wantSHA, path string, progress func(string)) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -226,7 +264,7 @@ func downloadExe(ctx context.Context, url, path string, progress func(string)) e
 	if err != nil {
 		return err
 	}
-	_, err = download(ctx, url, f, "", progress)
+	_, err = download(ctx, url, f, wantSHA, progress)
 	f.Close()
 	if err != nil {
 		os.Remove(tmp)

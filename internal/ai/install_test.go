@@ -66,16 +66,20 @@ func TestDownloadClaudeRefusesAWrongChecksum(t *testing.T) {
 }
 
 func TestCodexAssetPicksThisPCsBuild(t *testing.T) {
+	sum := strings.Repeat("ab", 32)
 	rel := ghRelease{TagName: "rust-v0.154.0", Assets: []ghAsset{
 		{Name: "codex-aarch64-pc-windows-msvc.exe", URL: "arm"},
-		{Name: "codex-x86_64-pc-windows-msvc.exe", URL: "x64"},
+		{Name: "codex-x86_64-pc-windows-msvc.exe", URL: "x64", Digest: "sha256:" + sum},
 		{Name: "codex-x86_64-unknown-linux-musl.tar.gz", URL: "linux"},
 	}}
-	if got := assetURL(rel, "codex-x86_64-pc-windows-msvc.exe"); got != "x64" {
-		t.Fatalf("url = %q", got)
+	if a, ok := findAsset(rel, "codex-x86_64-pc-windows-msvc.exe"); !ok || a.URL != "x64" || a.sha256() != sum {
+		t.Fatalf("asset = %+v", a)
 	}
-	if got := assetURL(rel, "codex-riscv.exe"); got != "" {
-		t.Fatalf("unknown asset gave %q", got)
+	if a, ok := findAsset(rel, "codex-aarch64-pc-windows-msvc.exe"); !ok || a.sha256() != "" {
+		t.Fatalf("an asset without a digest gave %q", a.sha256())
+	}
+	if _, ok := findAsset(rel, "codex-riscv.exe"); ok {
+		t.Fatal("found an asset that isn't there")
 	}
 }
 
@@ -88,7 +92,7 @@ func TestDownloadExeReplacesTheOldCopy(t *testing.T) {
 	path := filepath.Join(dir, "tools", "codex.exe")
 	os.MkdirAll(filepath.Dir(path), 0o755)
 	os.WriteFile(path, []byte("old build"), 0o755)
-	if err := downloadExe(t.Context(), srv.URL, path, nil); err != nil {
+	if err := downloadExe(t.Context(), srv.URL, sha("new build"), path, nil); err != nil {
 		t.Fatalf("download: %v", err)
 	}
 	if got, _ := os.ReadFile(path); string(got) != "new build" {
@@ -127,10 +131,21 @@ func TestCodexTarballGivesTheProgram(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(buf.Bytes()) }))
 	defer srv.Close()
 	path := filepath.Join(t.TempDir(), "tools", "codex")
-	if err := downloadTarred(t.Context(), srv.URL, "codex-x86_64-unknown-linux-musl", path, nil); err != nil {
+	if err := downloadTarred(t.Context(), srv.URL, strings.Repeat("00", 32), "codex-x86_64-unknown-linux-musl", path, nil); err == nil {
+		t.Fatal("an archive that doesn't match its checksum was used")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("the program from a bad archive was saved")
+	}
+	if err := downloadTarred(t.Context(), srv.URL, sha(buf.String()), "codex-x86_64-unknown-linux-musl", path, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := os.ReadFile(path); string(got) != string(content) {
 		t.Fatalf("saved %q", got)
 	}
+}
+
+func sha(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
 }
