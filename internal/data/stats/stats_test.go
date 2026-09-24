@@ -585,3 +585,36 @@ func TestAnOlderDataFileStillOpens(t *testing.T) {
 		t.Errorf("filtering an upgraded data file: %v", err)
 	}
 }
+
+// A data folder whose name has characters that mean something in a URI still holds the file.
+func TestDataFileInAnOddlyNamedFolder(t *testing.T) {
+	for _, name := range []string{"Dota #2", "what?", "100%", "a%20b"} {
+		dir := filepath.Join(t.TempDir(), name)
+		st, err := Open(dir)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		st.Close()
+		if _, err := os.Stat(filepath.Join(dir, DataFile)); err != nil {
+			t.Errorf("%s: the data file isn't in the folder: %v", name, err)
+		}
+	}
+}
+
+func TestCSVCellsNeverRunAsFormulas(t *testing.T) {
+	for in, want := range map[string]string{
+		"=HYPERLINK(\"http://x\")": "'=HYPERLINK(\"http://x\")",
+		"+1+2":                     "'+1+2",
+		"-sum(A1)":                 "'-sum(A1)",
+		"@cmd":                     "'@cmd",
+		"\tx":                      "'\tx",
+		"-12":                      "-12",
+		"-0.5":                     "-0.5",
+		"Buy a TP scroll":          "Buy a TP scroll",
+		"":                         "",
+	} {
+		if got := cell(in); got != want {
+			t.Errorf("cell(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
