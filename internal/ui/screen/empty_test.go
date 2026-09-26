@@ -11,7 +11,7 @@ func TestEmptySlots(t *testing.T) {
 	files := loadFrames(t)
 	table, names := namedTable(t)
 	img := openFrame(t, files[0])
-	bar := Predict(img.Bounds())
+	bar := barOf(t, files[0], img)
 	fmt.Println("at the geometry worked out from the screen's height:")
 	read := 0
 	for slot := range 2 * Slots {
