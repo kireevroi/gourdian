@@ -1,6 +1,8 @@
 package screen
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"image"
 	_ "image/png"
@@ -49,6 +51,26 @@ func openFrame(t *testing.T, path string) image.Image {
 		t.Fatal(err)
 	}
 	return img
+}
+
+// barOf is where the bar was in a frame. The trainer saves only the top strip of the screen,
+// so its reading.jsonl says where the bar was, not the strip's height.
+func barOf(t *testing.T, path string, img image.Image) Bar {
+	raw, err := os.ReadFile(filepath.Join(filepath.Dir(path), "reading.jsonl"))
+	if err != nil {
+		return Predict(img.Bounds())
+	}
+	for _, line := range bytes.Split(raw, []byte("\n")) {
+		var note struct {
+			Frame string `json:"frame"`
+			Bar   Bar    `json:"bar"`
+		}
+		if json.Unmarshal(line, &note) == nil && note.Frame == filepath.Base(path) && note.Bar.Ready() {
+			return note.Bar
+		}
+	}
+	t.Fatalf("%s is not in its reading.jsonl", filepath.Base(path))
+	return Bar{}
 }
 
 // TestLocateOnRealFrames checks the search against captured screens: it must find the bar in
