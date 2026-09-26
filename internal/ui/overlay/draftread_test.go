@@ -88,7 +88,7 @@ func TestTheDraftIsReadAndReported(t *testing.T) {
 		watchWith(ctx, m, &a, table, eyes{
 			size: func() (image.Rectangle, error) { return size, nil },
 			grab: func(image.Rectangle) (image.Image, error) { return shot, nil },
-		}, 10*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		}, 10*time.Millisecond, &frameKeeper{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	}()
 
 	deadline := time.After(2 * time.Second)
@@ -136,7 +136,7 @@ func TestNothingIsReadOutsideADraft(t *testing.T) {
 	watchWith(ctx, m, &a, table, eyes{
 		size: func() (image.Rectangle, error) { looked++; return image.Rect(0, 0, 1920, 1080), nil },
 		grab: func(image.Rectangle) (image.Image, error) { looked++; return nil, nil },
-	}, 10*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}, 10*time.Millisecond, &frameKeeper{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if looked != 0 {
 		t.Errorf("the screen was looked at %d times outside a draft", looked)
 	}
@@ -198,7 +198,7 @@ func TestTheDraftIsReportedEvenWhenNothingChanges(t *testing.T) {
 	watchWith(ctx, m, &a, table, eyes{
 		size: func() (image.Rectangle, error) { return size, nil },
 		grab: func(image.Rectangle) (image.Image, error) { return shot, nil },
-	}, 20*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}, 20*time.Millisecond, &frameKeeper{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	mu.Lock()
 	defer mu.Unlock()

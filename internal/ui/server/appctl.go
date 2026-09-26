@@ -103,8 +103,9 @@ func (s *Server) hudPayload() hud.Payload {
 	return hud.Payload{Live: live, Sample: hud.SampleIn(set.HUDWidgets, set.Language),
 		// Choosing ends with the player's own pick; reading the screen lasts the whole draft,
 		// since the other side is still picking and what is known of them would go stale.
-		Choosing: pickMatters(snap),
-		Draft:    set.Screen.Draft && draftMatters(snap)}
+		Choosing:   pickMatters(snap),
+		Draft:      set.Screen.Draft && draftMatters(snap),
+		KeepFrames: set.Screen.Draft && set.Screen.KeepFrames}
 }
 
 func (s *Server) handleHUD(w http.ResponseWriter, r *http.Request) {

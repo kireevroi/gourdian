@@ -71,6 +71,8 @@ type Payload struct {
 	// having asked for it. The overlay is the part of the trainer running where the screen
 	// is, which under WSL is not where the rest of it runs.
 	Draft bool `json:"draft"`
+	// KeepFrames says to save what the draft reader looks at, for fixing a misread.
+	KeepFrames bool `json:"keep_frames,omitempty"`
 }
 
 // PositionUntil is when the HUD stops offering the position hotkeys; lane detection decides then.

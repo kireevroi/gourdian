@@ -99,7 +99,7 @@ func Run(ctx context.Context, o Options) error {
 	pSetTimer.Call(hwnd, 1, 1000, 0)
 
 	go stream(ctx, o.URL, u.model, func() { pPostMessage.Call(hwnd, wmApp, 0, 0) }, u.onEvent)
-	go startDraftReader(ctx, u.model, &u.api, u.log)
+	go startDraftReader(ctx, u.model, &u.api, u.opts.framesDir(), u.log)
 	go u.loadSettings(ctx)
 	go func() {
 		<-ctx.Done()

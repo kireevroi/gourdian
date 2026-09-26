@@ -165,6 +165,8 @@ var (
 type ScreenSettings struct {
 	// Draft is off until the player asks for it, because it means looking at their screen.
 	Draft bool `json:"draft"`
+	// KeepFrames saves the top of every frame read during a draft, in draft-frames.
+	KeepFrames bool `json:"keep_frames,omitempty"`
 	// Bars is where the portraits were found, by screen size ("2560x1440").
 	Bars map[string]screen.Bar `json:"bars,omitempty"`
 }
