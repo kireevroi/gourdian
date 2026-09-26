@@ -26,12 +26,18 @@ func isOpenDotaMatch(m model.MatchSummary) bool {
 	return err == nil && m.Real() && m.MatchID != "0"
 }
 
-// reviewStatus tells the dashboard what the review is doing; Waiting means the replay parse
-// hasn't arrived yet, so the dashboard offers to review with live data instead.
+// reviewStatus: Waiting offers a review with live data before the parse; Failed offers a retry.
 type reviewStatus struct {
 	Text    string `json:"text"`
 	MatchID string `json:"match_id,omitempty"`
 	Waiting bool   `json:"waiting,omitempty"`
+	Failed  bool   `json:"failed,omitempty"`
+}
+
+// reviewFailed ends a review the dashboard is showing as under way.
+func (s *Server) reviewFailed(matchID string) {
+	s.hub.publish("review_status", reviewStatus{Text: "The match review couldn't be written. Check the AI coach, then try again.",
+		MatchID: matchID, Failed: true})
 }
 
 // checkRanked asks OpenDota what kind of match it was, so the MMR prompt only stays for
@@ -114,7 +120,9 @@ func (s *Server) afterMatch(m model.MatchSummary, set config.Settings) {
 			row.Items = m.Items
 			m = row
 		}
-		s.reviewMatch(m, s.cfg.Settings(), false, detail)
+		if !s.reviewMatch(m, s.cfg.Settings(), false, detail) && reviewing {
+			s.reviewFailed(m.MatchID)
+		}
 	})
 }
 

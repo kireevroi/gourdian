@@ -30,14 +30,21 @@ func readDraft(t *testing.T, payload hud.Payload, root string) {
 	copy(slots[screen.Slots:], heroes)
 	size := image.Rect(0, 0, 1920, 1080)
 	shot := fakeScreen(size, slots)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{}`)) }))
+	// Stop once the draft has settled, not after a fixed time: under -race a frame can take
+	// longer than the whole window.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/draft" {
+			cancel()
+		}
+		w.Write([]byte(`{}`))
+	}))
 	defer srv.Close()
 	m := newModel(time.Now(), false)
 	m.apply("snapshot", []byte(`{"connected":true,"team":"radiant"}`), time.Now())
 	m.apply("hud", mustJSON(payload), time.Now())
 	a := newAPI(srv.URL)
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
-	defer cancel()
 	watchWith(ctx, m, &a, table, eyes{
 		size: func() (image.Rectangle, error) { return size, nil },
 		grab: func(image.Rectangle) (image.Image, error) { return shot, nil },
