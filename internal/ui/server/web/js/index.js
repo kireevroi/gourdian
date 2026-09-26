@@ -2,9 +2,8 @@ import { $, esc, clockStr, imgURL, ROLE_NAMES, CATEGORY_NAMES, api, toast, t, tp
 
 let snap = null, tips = [], voiceUnlocked = false, calloutTimer = null;
 
-// With the dashboard open in more than one tab or window, only one of them may speak, or every
-// tip is heard twice. Tabs agree through a heartbeat in localStorage; the one you last
-// looked at wins, and another takes over within seconds if it closes.
+// Only one dashboard tab may speak, or every tip is heard twice: a localStorage heartbeat
+// hands the voice to the tab last looked at, and another takes over if it closes.
 const voiceTab = (() => {
   const id = Math.random().toString(36).slice(2);
   const read = () => { try { return JSON.parse(localStorage.getItem('voice-owner') || 'null'); } catch (e) { return null; } };
@@ -332,8 +331,9 @@ function renderReview(r, status) {
   card.hidden = false;
   if (status) {
     $('review-sub').textContent = '';
-    $('review').innerHTML = `<div class="empty"><span class="spinner"></span>${esc(status.text || status)}</div>
-      ${status.waiting && status.match_id ? `<button class="btn small" data-review-now="${esc(status.match_id)}">Review now with live data</button>` : ''}`;
+    $('review').innerHTML = `<div class="empty">${status.failed ? '' : '<span class="spinner"></span>'}${esc(status.text || status)}</div>
+      ${status.waiting && status.match_id ? `<button class="btn small" data-review-now="${esc(status.match_id)}">Review now with live data</button>` : ''}
+      ${status.failed && status.match_id ? `<button class="btn small" data-review-now="${esc(status.match_id)}">Try again</button>` : ''}`;
     return;
   }
   $('review-sub').textContent = `${r.hero} · ${t(r.result)}`;
