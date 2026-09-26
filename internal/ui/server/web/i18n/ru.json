@@ -464,6 +464,7 @@
     "No Steam account id yet. Play a match with the trainer running, or enter it in Settings.": "Steam ID пока не известен. Сыграйте матч с запущенным тренером или укажите его в настройках.",
     "Windows speech isn't available on this machine; use browser voice": "Речь Windows здесь недоступна; используйте голос браузера",
     "Preparing the match review…": "Готовим разбор матча…",
+    "The match review couldn't be written. Check the AI coach, then try again.": "Не удалось написать разбор матча. Проверьте ИИ-тренера и попробуйте снова.",
     "OpenDota didn't parse the replay in time; reviewing with live data": "OpenDota не успела разобрать реплей; разбор по данным из игры",
     "OpenDota match data unavailable": "Данные матча из OpenDota недоступны",
     "Waiting for OpenDota to parse the replay, then the review is written. This is usually a few minutes, but can take longer.": "Ждём, пока OpenDota разберёт реплей, затем будет написан разбор. Обычно это несколько минут, но может занять больше.",
