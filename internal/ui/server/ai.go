@@ -239,6 +239,7 @@ func (s *Server) reviewMatch(m model.MatchSummary, set config.Settings, force bo
 			} else {
 				s.hub.publish("ai_error", "Match review failed: "+err.Error())
 			}
+			s.reviewFailed(m.MatchID)
 			return
 		}
 		review := model.Review{Date: time.Now(), MatchID: m.MatchID, Hero: m.Hero, HeroID: m.HeroID,
@@ -300,7 +301,9 @@ func (s *Server) handleReviewMatch(w http.ResponseWriter, r *http.Request) {
 			detail, _ = s.matches.Enrich(ctx, m, s.cfg.Settings().AccountID, nil)
 			cancel()
 		}
-		s.reviewMatch(m, s.cfg.Settings(), true, detail)
+		if !s.reviewMatch(m, s.cfg.Settings(), true, detail) {
+			s.reviewFailed(id)
+		}
 	})
 	writeJSON(w, map[string]string{"status": "writing"})
 }
