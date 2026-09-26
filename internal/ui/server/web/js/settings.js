@@ -50,6 +50,8 @@ onSettings((c) => {
   $('voice-missing').hidden = !(!c.natural_voice && s.language !== 'en' && s.voice === 'system' && c.voice_langs && !c.voice_langs.includes(s.language));
 
   $('screen-draft').checked = !!(s.screen && s.screen.draft);
+  $('screen-frames').checked = !!(s.screen && s.screen.keep_frames);
+  $('screen-frames').disabled = !(s.screen && s.screen.draft);
   $('stratz-key').placeholder = c.stratz_key ? tp('Token {key} saved · paste a new one', { key: c.stratz_key }) : t('Paste your STRATZ token');
   $('stratz-remove').hidden = !c.stratz_key;
   for (const [id, key] of PICK_FIELDS) {
@@ -165,6 +167,7 @@ for (const [id, key] of PICK_FIELDS) {
 }
 $('picks-reset').addEventListener('click', () => saveSettings({ picks: null }));
 $('screen-draft').addEventListener('change', (e) => saveSettings({ screen: { draft: e.target.checked } }));
+$('screen-frames').addEventListener('change', (e) => saveSettings({ screen: { keep_frames: e.target.checked } }));
 async function saveStratz(key) {
   try { setSettings(await api('/api/stratz/key', { method: 'PUT', body: { key } })); } catch (e) { toast(e.message, true); }
 }

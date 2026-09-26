@@ -22,12 +22,12 @@ const readEvery = 2 * time.Second
 // screen is: under WSL the rest of it runs on the Linux side, which cannot see the Windows
 // desktop at all. Nothing is read outside a draft, and nothing at all unless the player has
 // turned it on.
-func watchDraft(ctx context.Context, m *model, a *api, heroes map[string]int, log *slog.Logger) {
+func watchDraft(ctx context.Context, m *model, a *api, heroes map[string]int, frames string, log *slog.Logger) {
 	if screen.Wayland() {
 		log.Info("not reading the draft: a program can't read a Wayland desktop")
 		return
 	}
-	watchWith(ctx, m, a, screen.TableFor(heroes), eyes{screen.Size, screen.Grab}, readEvery, log)
+	watchWith(ctx, m, a, screen.TableFor(heroes), eyes{screen.Size, screen.Grab}, readEvery, &frameKeeper{root: frames}, log)
 }
 
 // eyes is where the pictures come from, so the loop can be run against a made-up screen.
@@ -36,7 +36,7 @@ type eyes struct {
 	grab func(image.Rectangle) (image.Image, error)
 }
 
-func watchWith(ctx context.Context, m *model, a *api, table screen.Table, look eyes, every time.Duration, log *slog.Logger) {
+func watchWith(ctx context.Context, m *model, a *api, table screen.Table, look eyes, every time.Duration, keep *frameKeeper, log *slog.Logger) {
 	if len(table) == 0 {
 		log.Warn("not reading the draft: no hero portraits to compare against")
 		return
@@ -57,6 +57,7 @@ func watchWith(ctx context.Context, m *model, a *api, table screen.Table, look e
 			// The draft is over, or hasn't started. Start the next one from nothing.
 			if drafting {
 				seen.Forget()
+				keep.done()
 				searched, drafting = false, false
 			}
 			continue
@@ -85,6 +86,13 @@ func watchWith(ctx context.Context, m *model, a *api, table screen.Table, look e
 				bar = found
 			}
 		}
+		if m.keepFrames() {
+			note := frameNote{At: time.Now(), Screen: size, Bar: bar, Seen: bar.Read(shot, table),
+				Settled: seen.Heroes(), Dire: m.dire()}
+			if err := keep.save(shot, where, note); err != nil {
+				log.Warn("couldn't save the draft frame", "err", err)
+			}
+		}
 		// Tell the trainer every time round, not only when a hero has just settled. It drops
 		// a reading that stops being renewed, so a quiet stretch of the draft -- which is
 		// most of it, once the first few are in -- would take the other side off the board
@@ -103,7 +111,7 @@ func watchWith(ctx context.Context, m *model, a *api, table screen.Table, look e
 // startDraftReader waits for the trainer to have the hero numbers and then watches the draft.
 // It is started whatever the setting says, and asks the model each tick, so turning the
 // reading on from the dashboard takes effect without restarting the overlay.
-func startDraftReader(ctx context.Context, m *model, a *api, log *slog.Logger) {
+func startDraftReader(ctx context.Context, m *model, a *api, frames string, log *slog.Logger) {
 	var heroes map[string]int
 	for len(heroes) == 0 {
 		if err := a.do(ctx, "GET", "/api/heroes", nil, &heroes); err != nil && ctx.Err() == nil {
@@ -118,5 +126,5 @@ func startDraftReader(ctx context.Context, m *model, a *api, log *slog.Logger) {
 		case <-time.After(30 * time.Second):
 		}
 	}
-	watchDraft(ctx, m, a, heroes, log)
+	watchDraft(ctx, m, a, heroes, frames, log)
 }

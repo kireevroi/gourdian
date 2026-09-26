@@ -105,6 +105,13 @@ func (m *model) draft() bool {
 	return m.online && m.hud.Draft
 }
 
+// keepFrames reports whether the player asked for the draft frames to be saved.
+func (m *model) keepFrames() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.hud.KeepFrames
+}
+
 // dire reports which side the player is on, so a run of portraits can be called theirs.
 func (m *model) dire() bool {
 	m.mu.Lock()

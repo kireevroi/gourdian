@@ -796,6 +796,8 @@
     " from the meta, ": " из меты, ",
     " to avoid": " для избегания",
     "Read the enemy picks off your screen": "Считывать пики соперников с экрана",
+    "Save what the pick reader sees": "Сохранять то, что видит чтение пиков",
+    "For fixing a misread pick: the top strip of every frame it reads during a draft, and what it made of each, go into draft-frames in the app folder (tray menu, Open app folder). The last five drafts are kept.": "Чтобы исправлять ошибки распознавания: верхняя полоса каждого кадра, прочитанного во время выбора героев, и то, что на нём распознано, сохраняются в draft-frames в папке приложения (меню в трее, «Open app folder»). Хранятся последние пять стадий выбора.",
     "Dota tells no player who the other side took — Valve sends the draft to spectators only — so the trainer reads the ten hero portraits along the top of the game, the same way a screenshot would. Only while you are choosing a hero, never during play, and never anything else on your screen.": "Dota не сообщает игроку, кого взяли соперники: Valve отдаёт пики только зрителям. Поэтому тренер считывает десять портретов героев вверху экрана — так же, как это сделал бы скриншот. Только пока вы выбираете героя, никогда во время игры и ничего больше с вашего экрана.",
     "The other side has taken": "Соперники взяли",
     "All pick and ranked": "Обычные и рейтинговые",
