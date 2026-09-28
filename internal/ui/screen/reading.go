@@ -8,11 +8,13 @@ import "image"
 const Agree = 2
 
 // Reading is what has been made out of the bar so far, gathered over however many frames the
-// draft lasts. A slot's hero doesn't change once it is picked, so a settled slot is left
-// alone and the reading only ever fills in.
+// draft lasts. A settled slot can still change: allies' hovers look like picks.
 type Reading struct {
 	votes  [2 * Slots]map[int]int
 	heroes [2 * Slots]int
+	// rival is a different hero read in a settled slot, and how many frames running.
+	rival  [2 * Slots]int
+	rivals [2 * Slots]int
 }
 
 // Add reads the bar in one frame. It returns how many slots it made out, and how many of
@@ -28,16 +30,15 @@ func (r *Reading) Add(shot image.Image, bar Bar, t Table) (read, settled int) {
 	var seen [2 * Slots]int
 	found := 0
 	for slot := range seen {
-		if r.heroes[slot] != 0 {
-			found++ // a slot settled earlier is still a portrait in this frame
-			continue
-		}
 		cell := bar.Cell(slot)
-		if !cell.In(shot.Bounds()) {
-			continue
+		if cell.In(shot.Bounds()) {
+			if id, ok := t.MatchAt(shot, cell); ok {
+				seen[slot] = id
+			}
 		}
-		if id, ok := t.Match(Of(shot, cell)); ok {
-			seen[slot], found = id, found+1
+		// A slot settled earlier is still a portrait in this frame, read or not.
+		if seen[slot] != 0 || r.heroes[slot] != 0 {
+			found++
 		}
 	}
 	if found < LeastRead {
@@ -60,10 +61,22 @@ func (r *Reading) Add(shot image.Image, bar Bar, t Table) (read, settled int) {
 		}
 	}
 	for slot, id := range seen {
-		if id == 0 || twice[id] {
+		if id != 0 && id == r.heroes[slot] {
+			r.rivals[slot] = 0
+		}
+		if id == 0 || twice[id] || id == r.heroes[slot] {
 			continue
 		}
 		read++
+		if r.heroes[slot] != 0 {
+			if r.rival[slot] != id {
+				r.rival[slot], r.rivals[slot] = id, 0
+			}
+			if r.rivals[slot]++; r.rivals[slot] >= Agree {
+				r.heroes[slot], r.rivals[slot], settled = id, 0, settled+1
+			}
+			continue
+		}
 		if r.votes[slot] == nil {
 			r.votes[slot] = map[int]int{}
 		}

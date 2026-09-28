@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"image"
+	"math"
 
 	xdraw "golang.org/x/image/draw"
 )
@@ -27,6 +28,10 @@ const Compared = 3
 // Ratio is the most the best match may be of the runner-up. Over two ranked drafts 0.7 let
 // empty slots settle as Faceless Void and below 0.5 real picks went unread.
 const Ratio = 0.6
+
+// Shifts are MatchAt's cut offsets as fractions of cell width: portraits don't sit where the
+// evenly split cells say, and a few pixels off is enough to lose most heroes.
+var Shifts = []float64{-0.036, -0.024, -0.012, 0, 0.012}
 
 // LeastContrast rejects flat, unpicked slots (about 132; portraits run 1400 and up).
 const LeastContrast = 600
@@ -112,8 +117,36 @@ func (t Table) add(heroID int, s Signature) { t[heroID] = append(t[heroID], s.Le
 
 // Match names the closest hero only when it stands clearly apart from the closest other hero.
 func (t Table) Match(s Signature) (heroID int, ok bool) {
-	if s.Contrast() < LeastContrast {
+	heroID, ratio, ok := t.closest(s)
+	if !ok || ratio > Ratio {
 		return 0, false
+	}
+	return heroID, true
+}
+
+// MatchAt names the hero in one cell of the bar. The portrait is cut a few pixels either side
+// of where the cell starts, and the cut whose hero stands furthest apart is the one believed.
+func (t Table) MatchAt(shot image.Image, cell image.Rectangle) (heroID int, ok bool) {
+	bestRatio := 0.0
+	for _, by := range Shifts {
+		cut := cell.Add(image.Pt(int(math.Round(by*float64(cell.Dx()))), 0))
+		if !cut.In(shot.Bounds()) {
+			continue
+		}
+		if id, ratio, found := t.closest(Of(shot, cut)); found && (heroID == 0 || ratio < bestRatio) {
+			heroID, bestRatio = id, ratio
+		}
+	}
+	if heroID == 0 || bestRatio > Ratio {
+		return 0, false
+	}
+	return heroID, true
+}
+
+// closest is the nearest hero and its distance over the runner-up's, lower being surer.
+func (t Table) closest(s Signature) (heroID int, ratio float64, ok bool) {
+	if s.Contrast() < LeastContrast {
+		return 0, 0, false
 	}
 	s = s.Level()
 	best, second := -1, -1
@@ -132,10 +165,10 @@ func (t Table) Match(s Signature) (heroID int, ok bool) {
 			second = near
 		}
 	}
-	if best < 0 || second < 0 || float64(best) > Ratio*float64(second) {
-		return 0, false
+	if best < 0 || second <= 0 {
+		return 0, 0, false
 	}
-	return heroID, true
+	return heroID, float64(best) / float64(second), true
 }
 
 func (s Signature) Contrast() int {

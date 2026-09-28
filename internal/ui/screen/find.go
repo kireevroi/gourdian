@@ -50,7 +50,7 @@ func Locate(shot image.Image, t Table) (Bar, int, bool) {
 			if !bar.Ready() {
 				continue
 			}
-			if read := distinct(bar.Read(shot, t)); read > bestRead {
+			if read := distinct(bar.readExact(shot, t)); read > bestRead {
 				best, bestRead = bar, read
 			}
 		}

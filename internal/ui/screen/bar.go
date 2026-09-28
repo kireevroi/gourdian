@@ -62,7 +62,7 @@ func (b Box) ReadRun(shot image.Image, t Table) [Slots]int {
 		if !cell.In(shot.Bounds()) {
 			continue
 		}
-		if id, ok := t.Match(Of(shot, cell)); ok {
+		if id, ok := t.MatchAt(shot, cell); ok {
 			out[i] = id
 		}
 	}
@@ -70,7 +70,16 @@ func (b Box) ReadRun(shot image.Image, t Table) [Slots]int {
 }
 
 // Read is the hero in each of the ten slots, 0 where a slot is empty or can't be read.
-func (b Bar) Read(shot image.Image, t Table) [2 * Slots]int {
+func (b Bar) Read(shot image.Image, t Table) [2 * Slots]int { return b.read(shot, t, t.MatchAt) }
+
+// readExact is for Locate: it tries thousands of bars, too many for MatchAt's five cuts.
+func (b Bar) readExact(shot image.Image, t Table) [2 * Slots]int {
+	return b.read(shot, t, func(shot image.Image, cell image.Rectangle) (int, bool) {
+		return t.Match(Of(shot, cell))
+	})
+}
+
+func (b Bar) read(shot image.Image, t Table, match func(image.Image, image.Rectangle) (int, bool)) [2 * Slots]int {
 	var out [2 * Slots]int
 	if !b.Ready() || len(t) == 0 {
 		return out
@@ -80,7 +89,7 @@ func (b Bar) Read(shot image.Image, t Table) [2 * Slots]int {
 		if !cell.In(shot.Bounds()) {
 			continue
 		}
-		if id, ok := t.Match(Of(shot, cell)); ok {
+		if id, ok := match(shot, cell); ok {
 			out[i] = id
 		}
 	}

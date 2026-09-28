@@ -60,8 +60,7 @@ func screenshot(bar Bar, slots [2 * Slots]int) image.Image {
 	return shot
 }
 
-// bar is where Dota really puts the portraits on a 1920x1080 screen, so the made-up pictures
-// the tests paint have the proportions of a real one.
+// bar has the proportions of a real 1920x1080 screen.
 var screenSize = image.Rect(0, 0, 1920, 1080)
 
 var bar = Predict(screenSize)
@@ -153,9 +152,7 @@ func TestABarMustDescribeTenReadablePortraits(t *testing.T) {
 	}
 }
 
-// When the guess from the screen's height is wrong, the bar is searched for, and what makes
-// that safe is asking which whole bar reads the most heroes rather than which rectangle looks
-// most like some hero.
+// A wrong guess from the screen's height is fixed by searching for the whole bar.
 func TestLocatingAMovedBar(t *testing.T) {
 	tab := table(heroes)
 	want := [2 * Slots]int{1, 8, 14, 26, 35, 44, 53, 74, 86, 101}
@@ -166,6 +163,37 @@ func TestLocatingAMovedBar(t *testing.T) {
 	}
 	if got := ReadCount(found.Read(shot, tab)); got != 2*Slots {
 		t.Errorf("the bar found reads %d of the ten: %+v", got, found)
+	}
+}
+
+func TestAPortraitOffItsCellIsStillRead(t *testing.T) {
+	want := [2 * Slots]int{1, 8, 14, 26, 35, 44, 53, 74, 86, 101}
+	shot := image.NewRGBA(screenSize)
+	draw.Draw(shot, shot.Bounds(), image.NewUniform(color.RGBA{18, 20, 26, 255}), image.Point{}, draw.Src)
+	for i, id := range want {
+		cell := bar.Cell(i)
+		art := image.Rect(cell.Min.X-cell.Dx()*3/100, cell.Min.Y, cell.Min.X+cell.Dx()*92/100, cell.Max.Y)
+		xdraw.ApproxBiLinear.Scale(shot, art, portrait(id), portrait(id).Bounds(), xdraw.Src, nil)
+	}
+	if got := bar.Read(shot, table(heroes)); got != want {
+		t.Errorf("read %v, want %v", got, want)
+	}
+}
+
+func TestAHoverGivesWayToThePick(t *testing.T) {
+	tab := table(heroes)
+	hover := screenshot(bar, [2 * Slots]int{1, 8, 0, 0, 14, 0, 0, 0, 0, 0})
+	picked := screenshot(bar, [2 * Slots]int{1, 8, 0, 0, 35, 0, 0, 0, 0, 0})
+	var r Reading
+	for _, shot := range []image.Image{hover, hover, picked} {
+		r.Add(shot, bar, tab)
+	}
+	if got := r.Heroes()[4]; got != 14 {
+		t.Fatalf("slot 4 is %d after one frame of the pick, want the hover 14 kept", got)
+	}
+	r.Add(picked, bar, tab)
+	if got := r.Heroes()[4]; got != 35 {
+		t.Errorf("slot 4 is %d, want the pick 35", got)
 	}
 }
 
