@@ -50,6 +50,39 @@ var games = map[string][]string{
 		"npc_dota_hero_razor", "npc_dota_hero_troll_warlord", "npc_dota_hero_venomancer",
 		"npc_dota_hero_sniper", "npc_dota_hero_furion",
 	},
+	// Ranked, match 9020418249, named off the frames: only Queen of Pain of the enemy five was read.
+	"6": {
+		"npc_dota_hero_alchemist", "npc_dota_hero_earthshaker", "npc_dota_hero_lich",
+		"npc_dota_hero_phantom_lancer", "npc_dota_hero_queenofpain",
+		"npc_dota_hero_undying", "npc_dota_hero_bristleback", "npc_dota_hero_faceless_void",
+		"npc_dota_hero_tinker", "npc_dota_hero_ogre_magi",
+	},
+	// Ranked, 2026-09-28: matches 9019499125, 9019546612, 9019961524 and 9020319954. In 10 an
+	// ally hovered Pudge before picking Queen of Pain.
+	"7": {
+		"npc_dota_hero_keeper_of_the_light", "npc_dota_hero_treant", "npc_dota_hero_dark_willow",
+		"npc_dota_hero_morphling", "npc_dota_hero_muerta",
+		"npc_dota_hero_ursa", "npc_dota_hero_undying", "npc_dota_hero_witch_doctor",
+		"npc_dota_hero_bristleback", "npc_dota_hero_lina",
+	},
+	"8": {
+		"npc_dota_hero_wisp", "npc_dota_hero_night_stalker", "npc_dota_hero_witch_doctor",
+		"npc_dota_hero_drow_ranger", "npc_dota_hero_nyx_assassin",
+		"npc_dota_hero_silencer", "npc_dota_hero_dawnbreaker", "npc_dota_hero_phantom_assassin",
+		"npc_dota_hero_rubick", "npc_dota_hero_magnataur",
+	},
+	"9": {
+		"npc_dota_hero_venomancer", "npc_dota_hero_techies", "npc_dota_hero_juggernaut",
+		"npc_dota_hero_witch_doctor", "npc_dota_hero_invoker",
+		"npc_dota_hero_drow_ranger", "npc_dota_hero_lion", "npc_dota_hero_bristleback",
+		"npc_dota_hero_sniper", "npc_dota_hero_nyx_assassin",
+	},
+	"10": {
+		"npc_dota_hero_bristleback", "npc_dota_hero_winter_wyvern", "npc_dota_hero_phantom_lancer",
+		"npc_dota_hero_silencer", "npc_dota_hero_queenofpain",
+		"npc_dota_hero_life_stealer", "npc_dota_hero_warlock", "npc_dota_hero_viper",
+		"npc_dota_hero_bloodseeker", "npc_dota_hero_ancient_apparition",
+	},
 }
 
 func init() {
@@ -170,7 +203,7 @@ func TestAcrossEveryFrame(t *testing.T) {
 			if locked[slot] != "" {
 				continue
 			}
-			id, ok := table.Match(Of(img, barOf(t, path, img).Cell(slot)))
+			id, ok := table.MatchAt(img, barOf(t, path, img).Cell(slot))
 			if !ok {
 				continue
 			}

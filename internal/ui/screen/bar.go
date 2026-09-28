@@ -62,7 +62,7 @@ func (b Box) ReadRun(shot image.Image, t Table) [Slots]int {
 		if !cell.In(shot.Bounds()) {
 			continue
 		}
-		if id, ok := t.Match(Of(shot, cell)); ok {
+		if id, ok := t.MatchAt(shot, cell); ok {
 			out[i] = id
 		}
 	}
@@ -80,7 +80,7 @@ func (b Bar) Read(shot image.Image, t Table) [2 * Slots]int {
 		if !cell.In(shot.Bounds()) {
 			continue
 		}
-		if id, ok := t.Match(Of(shot, cell)); ok {
+		if id, ok := t.MatchAt(shot, cell); ok {
 			out[i] = id
 		}
 	}
