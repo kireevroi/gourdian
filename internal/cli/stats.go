@@ -22,7 +22,6 @@ func statsCmd() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("CSV files:", st.Dir())
 	var real []model.MatchSummary
 	for _, m := range matches {
 		if m.Real() {
