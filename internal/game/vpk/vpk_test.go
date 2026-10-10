@@ -129,6 +129,28 @@ func TestRefusingSomethingThatIsNotAPack(t *testing.T) {
 	if _, err := Open(filepath.Join(dir, "missing_dir.vpk")); err == nil {
 		t.Error("a pack that isn't there was accepted")
 	}
+
+	var badVersion bytes.Buffer
+	binary.Write(&badVersion, binary.LittleEndian, uint32(signature))
+	binary.Write(&badVersion, binary.LittleEndian, uint32(3)) // invalid version
+	binary.Write(&badVersion, binary.LittleEndian, uint32(0)) // tree size
+	badVerPath := filepath.Join(dir, "bad_version_dir.vpk")
+	if err := os.WriteFile(badVerPath, badVersion.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(badVerPath); err == nil {
+		t.Error("a pack with an unknown version was accepted")
+	}
+
+	var badSignature bytes.Buffer
+	binary.Write(&badSignature, binary.LittleEndian, uint32(0x11223344)) // invalid signature
+	badSigPath := filepath.Join(dir, "bad_sig_dir.vpk")
+	if err := os.WriteFile(badSigPath, badSignature.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(badSigPath); err == nil {
+		t.Error("a pack with an unknown signature was accepted")
+	}
 }
 
 // A truncated pack must be refused rather than read as far as it goes.
