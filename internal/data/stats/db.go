@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -116,7 +117,7 @@ func migrate(db *sql.DB) error {
 			tx.Rollback()
 			return fmt.Errorf("upgrade %s to version %d: %w", DataFile, i+1, err)
 		}
-		if _, err := tx.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, i+1)); err != nil {
+		if _, err := tx.Exec(`PRAGMA user_version = ` + strconv.Itoa(i+1)); err != nil {
 			tx.Rollback()
 			return err
 		}
