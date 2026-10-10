@@ -41,8 +41,6 @@ func draftCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("screen %dx%d, %d hero portraits known. Switch to Dota; looking every %s for %s.\n",
-		size.Dx(), size.Dy(), len(table), *every, *forHow)
 	if !*quiet {
 		if err := os.MkdirAll(*out, 0o755); err != nil {
 			return err
