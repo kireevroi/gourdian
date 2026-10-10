@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -553,11 +554,11 @@ func TestAnOlderDataFileStillOpens(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, column := range []string{"game_mode", "last_hits_by_minute"} {
-		if _, err := db.Exec(`ALTER TABLE matches DROP COLUMN ` + column); err != nil {
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE matches DROP COLUMN %q", column)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, len(migrations)-2)); err != nil {
+	if _, err := db.Exec("PRAGMA user_version = " + strconv.Itoa(len(migrations)-2)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
