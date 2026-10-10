@@ -105,7 +105,7 @@ func TestGoal_Met(t *testing.T) {
 func TestWeekGoals(t *testing.T) {
 	g1 := Goal{Metric: "gpm", Week: "2024-W01", Target: 400}
 	g2 := Goal{Metric: "xpm", Week: "2024-W01", Target: 500}
-	g3 := Goal{Metric: "gpm", Week: "2024-W01", Target: 450} // newer for same metric
+	g3 := Goal{Metric: "gpm", Week: "2024-W01", Target: 450}  // newer for same metric
 	g4 := Goal{Metric: "deaths", Week: "2024-W02", Target: 5} // different week
 
 	goals := []Goal{g1, g2, g3, g4}
@@ -129,19 +129,19 @@ func TestProgress(t *testing.T) {
 	goals := []Goal{g1, g2}
 
 	matches := []MatchSummary{
-		{MatchID: "sim", Simulated: true}, // Ignored
-		{MatchID: "past", EndedAt: created.Add(-time.Hour), Source: SourceOpenDota}, // Ignored
-		{MatchID: "wrong_week", EndedAt: created.AddDate(0, 0, 14), Source: SourceOpenDota}, // Ignored
+		{MatchID: "sim", Simulated: true},                                                             // Ignored
+		{MatchID: "past", EndedAt: created.Add(-time.Hour), Source: SourceOpenDota},                   // Ignored
+		{MatchID: "wrong_week", EndedAt: created.AddDate(0, 0, 14), Source: SourceOpenDota},           // Ignored
 		{MatchID: "match_goal_1", EndedAt: created.Add(time.Hour), Source: SourceOpenDota, Deaths: 6}, // Ignored by g1, met by g2? No, g2 not met (6 > 5) but tried
-		{MatchID: "match_goal_2", EndedAt: created.Add(time.Hour), Source: SourceOpenDota, GPM: 450}, // Ignored by g2, met by g1 (450 > 400)
+		{MatchID: "match_goal_2", EndedAt: created.Add(time.Hour), Source: SourceOpenDota, GPM: 450},  // Ignored by g2, met by g1 (450 > 400)
 
 		// Valid matches
-		{MatchID: "m1", EndedAt: created.Add(time.Hour), Source: SourceOpenDota, GPM: 450, Deaths: 6}, // g1 met, g2 not met
-		{MatchID: "m2", EndedAt: created.Add(2 * time.Hour), Source: SourceOpenDota, GPM: 0, Deaths: 4}, // g1 ignored (ok=false), g2 met
+		{MatchID: "m1", EndedAt: created.Add(time.Hour), Source: SourceOpenDota, GPM: 450, Deaths: 6},     // g1 met, g2 not met
+		{MatchID: "m2", EndedAt: created.Add(2 * time.Hour), Source: SourceOpenDota, GPM: 0, Deaths: 4},   // g1 ignored (ok=false), g2 met
 		{MatchID: "m3", EndedAt: created.Add(3 * time.Hour), Source: SourceOpenDota, GPM: 300, Deaths: 4}, // g1 not met, g2 met
-		{MatchID: "m4", EndedAt: created.Add(4 * time.Hour), Source: SourceOpenDota, Deaths: 4}, // g1 ignored (ok=false), g2 met
-		{MatchID: "m5", EndedAt: created.Add(5 * time.Hour), Source: SourceOpenDota, Deaths: 4}, // g1 ignored (ok=false), g2 met
-		{MatchID: "m6", EndedAt: created.Add(6 * time.Hour), Source: SourceOpenDota, Deaths: 4}, // g1 ignored (ok=false), g2 met
+		{MatchID: "m4", EndedAt: created.Add(4 * time.Hour), Source: SourceOpenDota, Deaths: 4},           // g1 ignored (ok=false), g2 met
+		{MatchID: "m5", EndedAt: created.Add(5 * time.Hour), Source: SourceOpenDota, Deaths: 4},           // g1 ignored (ok=false), g2 met
+		{MatchID: "m6", EndedAt: created.Add(6 * time.Hour), Source: SourceOpenDota, Deaths: 4},           // g1 ignored (ok=false), g2 met
 	}
 
 	got := Progress(goals, matches)
