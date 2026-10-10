@@ -232,6 +232,7 @@ func RemainingCost(target string, held []string, items map[string]ItemInfo) int 
 	for _, h := range held {
 		counts[h]++
 	}
+	recipeMemo := make(map[string]int)
 	var need func(name string, top bool) int
 	need = func(name string, top bool) int {
 		if !top && counts[name] > 0 {
@@ -242,9 +243,13 @@ func RemainingCost(target string, held []string, items map[string]ItemInfo) int 
 		if len(info.Components) == 0 {
 			return info.Cost
 		}
-		recipe := info.Cost
-		for _, c := range info.Components {
-			recipe -= items[c].Cost
+		recipe, ok := recipeMemo[name]
+		if !ok {
+			recipe = info.Cost
+			for _, c := range info.Components {
+				recipe -= items[c].Cost
+			}
+			recipeMemo[name] = recipe
 		}
 		total := max(recipe, 0)
 		for _, c := range info.Components {

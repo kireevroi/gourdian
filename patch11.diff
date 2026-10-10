@@ -1,0 +1,38 @@
+--- internal/data/opendota/build.go
++++ internal/data/opendota/build.go
+@@ -233,6 +233,7 @@
+	for _, h := range held {
+		counts[h]++
+	}
++	memoTotal := make(map[string]int)
+	var need func(name string, top bool) int
+	need = func(name string, top bool) int {
+		if !top && counts[name] > 0 {
+@@ -243,15 +244,18 @@
+		if len(info.Components) == 0 {
+			return info.Cost
+		}
+-		recipe := info.Cost
+-		for _, c := range info.Components {
+-			recipe -= items[c].Cost
+-		}
+-		total := max(recipe, 0)
+-		for _, c := range info.Components {
+-			total += need(c, false)
+-		}
+-		return total
++
++		total, ok := memoTotal[name]
++		if !ok {
++			recipe := info.Cost
++			for _, c := range info.Components {
++				recipe -= items[c].Cost
++				total += need(c, false)
++			}
++			total += max(recipe, 0)
++			memoTotal[name] = total
++		}
++		return total
+	}
+	return need(target, true)
+ }

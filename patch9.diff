@@ -1,0 +1,16 @@
+--- internal/data/opendota/build.go
++++ internal/data/opendota/build.go
+@@ -233,6 +233,16 @@
+	for _, h := range held {
+		counts[h]++
+	}
++
++	// Memoize recipe costs to avoid nested loop lookups during cost calculation
++	recipes := map[string]int{}
++	for _, info := range items {
++		recipe := info.Cost
++		for _, c := range info.Components {
++			recipe -= items[c].Cost
++		}
++		recipes[info.DName] = recipe
++	}

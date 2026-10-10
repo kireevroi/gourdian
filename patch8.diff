@@ -1,0 +1,27 @@
+--- internal/data/opendota/build.go
++++ internal/data/opendota/build.go
+@@ -233,6 +233,7 @@
+	for _, h := range held {
+		counts[h]++
+	}
++	recipes := map[string]int{}
+	var need func(name string, top bool) int
+	need = func(name string, top bool) int {
+		if !top && counts[name] > 0 {
+@@ -243,9 +244,13 @@
+		if len(info.Components) == 0 {
+			return info.Cost
+		}
+-		recipe := info.Cost
+-		for _, c := range info.Components {
+-			recipe -= items[c].Cost
++		recipe, ok := recipes[name]
++		if !ok {
++			recipe = info.Cost
++			for _, c := range info.Components {
++				recipe -= items[c].Cost
++			}
++			recipes[name] = recipe
+		}
+		total := max(recipe, 0)
+		for _, c := range info.Components {
