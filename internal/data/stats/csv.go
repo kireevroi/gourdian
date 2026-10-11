@@ -136,6 +136,9 @@ func (s *Store) Export() (string, error) {
 		return "", err
 	}
 	rows = rows[:0]
+	if cap(rows) < len(samples) {
+		rows = make([]map[string]string, 0, len(samples))
+	}
 	for _, x := range samples {
 		rows = append(rows, map[string]string{
 			"match_id": x.MatchID, "clock": itoa(x.Clock), "gold": itoa(x.Gold), "gpm": itoa(x.GPM), "xpm": itoa(x.XPM),
@@ -152,6 +155,9 @@ func (s *Store) Export() (string, error) {
 		return "", err
 	}
 	rows = rows[:0]
+	if cap(rows) < len(items) {
+		rows = make([]map[string]string, 0, len(items))
+	}
 	for _, it := range items {
 		rows = append(rows, map[string]string{"match_id": it.MatchID, "hero": it.Hero, "item": it.Item,
 			"time": itoa(it.Time), "source": it.Source})
@@ -165,6 +171,9 @@ func (s *Store) Export() (string, error) {
 		return "", err
 	}
 	rows = rows[:0]
+	if cap(rows) < len(mmr) {
+		rows = make([]map[string]string, 0, len(mmr))
+	}
 	for _, e := range mmr {
 		rows = append(rows, map[string]string{"date": timeValue(e.Date), "mmr": itoa(e.MMR), "note": e.Note, "match_id": e.MatchID})
 	}
@@ -177,6 +186,9 @@ func (s *Store) Export() (string, error) {
 		return "", err
 	}
 	rows = rows[:0]
+	if cap(rows) < len(reviews) {
+		rows = make([]map[string]string, 0, len(reviews))
+	}
 	for _, r := range reviews {
 		rows = append(rows, map[string]string{"date": timeValue(r.Date), "match_id": r.MatchID, "hero": r.Hero,
 			"hero_id": itoa(r.HeroID), "role": r.Role, "result": r.Result, "summary": r.Summary,
@@ -191,6 +203,9 @@ func (s *Store) Export() (string, error) {
 		return "", err
 	}
 	rows = rows[:0]
+	if cap(rows) < len(goals) {
+		rows = make([]map[string]string, 0, len(goals))
+	}
 	for _, g := range goals {
 		rows = append(rows, map[string]string{"created": timeValue(g.Created), "week": g.Week, "metric": g.Metric,
 			"comparator": g.Comparator, "target": strconv.FormatFloat(g.Target, 'f', -1, 64), "label": g.Label,
@@ -205,6 +220,9 @@ func (s *Store) Export() (string, error) {
 		return "", err
 	}
 	rows = rows[:0]
+	if cap(rows) < len(tips) {
+		rows = make([]map[string]string, 0, len(tips))
+	}
 	for _, t := range tips {
 		rows = append(rows, map[string]string{"at": timeValue(t.At), "match_id": t.MatchID, "clock": itoa(t.Clock),
 			"rule": t.Rule, "category": t.Category, "severity": t.Severity, "habit": strconv.FormatBool(t.Habit), "text": t.Text})
