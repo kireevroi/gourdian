@@ -201,6 +201,7 @@ func (e *Engine) Snapshot(set config.Settings) Snapshot {
 	if build != nil && items != nil {
 		held := heldNames(s)
 		p := build.Progress(held, items, s.Map.ClockTime)
+		snap.Build = make([]BuildView, 0, len(build.Items))
 		for i, it := range build.Items {
 			v := BuildView{BuildItem: it, Owned: p.Owned[i], Skipped: p.Skipped[i], Next: i == p.Next}
 			if !v.Owned {
