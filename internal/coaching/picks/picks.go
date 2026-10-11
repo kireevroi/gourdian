@@ -64,8 +64,9 @@ const (
 	// freshPct: the roster median is 49.7%, so 52% (the top sixth) is the bar for a stranger.
 	freshPct = 52
 
-	// TODO: tune. yoursCap saturates above about 65%, so the best two heroes tie.
-	yoursCap = 15
+	// yoursCap caps the score bonus from the player's own win rate.
+	// It is set to 20 to allow heroes with up to 70% win rate to be distinguished.
+	yoursCap = 20
 	metaCap  = 6
 	fitBonus = 3
 	rustyCap = 5
