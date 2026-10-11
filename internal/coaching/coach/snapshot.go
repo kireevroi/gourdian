@@ -227,6 +227,7 @@ func (e *Engine) Snapshot(set config.Settings) Snapshot {
 	if items != nil {
 		held := heldNames(s)
 		owned := opendota.OwnedClosure(held, items)
+		snap.ItemGoals = make([]ItemGoalView, 0, len(targets.Items))
 		for _, g := range targets.Items {
 			v := ItemGoalView{ItemGoal: g, Owned: owned[g.Item]}
 			if !v.Owned {
