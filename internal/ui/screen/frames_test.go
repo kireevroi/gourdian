@@ -84,6 +84,6 @@ func TestLocateOnRealFrames(t *testing.T) {
 		if ok {
 			where = fmt.Sprintf("%d heroes at y=%d, portrait %dx%d", read, found.Y(), found.Left.W/Slots, found.Left.H)
 		}
-		fmt.Printf("%-14s %s\n", filepath.Base(path), where)
+		t.Logf("%-14s %s\n", filepath.Base(path), where)
 	}
 }
