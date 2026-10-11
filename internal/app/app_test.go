@@ -11,6 +11,16 @@ import (
 	"time"
 )
 
+func getFreePort(t *testing.T) int {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to find a free port: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	return port
+}
+
 func stopTrainer(port int) {
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", fmt.Sprintf("http://127.0.0.1:%d/api/quit", port), nil)
 	for i := 0; i < 20; i++ {
@@ -27,7 +37,7 @@ func TestRun(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GOURDIAN_HOME", dir)
 
-	port := 41001
+	port := getFreePort(t)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- Run(Options{Listen: fmt.Sprintf("127.0.0.1:%d", port)})
@@ -58,7 +68,7 @@ func TestRun_QuitRequested(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GOURDIAN_HOME", dir)
 
-	port := 41002
+	port := getFreePort(t)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- Run(Options{Listen: fmt.Sprintf("127.0.0.1:%d", port)})
@@ -81,7 +91,7 @@ func TestRun_PortInUse(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GOURDIAN_HOME", dir)
 
-	port := 41003
+	port := getFreePort(t)
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
@@ -97,12 +107,18 @@ func TestRun_PortInUse(t *testing.T) {
 }
 
 func TestRun_InvalidDir(t *testing.T) {
-	os.Setenv("GOURDIAN_HOME", "/nonexistent/directory/that/cannot/be/created")
-	defer os.Unsetenv("GOURDIAN_HOME")
+	f, err := os.CreateTemp("", "gourdian_invalid_dir_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	f.Close()
+	defer os.Remove(f.Name())
 
-	err := Run(Options{})
+	t.Setenv("GOURDIAN_HOME", f.Name())
+
+	err = Run(Options{})
 	if err == nil {
-		t.Error("Run() should have failed when GOURDIAN_HOME is invalid")
+		t.Error("Run() should have failed when GOURDIAN_HOME is a file instead of a directory")
 	}
 }
 
@@ -110,7 +126,7 @@ func TestRun_RecordEnabled(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GOURDIAN_HOME", dir)
 
-	port := 41004
+	port := getFreePort(t)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- Run(Options{Listen: fmt.Sprintf("127.0.0.1:%d", port), Record: true})
@@ -133,7 +149,7 @@ func TestRun_BackgroundAndOverlay(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GOURDIAN_HOME", dir)
 
-	port := 41005
+	port := getFreePort(t)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- Run(Options{Listen: fmt.Sprintf("127.0.0.1:%d", port), Background: true, Overlay: true})
@@ -156,7 +172,7 @@ func TestRun_PortInUse_OpenDashboard(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GOURDIAN_HOME", dir)
 
-	port := 41006
+	port := getFreePort(t)
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
@@ -187,7 +203,7 @@ func TestRun_ConfigRepair(t *testing.T) {
 		t.Fatalf("failed to write config.json: %v", err)
 	}
 
-	port := 41007
+	port := getFreePort(t)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- Run(Options{Listen: fmt.Sprintf("127.0.0.1:%d", port)})
@@ -230,7 +246,7 @@ func TestRun_SystemVoiceBrowserFallbackError(t *testing.T) {
 		t.Fatalf("failed to write config.json: %v", err)
 	}
 
-	port := 41010
+	port := getFreePort(t)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- Run(Options{Listen: fmt.Sprintf("127.0.0.1:%d", port)})
@@ -289,7 +305,7 @@ func TestRun_SystemVoiceSwitch(t *testing.T) {
 		t.Fatalf("failed to write config.json: %v", err)
 	}
 
-	port := 41008
+	port := getFreePort(t)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- Run(Options{Listen: fmt.Sprintf("127.0.0.1:%d", port)})
@@ -312,7 +328,7 @@ func TestRun_FirstStartOpenBrowser(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GOURDIAN_HOME", dir)
 
-	port := 41009
+	port := getFreePort(t)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- Run(Options{Listen: fmt.Sprintf("127.0.0.1:%d", port), OpenFirst: true})
