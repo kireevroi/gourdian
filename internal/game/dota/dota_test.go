@@ -96,7 +96,17 @@ func TestRankName(t *testing.T) {
 	for _, c := range []struct {
 		tier       int
 		lang, want string
-	}{{53, "en", "Legend 3"}, {71, "ru", "Божество 1"}, {80, "en", "Immortal"}, {0, "en", ""}} {
+	}{
+		{11, "en", "Herald 1"},
+		{53, "en", "Legend 3"},
+		{71, "ru", "Божество 1"},
+		{75, "en", "Divine 5"},
+		{75, "ru", "Божество 5"},
+		{80, "en", "Immortal"},
+		{80, "ru", "Бессмертный"},
+		{0, "en", ""},
+		{99, "en", ""},
+	} {
 		if got := RankName(c.tier, c.lang); got != c.want {
 			t.Errorf("RankName(%d, %s) = %q, want %q", c.tier, c.lang, got, c.want)
 		}
