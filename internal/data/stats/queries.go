@@ -160,11 +160,23 @@ func (s *Store) AppendSamples(samples []model.Sample) error {
 }
 
 func appendSamples(q execer, samples []model.Sample) error {
-	for _, x := range samples {
-		_, err := q.Exec(`REPLACE INTO samples (match_id, clock, gold, gpm, xpm, last_hits, denies, kills, deaths, assists, level, alive)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			x.MatchID, x.Clock, x.Gold, x.GPM, x.XPM, x.LastHits, x.Denies, x.Kills, x.Deaths, x.Assists, x.Level, boolInt(x.Alive))
-		if err != nil {
+	const batchSize = 50
+	for i := 0; i < len(samples); i += batchSize {
+		end := i + batchSize
+		if end > len(samples) {
+			end = len(samples)
+		}
+		batch := samples[i:end]
+
+		query := `REPLACE INTO samples (match_id, clock, gold, gpm, xpm, last_hits, denies, kills, deaths, assists, level, alive) VALUES `
+		args := make([]any, 0, len(batch)*12)
+
+		for _, x := range batch {
+			args = append(args, x.MatchID, x.Clock, x.Gold, x.GPM, x.XPM, x.LastHits, x.Denies, x.Kills, x.Deaths, x.Assists, x.Level, boolInt(x.Alive))
+		}
+
+		query += strings.TrimSuffix(strings.Repeat("(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?), ", len(batch)), ", ")
+		if _, err := q.Exec(query, args...); err != nil {
 			return err
 		}
 	}
