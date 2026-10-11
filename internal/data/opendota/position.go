@@ -26,14 +26,6 @@ type positionKey struct {
 	won       bool // only games the hero's team won
 }
 
-// filter is the SQL condition that keeps the key's games.
-func (k positionKey) filter() string {
-	if k.won {
-		return "won"
-	}
-	return "true"
-}
-
 func (k positionKey) file(kind string) string {
 	games := "all"
 	if k.won {
@@ -60,7 +52,7 @@ func positionSQL(key positionKey) string {
   WHERE m.start_time > extract(epoch from now() - interval '%d days')
     AND pm.match_id IN (SELECT match_id FROM player_matches WHERE hero_id = %d)
 ), q AS (
-  SELECT match_id, purchase_log FROM p WHERE hero_id = %d AND %s AND purchase_log IS NOT NULL AND (%d = 0 OR CASE
+  SELECT match_id, purchase_log FROM p WHERE hero_id = %d AND (%t OR won) AND purchase_log IS NOT NULL AND (%d = 0 OR CASE
     WHEN farm <= 3 AND lane_role = 2 THEN 2 WHEN farm <= 3 AND lane_role = 1 THEN 1
     WHEN farm <= 3 AND lane_role = 3 THEN 3 WHEN farm <= 3 THEN 0 WHEN farm = 4 THEN 4 ELSE 5 END = %d)
 )
@@ -68,7 +60,7 @@ SELECT CASE WHEN (e->>'time')::int <= 0 THEN 'start_game_items' WHEN (e->>'time'
     WHEN (e->>'time')::int < 1500 THEN 'mid_game_items' ELSE 'late_game_items' END AS phase,
   e->>'key' AS item, count(DISTINCT match_id)::int AS games, (SELECT count(*) FROM q)::int AS total,
   percentile_disc(0.5) WITHIN GROUP (ORDER BY (e->>'time')::int)::int AS at
-FROM q, unnest(purchase_log) e GROUP BY 1, 2`, ProDays, hero, hero, key.filter(), pos, pos)
+FROM q, unnest(purchase_log) e GROUP BY 1, 2`, ProDays, hero, hero, !key.won, pos, pos)
 }
 
 // proBuild is the hero's build from pro games in one position (0 for every position), won

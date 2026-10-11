@@ -22,12 +22,12 @@ func TestBuildFollowsThePosition(t *testing.T) {
 			io.WriteString(w, `{"14":{"id":14,"localized_name":"Pudge"},"15":{"id":15,"localized_name":"Razor"}}`)
 		case r.URL.Path == "/heroes/14/itemPopularity" || r.URL.Path == "/heroes/15/itemPopularity":
 			io.WriteString(w, `{"mid_game_items":{"232":30,"1":25,"108":10}}`)
-		case r.URL.Path == "/explorer" && strings.Contains(sql, "hero_id = 14") && strings.Contains(sql, "AND won AND") && strings.Contains(sql, "END = 2)"):
+		case r.URL.Path == "/explorer" && strings.Contains(sql, "hero_id = 14") && strings.Contains(sql, "AND (false OR won) AND") && strings.Contains(sql, "END = 2)"):
 			io.WriteString(w, `{"rows":[{"phase":"mid_game_items","item":"ultimate_scepter","games":100,"total":122},
 				{"phase":"mid_game_items","item":"blink","games":43,"total":122}],"err":null}`)
-		case r.URL.Path == "/explorer" && strings.Contains(sql, "hero_id = 14") && strings.Contains(sql, "AND true AND") && strings.Contains(sql, "END = 1)"):
+		case r.URL.Path == "/explorer" && strings.Contains(sql, "hero_id = 14") && strings.Contains(sql, "AND (true OR won) AND") && strings.Contains(sql, "END = 1)"):
 			io.WriteString(w, `{"rows":[{"phase":"mid_game_items","item":"ultimate_scepter","games":20,"total":30}],"err":null}`)
-		case r.URL.Path == "/explorer" && strings.Contains(sql, "hero_id = 14") && strings.Contains(sql, "AND won AND") && strings.Contains(sql, "(0 = 0"):
+		case r.URL.Path == "/explorer" && strings.Contains(sql, "hero_id = 14") && strings.Contains(sql, "AND (false OR won) AND") && strings.Contains(sql, "(0 = 0"):
 			io.WriteString(w, `{"rows":[{"phase":"mid_game_items","item":"blink","games":30,"total":40}],"err":null}`)
 		case r.URL.Path == "/explorer":
 			io.WriteString(w, `{"rows":[{"phase":"mid_game_items","item":"blink","games":2,"total":3}],"err":null}`)

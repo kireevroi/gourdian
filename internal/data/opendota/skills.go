@@ -239,8 +239,8 @@ func skillSQL(key positionKey) string {
   WHERE m.start_time > extract(epoch from now() - interval '%d days')
     AND pm.match_id IN (SELECT match_id FROM player_matches WHERE hero_id = %d)
 )
-SELECT ability_upgrades_arr FROM p WHERE hero_id = %d AND %s AND ability_upgrades_arr IS NOT NULL AND (%d = 0 OR CASE
+SELECT ability_upgrades_arr FROM p WHERE hero_id = %d AND (%t OR won) AND ability_upgrades_arr IS NOT NULL AND (%d = 0 OR CASE
     WHEN farm <= 3 AND lane_role = 2 THEN 2 WHEN farm <= 3 AND lane_role = 1 THEN 1
     WHEN farm <= 3 AND lane_role = 3 THEN 3 WHEN farm <= 3 THEN 0 WHEN farm = 4 THEN 4 ELSE 5 END = %d)
-ORDER BY start_time DESC LIMIT 300`, ProDays, hero, hero, key.filter(), pos, pos)
+ORDER BY start_time DESC LIMIT 300`, ProDays, hero, hero, !key.won, pos, pos)
 }
