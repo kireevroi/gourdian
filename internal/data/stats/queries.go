@@ -430,8 +430,29 @@ func (s *Store) ReplaceRules(rows []RuleRow) error {
 		if _, err := tx.Exec(`DELETE FROM rules`); err != nil {
 			return err
 		}
-		for _, r := range rows {
-			if _, err := tx.Exec(`INSERT INTO rules (id, kind, spec) VALUES (?, ?, ?)`, r.ID, r.Kind, r.Spec); err != nil {
+		// SQLite limits parameters to 32766 in modern versions.
+		// We'll use 500 rows per batch (1500 params) which is well within limits.
+		const chunkSize = 500
+		for i := 0; i < len(rows); i += chunkSize {
+			end := i + chunkSize
+			if end > len(rows) {
+				end = len(rows)
+			}
+			chunk := rows[i:end]
+
+			var sb strings.Builder
+			sb.WriteString("INSERT INTO rules (id, kind, spec) VALUES ")
+			var vals []any
+
+			for j, r := range chunk {
+				if j > 0 {
+					sb.WriteString(", ")
+				}
+				sb.WriteString("(?, ?, ?)")
+				vals = append(vals, r.ID, r.Kind, r.Spec)
+			}
+
+			if _, err := tx.Exec(sb.String(), vals...); err != nil {
 				return err
 			}
 		}
