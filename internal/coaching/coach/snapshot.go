@@ -186,6 +186,7 @@ func (e *Engine) Snapshot(set config.Settings) Snapshot {
 		}
 		snap.Skill = skillView(e.data, s, set.Role, set.Language, points)
 	}
+	snap.Items = make([]ItemView, 0, len(itemSlots))
 	for _, slot := range itemSlots {
 		it, ok := s.Items[slot]
 		if !ok || it.Empty() {
