@@ -200,15 +200,29 @@ func (s *Store) Export() (string, error) {
 		return "", err
 	}
 
-	tips, err := s.tipRecords()
+	rows = rows[:0]
+	tipRows, err := s.db.Query(`SELECT at, match_id, CAST(clock AS TEXT), rule, category, severity, habit, text FROM tips ORDER BY rowid`)
 	if err != nil {
 		return "", err
 	}
-	rows = rows[:0]
-	for _, t := range tips {
-		rows = append(rows, map[string]string{"at": timeValue(t.At), "match_id": t.MatchID, "clock": itoa(t.Clock),
-			"rule": t.Rule, "category": t.Category, "severity": t.Severity, "habit": strconv.FormatBool(t.Habit), "text": t.Text})
+	defer tipRows.Close()
+	for tipRows.Next() {
+		var at, matchID, clock, rule, category, severity, text sql.NullString
+		var habit sql.NullInt64
+		if err := tipRows.Scan(&at, &matchID, &clock, &rule, &category, &severity, &habit, &text); err != nil {
+			return "", err
+		}
+		habitStr := "false"
+		if habit.Int64 == 1 {
+			habitStr = "true"
+		}
+		rows = append(rows, map[string]string{"at": at.String, "match_id": matchID.String, "clock": clock.String,
+			"rule": rule.String, "category": category.String, "severity": severity.String, "habit": habitStr, "text": text.String})
 	}
+	if err := tipRows.Err(); err != nil {
+		return "", err
+	}
+
 	if err := writeAll(s.path(TipsFile), tipColumns, rows); err != nil {
 		return "", err
 	}
