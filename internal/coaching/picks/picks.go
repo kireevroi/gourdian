@@ -65,8 +65,8 @@ const (
 	freshPct = 52
 
 	// yoursCap caps the score bonus from the player's own win rate.
-	// It is set to 20 to allow heroes with up to 70% win rate to be distinguished.
-	yoursCap = 20
+	// We want counters and meta to still play a significant role, so this cap keeps the bonus in check.
+	yoursCap = 12
 	metaCap  = 6
 	fitBonus = 3
 	rustyCap = 5
